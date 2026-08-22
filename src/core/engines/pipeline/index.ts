@@ -8,6 +8,7 @@ export { ScenesBuilderStage } from './scenes/ScenesBuilder';
 export { StagesExecutorStage } from './stages/StagesExecutor';
 export { PromptsGeneratorStage } from './prompts/PromptsGenerator';
 export { ProjectAssemblerStage } from './assembly/ProjectAssembler';
+export { PipelineRegistry } from './pipeline-registry';
 
 // Re-export blueprint types from project-orchestrator for backward compatibility
 export type { BlueprintOperation, ConstructionBlueprint, BlueprintMaterialStock, BlueprintToolStock } from '../project-orchestrator';
@@ -20,37 +21,18 @@ import type {
 } from './types';
 import type { ProjectConfig, Project } from '../../types';
 import type { ConstructionBlueprint } from '../project-orchestrator';
-import {
-  DNABuilderStage,
-  SpatialBuilderStage,
-  DependencyBuilderStage,
-  WorldBuilderStage,
-  OperationsBuilderStage,
-  ScenesBuilderStage,
-  StagesExecutorStage,
-  PromptsGeneratorStage,
-  ProjectAssemblerStage,
-} from './index';
+import { PipelineRegistry } from './pipeline-registry';
 
 /**
  * Pipeline Orchestrator
  * Executes all pipeline stages in sequence, passing context through each stage
+ * Stage registration is centralized in PipelineRegistry
  */
 export class PipelineOrchestrator {
   private stages: PipelineStage[];
 
   constructor() {
-    this.stages = [
-      new SpatialBuilderStage(),      // 1. Spatial map must come first (needed for DNA cameras)
-      new DNABuilderStage(),          // 2. DNA creation (uses spatial map for visible zones)
-      new DependencyBuilderStage(),   // 3. Dependency graph
-      new WorldBuilderStage(),        // 4. World state initialization
-      new OperationsBuilderStage(),   // 5. Operations creation
-      new ScenesBuilderStage(),       // 6. Scenes & storyboard
-      new StagesExecutorStage(),      // 7. Stages execution with fiscal validation
-      new PromptsGeneratorStage(),    // 8. Prompt generation
-      new ProjectAssemblerStage(),    // 9. Final project assembly
-    ];
+    this.stages = PipelineRegistry.getStages();
   }
 
   /**
