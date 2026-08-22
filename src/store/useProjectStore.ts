@@ -62,8 +62,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   project: null,
   isDirty: false,
 
-  createProject: (config) => {
-    const project = orchestrateDescription({
+  createProject: async (config) => {
+    const project = await orchestrateDescription({
       description: `${config.construction} em ${config.environment}, forma ${config.approximateForm}, materiais ${config.materials.join(', ')}`,
       name: config.name,
       environment: config.environment,

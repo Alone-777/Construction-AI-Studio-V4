@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Operation, Scene, Stage } from '../types';
 import {
   compileDescriptionToBlueprint,
   createProjectFromDescription,
@@ -16,7 +17,7 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
     expect(compiled.config.environment).toBe('riacho');
     expect(compiled.config.materials).toEqual(expect.arrayContaining(['madeira', 'pedra']));
     expect(compiled.blueprint.id).not.toContain('cabana_do_riacho');
-    expect(compiled.blueprint.components.some(component => component.id === 'sapatas_pedra')).toBe(false);
+    expect(compiled.blueprint.components.some((component: any) => component.id === 'sapatas_pedra')).toBe(false);
   });
 
   it('gera projeto completo com origem e hipóteses rastreáveis', () => {
@@ -32,15 +33,15 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
 
   it('executa progressão física absoluta para o mesmo trabalho', () => {
     for (const scene of project.scenes) {
-      expect(scene.stages.map(stage => stage.percentage)).toEqual([0, 25, 50, 75, 100]);
+      expect(scene.stages.map((stage: any) => stage.percentage)).toEqual([0, 25, 50, 75, 100]);
       for (const stage of scene.stages) {
         expect(stage.physicalState).toBeDefined();
         expect(Object.keys(stage.physicalState?.elementProgress ?? {})).toHaveLength(
-          project.operations.find(operation => operation.id === scene.operationId)?.elements?.length ?? 0,
+          project.operations.find((operation: any) => operation.id === scene.operationId)?.elements?.length ?? 0,
         );
       }
       expect(scene.stages[scene.stages.length - 1]?.physicalState?.completedElements).toEqual(
-        project.operations.find(operation => operation.id === scene.operationId)?.elements,
+        project.operations.find((operation: any) => operation.id === scene.operationId)?.elements,
       );
     }
   });
@@ -55,14 +56,14 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
 
   it('gera zonas adaptativas e preserva a faixa ambiental', () => {
     expect(project.spatialMap.zones).toHaveLength(5);
-    expect(project.spatialMap.zones.find(zone => zone.id === 'Z_PROTEGIDA_AGUA')?.status).toBe('pristine');
-    expect(allStages.every(stage => stage.preservedZones.includes('Z_PROTEGIDA_AGUA'))).toBe(true);
+    expect(project.spatialMap.zones.find((zone: any) => zone.id === 'Z_PROTEGIDA_AGUA')?.status).toBe('pristine');
+    expect(allStages.every((stage: any) => stage.preservedZones.includes('Z_PROTEGIDA_AGUA'))).toBe(true);
   });
 
   it('conclui o grafo e conserva inventários rastreáveis', () => {
-    expect(project.dependencyGraph.nodes.every(component => component.status === 'COMPLETE')).toBe(true);
-    expect(project.worldState.materials.every(material => material.quantity >= 0)).toBe(true);
-    expect(project.worldState.consumedMaterials.every(material => material.origin.startsWith('operação:'))).toBe(true);
+    expect(project.dependencyGraph.nodes.every((component: any) => component.status === 'COMPLETE')).toBe(true);
+    expect(project.worldState.materials.every((material: any) => material.quantity >= 0)).toBe(true);
+    expect(project.worldState.consumedMaterials.every((material: any) => material.origin.startsWith('operação:'))).toBe(true);
     expect(project.worldState.tools.length).toBeGreaterThan(0);
   });
 
@@ -70,14 +71,14 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
     for (const stage of allStages) {
       expect(stage.validations.approved).toBe(true);
       expect(stage.validations.checks?.length).toBeGreaterThanOrEqual(10);
-      expect(stage.validations.checks?.some(check => check.status === 'PASS')).toBe(true);
-      expect(stage.validations.checks?.every(check => check.status !== 'FAIL')).toBe(true);
-      expect(stage.validations.checks?.every(check => check.explanation.length > 10)).toBe(true);
+      expect(stage.validations.checks?.some((check: any) => check.status === 'PASS')).toBe(true);
+      expect(stage.validations.checks?.every((check: any) => check.status !== 'FAIL')).toBe(true);
+      expect(stage.validations.checks?.every((check: any) => check.explanation.length > 10)).toBe(true);
     }
   });
 
   it('deriva prova, rota e prompts do estado real de cada estágio', () => {
-    for (const stage of allStages.filter(item => item.percentage > 0)) {
+    for (const stage of allStages.filter((item: any) => item.percentage > 0)) {
       expect(stage.executionProof?.valid).toBe(true);
       expect(stage.workRoute?.length).toBeGreaterThan(0);
       expect(stage.prompts?.nanoBanana).toContain(`ZONE ${stage.activeZone}`);
@@ -85,15 +86,15 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
     }
   });
 
-  it('usa o mesmo compilador genérico para outra tipologia', () => {
-    const bridge = createProjectFromDescription({
+  it('usa o mesmo compilador genérico para outra tipologia', async () => {
+    const bridge = await createProjectFromDescription({
       description: 'Ponte rústica de madeira sobre um rio, com guarda-corpo e terreno preservado.',
       name: 'Ponte de Teste',
     });
     expect(bridge.dna.finalConstruction).toBe('ponte');
-    expect(bridge.operations.some(operation => operation.id === 'op_tabuleiro')).toBe(true);
-    expect(bridge.operations.some(operation => operation.topology === 'POINTS')).toBe(true);
-    expect(bridge.operations.some(operation => operation.topology === 'LINEAR')).toBe(true);
+    expect(bridge.operations.some((operation: Operation) => operation.id === 'op_tabuleiro')).toBe(true);
+    expect(bridge.operations.some((operation: Operation) => operation.topology === 'POINTS')).toBe(true);
+    expect(bridge.operations.some((operation: Operation) => operation.topology === 'LINEAR')).toBe(true);
     expect(bridge.scenes.flatMap(scene => scene.stages).every(stage => stage.validations.approved)).toBe(true);
   });
 

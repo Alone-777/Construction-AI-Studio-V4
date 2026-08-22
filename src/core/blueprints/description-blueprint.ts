@@ -7,11 +7,7 @@ import type {
   VisualStyle,
 } from '../types';
 import { DEFAULT_CHARACTER, DEFAULT_MATERIALS } from '../types';
-import {
-  createProjectFromBlueprint,
-  type BlueprintOperation,
-  type ConstructionBlueprint,
-} from '../engines/project-orchestrator';
+import { createProjectFromBlueprint, type BlueprintOperation, type ConstructionBlueprint } from '../engines/pipeline';
 
 export interface ProjectDescriptionInput {
   description: string;
