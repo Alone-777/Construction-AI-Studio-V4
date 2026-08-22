@@ -9,7 +9,7 @@ interface UIState {
   rightPanelOpen: boolean;
   leftPanelTab: 'project' | 'dna' | 'libraries';
   centerTab: 'spatial' | 'graph' | 'storyboard' | 'timeline';
-  centerWorkspaceTab: 'map' | 'dependencies' | 'scenes' | 'stages';
+  centerWorkspaceTab: 'map' | 'dependencies' | 'scenes' | 'stages' | 'visual';
   rightPanelTab: 'inspector' | 'fiscal' | 'prompts' | 'debug';
 
   /* ─── Mobile ─── */
