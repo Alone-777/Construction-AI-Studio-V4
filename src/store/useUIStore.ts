@@ -9,11 +9,12 @@ interface UIState {
   rightPanelOpen: boolean;
   leftPanelTab: 'project' | 'dna' | 'libraries';
   centerTab: 'spatial' | 'graph' | 'storyboard' | 'timeline';
+  centerWorkspaceTab: 'map' | 'dependencies' | 'scenes' | 'stages';
   rightPanelTab: 'inspector' | 'fiscal' | 'prompts' | 'debug';
-  
+
   /* ─── Mobile ─── */
   mobileTab: 'spatial' | 'timeline' | 'inspector' | 'prompts';
-  
+
   /* ─── Seleção ─── */
   selectedSceneId: string | null;
   selectedStagePercentage: number | null;
@@ -34,6 +35,7 @@ interface UIState {
   toggleRightPanel: () => void;
   setLeftPanelTab: (tab: UIState['leftPanelTab']) => void;
   setCenterTab: (tab: UIState['centerTab']) => void;
+  setCenterWorkspaceTab: (tab: UIState['centerWorkspaceTab']) => void;
   setRightPanelTab: (tab: UIState['rightPanelTab']) => void;
   setMobileTab: (tab: UIState['mobileTab']) => void;
   selectScene: (id: string | null) => void;
@@ -51,6 +53,7 @@ export const useUIStore = create<UIState>((set) => ({
   rightPanelOpen: true,
   leftPanelTab: 'project',
   centerTab: 'spatial',
+  centerWorkspaceTab: 'map',
   rightPanelTab: 'inspector',
   mobileTab: 'spatial',
   selectedSceneId: null,
@@ -67,6 +70,7 @@ export const useUIStore = create<UIState>((set) => ({
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setLeftPanelTab: (tab) => set({ leftPanelTab: tab }),
   setCenterTab: (tab) => set({ centerTab: tab }),
+  setCenterWorkspaceTab: (tab) => set({ centerWorkspaceTab: tab }),
   setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
   setMobileTab: (tab) => set({ mobileTab: tab }),
   selectScene: (id) => set({ selectedSceneId: id }),

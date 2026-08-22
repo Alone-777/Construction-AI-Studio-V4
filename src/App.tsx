@@ -3,6 +3,7 @@ import { useProjectStore } from './store/useProjectStore';
 import { useSimulationStore } from './store/useSimulationStore';
 import { usePromptStore } from './store/usePromptStore';
 import { useEffect, useState } from 'react';
+import { VisualWorkspace } from './components/workspace/VisualWorkspace';
 import { importProjectJSON, listProjects, loadProject } from './db/repository';
 import type { DetailLevel, EnvironmentPreset } from './core/types';
 import { optimizePrompt } from './core/prompts/optimizer';
@@ -675,8 +676,8 @@ function ProjectScreen() {
   const rightPanelOpen = useUIStore(s => s.rightPanelOpen);
   const toggleLeftPanel = useUIStore(s => s.toggleLeftPanel);
   const toggleRightPanel = useUIStore(s => s.toggleRightPanel);
-  const centerTab = useUIStore(s => s.centerTab);
-  const setCenterTab = useUIStore(s => s.setCenterTab);
+  const centerWorkspaceTab = useUIStore(s => s.centerWorkspaceTab);
+  const setCenterWorkspaceTab = useUIStore(s => s.setCenterWorkspaceTab);
   const rightPanelTab = useUIStore(s => s.rightPanelTab);
   const setRightPanelTab = useUIStore(s => s.setRightPanelTab);
   const debugMode = useUIStore(s => s.debugMode);
@@ -733,15 +734,15 @@ function ProjectScreen() {
         {/* Center Panel */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex border-b border-studio-border shrink-0">
-            {(['spatial', 'graph', 'storyboard', 'timeline'] as const).map(tab => (
-              <button key={tab} onClick={() => setCenterTab(tab)}
-                className={centerTab === tab ? 'tab-active' : 'tab'}>
-                {tab === 'spatial' ? '🗺️ Mapa' : tab === 'graph' ? '📊 Grafo' : tab === 'storyboard' ? '🎬 Storyboard' : '⏱ Timeline'}
+            {(['map', 'dependencies', 'scenes', 'stages'] as const).map(tab => (
+              <button key={tab} onClick={() => setCenterWorkspaceTab(tab)}
+                className={centerWorkspaceTab === tab ? 'tab-active' : 'tab'}>
+                {tab === 'map' ? '🗺️ Mapa' : tab === 'dependencies' ? '📊 Grafo' : tab === 'scenes' ? '🎬 Cenas' : '⚙️ Stages'}
               </button>
             ))}
           </div>
           <div className="flex-1 overflow-auto p-2">
-            <CenterContent tab={centerTab} />
+            <VisualWorkspace />
           </div>
         </main>
 
@@ -953,275 +954,6 @@ function LeftPanel() {
   );
 }
 
-/* ─── Center Content ─── */
-function CenterContent({ tab }: { tab: string }) {
-  const project = useProjectStore(s => s.project);
-  if (!project) return null;
-
-  if (tab === 'spatial') return <SpatialMapView />;
-  if (tab === 'graph') return <DependencyGraphView />;
-  if (tab === 'storyboard') return <StoryboardView />;
-  if (tab === 'timeline') return <TimelineView />;
-  return null;
-}
-
-/* ─── Spatial Map View ─── */
-function SpatialMapView() {
-  const project = useProjectStore(s => s.project);
-  const simulatedWorldState = useSimulationStore(s => s.worldState);
-  const { scene: selectedScene, stage: selectedStage } = useSelectedSceneAndStage();
-  if (!project) return null;
-  const { spatialMap } = project;
-  const worldState = simulatedWorldState ?? project.worldState;
-  const completedZones = new Set(
-    selectedScene?.stages
-      .filter(stage => stage.percentage < (selectedStage?.percentage ?? 0))
-      .map(stage => stage.activeZone) ?? []
-  );
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="panel-header">MAPA ESPACIAL DA OBRA</div>
-      <div className="flex-1 relative bg-studio-bg rounded-lg overflow-hidden m-1">
-        <svg viewBox={`0 0 ${spatialMap.width} ${spatialMap.height}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-          {/* Grid */}
-          {Array.from({ length: Math.ceil(spatialMap.width / spatialMap.gridSize) + 1 }).map((_, i) => (
-            <line key={`v${i}`} x1={i * spatialMap.gridSize} y1={0} x2={i * spatialMap.gridSize} y2={spatialMap.height} stroke="#27272a" strokeWidth={0.5} />
-          ))}
-          {Array.from({ length: Math.ceil(spatialMap.height / spatialMap.gridSize) + 1 }).map((_, i) => (
-            <line key={`h${i}`} x1={0} y1={i * spatialMap.gridSize} x2={spatialMap.width} y2={i * spatialMap.gridSize} stroke="#27272a" strokeWidth={0.5} />
-          ))}
-
-          {/* Zones */}
-          {spatialMap.zones.map(zone => {
-            const statusColors: Record<string, string> = {
-              pristine: '#3f3f46', active: '#f59e0b', partial: '#06b6d4', complete: '#10b981', blocked: '#f43f5e'
-            };
-            const protectedZone = project.dna.restrictions.some(rule => rule.includes(zone.id));
-            const displayedStatus = protectedZone
-              ? 'pristine'
-              : zone.id === selectedStage?.activeZone
-                ? (selectedStage.percentage === 100 ? 'complete' : 'active')
-                : completedZones.has(zone.id) ? 'complete' : 'pristine';
-            const fill = statusColors[displayedStatus] || '#3f3f46';
-            const isActiveZone = worldState.activeZone === zone.id;
-
-            return (
-              <g key={zone.id}>
-                <rect x={zone.bounds.x} y={zone.bounds.y} width={zone.bounds.width} height={zone.bounds.height}
-                  fill={fill} fillOpacity={0.2} stroke={isActiveZone ? '#f59e0b' : fill} strokeWidth={isActiveZone ? 2 : 1}
-                  rx={2} />
-                <text x={zone.bounds.x + zone.bounds.width / 2} y={zone.bounds.y + zone.bounds.height / 2}
-                  textAnchor="middle" dominantBaseline="middle" fill="#fafafa" fontSize={6} fontFamily="JetBrains Mono">
-                  {zone.id}
-                </text>
-                <text x={zone.bounds.x + zone.bounds.width / 2} y={zone.bounds.y + zone.bounds.height / 2 + 8}
-                  textAnchor="middle" dominantBaseline="middle" fill={fill} fontSize={4} fontFamily="JetBrains Mono">
-                  {displayedStatus}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Character position */}
-          {(() => {
-            const charZone = spatialMap.zones.find(z => z.id === worldState.character.currentZone);
-            if (!charZone) return null;
-            const cx = charZone.bounds.x + charZone.bounds.width / 2;
-            const cy = charZone.bounds.y + charZone.bounds.height / 2 - 5;
-            return (
-              <g>
-                <circle cx={cx} cy={cy} r={3} fill="#f59e0b" stroke="#000" strokeWidth={0.5} />
-                <text x={cx} y={cy - 5} textAnchor="middle" fill="#f59e0b" fontSize={3}>👷</text>
-              </g>
-            );
-          })()}
-
-          {/* Orientation labels */}
-          <text x={spatialMap.width / 2} y={4} textAnchor="middle" fill="#71717a" fontSize={4}>FUNDO</text>
-          <text x={spatialMap.width / 2} y={spatialMap.height - 2} textAnchor="middle" fill="#71717a" fontSize={4}>FRENTE</text>
-          <text x={3} y={spatialMap.height / 2} textAnchor="middle" fill="#71717a" fontSize={4} transform={`rotate(-90, 3, ${spatialMap.height / 2})`}>ESQ</text>
-          <text x={spatialMap.width - 3} y={spatialMap.height / 2} textAnchor="middle" fill="#71717a" fontSize={4} transform={`rotate(90, ${spatialMap.width - 3}, ${spatialMap.height / 2})`}>DIR</text>
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Dependency Graph View ─── */
-function DependencyGraphView() {
-  const project = useProjectStore(s => s.project);
-  if (!project) return null;
-  const { dependencyGraph } = project;
-
-  const statusColors: Record<string, string> = {
-    READY: 'border-emerald-500 text-emerald-400', BLOCKED: 'border-rose-500 text-rose-400',
-    ACTIVE: 'border-amber-500 text-amber-400', PARTIAL: 'border-cyan-500 text-cyan-400',
-    COMPLETE: 'border-emerald-500 bg-emerald-500/10 text-emerald-400', LOCKED: 'border-purple-500 text-purple-400',
-  };
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="panel-header">GRAFO DE DEPENDÊNCIAS</div>
-      <div className="flex-1 overflow-auto p-4">
-        {dependencyGraph.nodes.length === 0 ? (
-          <p className="text-studio-muted text-sm text-center py-8">Nenhum componente definido. Adicione componentes ao projeto.</p>
-        ) : (
-          <div className="space-y-3">
-            {dependencyGraph.nodes.map(node => (
-              <div key={node.id} className={`panel p-3 border-l-4 ${statusColors[node.status] || 'border-zinc-500'}`}>
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-sm font-semibold">{node.name}</span>
-                  <span className={`badge ${node.status === 'COMPLETE' ? 'badge-success' : node.status === 'BLOCKED' ? 'badge-error' : node.status === 'ACTIVE' ? 'badge-warning' : 'badge-info'}`}>
-                    {node.status}
-                  </span>
-                </div>
-                {node.dependencies.length > 0 && (
-                  <div className="text-[10px] text-studio-muted mt-1">
-                    Depende de: {node.dependencies.join(', ')}
-                  </div>
-                )}
-                {node.zones.length > 0 && (
-                  <div className="text-[10px] text-studio-muted">Zonas: {node.zones.join(', ')}</div>
-                )}
-              </div>
-            ))}
-
-            {dependencyGraph.edges.length > 0 && (
-              <div className="mt-4">
-                <div className="panel-header">ARESTAS</div>
-                <div className="p-2 space-y-1">
-                  {dependencyGraph.edges.map((edge, i) => (
-                    <div key={i} className="text-[10px] text-studio-muted font-mono">
-                      {edge.from} → {edge.to} {edge.required ? '(obrigatório)' : '(opcional)'}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Storyboard View ─── */
-function StoryboardView() {
-  const project = useProjectStore(s => s.project);
-  const selectScene = useUIStore(s => s.selectScene);
-  const selectStage = useUIStore(s => s.selectStage);
-  const setRightPanelTab = useUIStore(s => s.setRightPanelTab);
-  const setStep = useSimulationStore(s => s.setStep);
-  if (!project) return null;
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="panel-header">STORYBOARD — 0% → 25% → 50% → 75% → 100%</div>
-      <div className="flex-1 overflow-auto p-2">
-        {project.scenes.length === 0 ? (
-          <p className="text-studio-muted text-sm text-center py-8">
-            Nenhuma cena criada. Adicione operações para gerar o storyboard.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {project.storyboard.map(entry => {
-              const scene = project.scenes.find(s => s.id === entry.sceneId);
-              if (!scene) return null;
-              return (
-                <div key={entry.sceneId}
-                  onClick={() => {
-                    const sceneIndex = project.scenes.findIndex(item => item.id === entry.sceneId);
-                    selectScene(entry.sceneId);
-                    selectStage(100);
-                    setStep(1 + sceneIndex * 5 + 4);
-                    setRightPanelTab('inspector');
-                  }}
-                  className={`panel p-3 cursor-pointer hover:border-studio-accent ${entry.locked ? 'border-purple-500' : ''}`}>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-mono text-xs font-semibold">Cena {scene.number}</span>
-                    <div className="flex gap-1">
-                      {entry.locked && <span className="badge-locked">🔒</span>}
-                      <span className={`badge ${scene.status === 'approved' ? 'badge-success' : scene.status === 'locked' ? 'badge-locked' : 'badge-info'}`}>
-                        {scene.status}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="bg-studio-bg rounded h-24 flex items-center justify-center text-studio-muted text-xs">
-                    {entry.thumbnail ? <img src={entry.thumbnail} alt="" className="w-full h-full object-cover rounded" /> : '📷 Sem miniatura'}
-                  </div>
-                  <p className="text-[10px] text-studio-muted mt-2">{entry.description}</p>
-                  <div className="text-[10px] text-studio-muted mt-1">
-                    ⏱ {scene.timecodeStart}s — {scene.timecodeEnd}s | 🎥 Câmera {scene.camera}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Timeline View ─── */
-function TimelineView() {
-  const project = useProjectStore(s => s.project);
-  const selectedSceneId = useUIStore(s => s.selectedSceneId);
-  const selectScene = useUIStore(s => s.selectScene);
-  const selectStage = useUIStore(s => s.selectStage);
-  const setRightPanelTab = useUIStore(s => s.setRightPanelTab);
-  const setStep = useSimulationStore(s => s.setStep);
-  if (!project) return null;
-
-  const riskColors: Record<string, string> = { LOW: 'badge-success', MEDIUM: 'badge-warning', HIGH: 'badge-error' };
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="panel-header">TIMELINE</div>
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-studio-border text-studio-muted">
-              <th className="p-2 text-left">#</th>
-              <th className="p-2 text-left">Timecode</th>
-              <th className="p-2 text-left">Operação</th>
-              <th className="p-2 text-left">Estágio</th>
-              <th className="p-2 text-left">Câmera</th>
-              <th className="p-2 text-left">Zona</th>
-              <th className="p-2 text-left">Status</th>
-              <th className="p-2 text-left">Risco</th>
-            </tr>
-          </thead>
-          <tbody>
-            {project.scenes.map((scene, sceneIndex) => (
-              <tr key={scene.id}
-                onClick={() => {
-                  selectScene(scene.id);
-                  selectStage(0);
-                  setStep(1 + sceneIndex * 5);
-                  setRightPanelTab('inspector');
-                }}
-                className={`border-b border-studio-border/50 hover:bg-studio-card/50 cursor-pointer ${selectedSceneId === scene.id ? 'bg-studio-card/70' : ''}`}>
-                <td className="p-2 font-mono">{scene.number}</td>
-                <td className="p-2 font-mono">{scene.timecodeStart}s–{scene.timecodeEnd}s</td>
-                <td className="p-2">{scene.operationId || '—'}</td>
-                <td className="p-2">{scene.stages.length > 0 ? `${scene.stages[0]?.percentage}%–${scene.stages[scene.stages.length - 1]?.percentage}%` : '—'}</td>
-                <td className="p-2">{scene.camera}</td>
-                <td className="p-2 font-mono">{scene.activeZones.join(', ') || '—'}</td>
-                <td className="p-2"><span className={`badge ${scene.status === 'approved' ? 'badge-success' : scene.status === 'locked' ? 'badge-locked' : 'badge-info'}`}>{scene.status}</span></td>
-                <td className="p-2"><span className={`badge ${riskColors[scene.riskLevel]}`}>{scene.riskLevel}</span></td>
-              </tr>
-            ))}
-            {project.scenes.length === 0 && (
-              <tr><td colSpan={8} className="p-8 text-center text-studio-muted">Nenhuma cena na timeline.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 /* ─── Right Content ─── */
 function RightContent({ tab }: { tab: string }) {

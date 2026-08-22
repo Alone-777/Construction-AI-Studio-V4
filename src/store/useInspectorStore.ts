@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ValidationError, ValidationResult, QualityScore, JumpRisk, Suggestion } from '../core/types';
+import type { ValidationError, ValidationResult, QualityScore, JumpRisk, Suggestion, Zone, ConstructionComponent } from '../core/types';
 
 interface InspectorState {
   /* ─── Validação da cena selecionada ─── */
@@ -8,6 +8,10 @@ interface InspectorState {
   currentWarnings: ValidationError[];
   qualityScore: QualityScore | null;
   jumpRisk: JumpRisk;
+
+  /* ─── Seleção no workspace ─── */
+  selectedZone: Zone | null;
+  selectedComponent: ConstructionComponent | null;
 
   /* ─── Sugestões ─── */
   suggestions: Suggestion[];
@@ -19,6 +23,8 @@ interface InspectorState {
   setQualityScore: (score: QualityScore) => void;
   setJumpRisk: (risk: JumpRisk) => void;
   setSuggestions: (suggestions: Suggestion[]) => void;
+  setSelectedZone: (zone: Zone | null) => void;
+  setSelectedComponent: (component: ConstructionComponent | null) => void;
   clearAll: () => void;
 }
 
@@ -28,6 +34,8 @@ export const useInspectorStore = create<InspectorState>((set) => ({
   currentWarnings: [],
   qualityScore: null,
   jumpRisk: 'LOW',
+  selectedZone: null,
+  selectedComponent: null,
   suggestions: [],
 
   setValidation: (result) => set({ currentValidation: result }),
@@ -36,12 +44,16 @@ export const useInspectorStore = create<InspectorState>((set) => ({
   setQualityScore: (score) => set({ qualityScore: score }),
   setJumpRisk: (risk) => set({ jumpRisk: risk }),
   setSuggestions: (suggestions) => set({ suggestions }),
+  setSelectedZone: (zone) => set({ selectedZone: zone }),
+  setSelectedComponent: (component) => set({ selectedComponent: component }),
   clearAll: () => set({
     currentValidation: null,
     currentErrors: [],
     currentWarnings: [],
     qualityScore: null,
     jumpRisk: 'LOW',
+    selectedZone: null,
+    selectedComponent: null,
     suggestions: [],
   }),
 }));
