@@ -93,12 +93,16 @@ export class PipelineOrchestrator {
       return { success: false, error: new Error(`Stage not found: ${stageName}`) };
     }
 
+    // Execute first, then validate (matches main execute loop behavior)
+    const result = stage.execute(context);
+    if (!result.success) return result;
+
     if (stage.validate) {
       const validation = stage.validate(context);
       if (!validation.success) return validation;
     }
 
-    return stage.execute(context);
+    return result;
   }
 
   /**
