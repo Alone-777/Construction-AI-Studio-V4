@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #18181b;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #3f3f46;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #52525b;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-studio-surface border border-studio-border rounded-lg;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between px-3 py-2 border-b border-studio-border text-xs font-semibold uppercase tracking-wider text-studio-muted;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 bg-studio-accent text-black font-semibold rounded-md hover:bg-amber-400 transition-colors text-sm;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-studio-card text-studio-text border border-studio-border rounded-md hover:bg-zinc-600 transition-colors text-sm;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-studio-rose text-white font-semibold rounded-md hover:bg-rose-400 transition-colors text-sm;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 bg-studio-bg border border-studio-border rounded-md text-studio-text text-sm focus:outline-none focus:border-studio-accent focus:ring-1 focus:ring-studio-accent;
+  }
+
+  .select-field {
+    @apply w-full px-3 py-2 bg-studio-bg border border-studio-border rounded-md text-studio-text text-sm focus:outline-none focus:border-studio-accent appearance-none cursor-pointer;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-emerald-500/20 text-emerald-400;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-500/20 text-amber-400;
+  }
+
+  .badge-error {
+    @apply badge bg-rose-500/20 text-rose-400;
+  }
+
+  .badge-info {
+    @apply badge bg-cyan-500/20 text-cyan-400;
+  }
+
+  .badge-locked {
+    @apply badge bg-purple-500/20 text-purple-400;
+  }
+
+  .tab {
+    @apply px-3 py-2 text-sm font-medium text-studio-muted hover:text-studio-text transition-colors border-b-2 border-transparent;
+  }
+
+  .tab-active {
+    @apply tab text-studio-accent border-studio-accent;
+  }
+
+  .validation-pass {
+    @apply text-emerald-400;
+  }
+
+  .validation-fail {
+    @apply text-rose-400;
+  }
+
+  .validation-warn {
+    @apply text-amber-400;
+  }
+}
