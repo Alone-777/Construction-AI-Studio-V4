@@ -1,6 +1,8 @@
 import { useProjectStore } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { useVisualEngineStore } from '../../store/useVisualEngineStore';
+import { worldStateToVisualSceneState } from '../../core/visual/VisualSceneState';
 
 export function StagesView() {
   const project = useProjectStore(s => s.project);
@@ -9,6 +11,7 @@ export function StagesView() {
   const selectStage = useUIStore(s => s.selectStage);
   const setRightPanelTab = useUIStore(s => s.setRightPanelTab);
   const setStep = useSimulationStore(s => s.setStep);
+  const setVisualSceneState = useVisualEngineStore(s => s.setVisualSceneState);
 
   if (!project) return null;
   const scene = project.scenes.find(s => s.id === selectedSceneId) ?? project.scenes[0];
@@ -22,6 +25,24 @@ export function StagesView() {
   }
 
   const riskColors: Record<string, string> = { LOW: 'badge-success', MEDIUM: 'badge-warning', HIGH: 'badge-error' };
+
+  const handleStageSelect = (stage: any, stageIndex: number) => {
+    selectScene(scene.id);
+    selectStage(stage.percentage);
+    setStep(1 + project.scenes.findIndex(s => s.id === scene.id) * 5 + stageIndex);
+    setRightPanelTab('inspector');
+
+    // Populate Visual Engine with selected stage data
+    const promptState = stage.worldStateBefore ?? stage.worldStateAfter;
+    if (promptState) {
+      const visualSceneState = worldStateToVisualSceneState(promptState);
+      visualSceneState.scene.title = `Cena ${scene.number} — ${scene.operationId}`;
+      visualSceneState.scene.description = stage.physicalAction;
+      visualSceneState.activeZone = stage.activeZone;
+      visualSceneState.timestamp = Date.now();
+      setVisualSceneState(visualSceneState);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -40,15 +61,10 @@ export function StagesView() {
             </tr>
           </thead>
           <tbody>
-            {scene.stages.map((stage) => (
+            {scene.stages.map((stage, stageIndex) => (
               <tr
                 key={stage.percentage}
-                onClick={() => {
-                  selectScene(scene.id);
-                  selectStage(stage.percentage);
-                  setStep(1 + project.scenes.findIndex(s => s.id === scene.id) * 5 + scene.stages.findIndex(s => s.percentage === stage.percentage));
-                  setRightPanelTab('inspector');
-                }}
+                onClick={() => handleStageSelect(stage, stageIndex)}
                 className="border-b border-studio-border/50 hover:bg-studio-card/50 cursor-pointer"
               >
                 <td className="p-2 font-mono">{stage.percentage}%</td>

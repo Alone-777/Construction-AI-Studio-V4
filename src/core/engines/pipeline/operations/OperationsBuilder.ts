@@ -30,6 +30,22 @@ export class OperationsBuilderStage {
         // Don't activate components here - done during stage execution in StagesExecutorStage
 
         const topology = analyzeTopology(specification.elements, specification.type, specification.zones);
+        const visualBasis = specification.visualBasis
+          ? {
+              ...specification.visualBasis,
+              materials: Object.keys(specification.materialUse ?? {}),
+              tools: specification.tool ? [specification.tool] : undefined,
+            }
+          : {
+              classification: 'FACT' as const,
+              sourceClassification: 'FACT' as const,
+              sourceField: 'blueprint',
+              evidence: specification.name,
+              sourceOrigin: 'PROVIDER' as const,
+              materials: Object.keys(specification.materialUse ?? {}),
+              tools: specification.tool ? [specification.tool] : undefined,
+            };
+
         const operation: Operation = {
           id: specification.id,
           name: specification.name,
@@ -37,7 +53,7 @@ export class OperationsBuilderStage {
           componentId: specification.componentId,
           elements: [...specification.elements],
           zones: [...specification.zones],
-          visualBasis: specification.visualBasis ? { ...specification.visualBasis } : undefined,
+          visualBasis,
           stages: [0, 25, 50, 75, 100],
           topology: topology.recommendedType,
           estimatedDuration: context.config!.sceneDuration,

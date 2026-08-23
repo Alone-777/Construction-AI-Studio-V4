@@ -13,8 +13,14 @@ import type {
   ToolInstance,
   Transformation,
   WorldState,
+  VisualDNA,
+  Camera,
+  Point,
 } from '../types';
+import type { CameraConfig, SceneMetadata, LightingConfig } from '../visual/VisualSceneState';
 import { createProjectDNA } from './project-dna';
+import { createProjectConstructionSnapshot } from '../state/createConstructionSnapshot';
+import { createConstructionTimeline } from '../timeline/createConstructionTimeline';
 import { createAdaptiveZones, createSpatialMap } from './spatial-map';
 import {
   addComponent,
@@ -376,6 +382,7 @@ export function createProjectFromBlueprint(
     for (const stage of stages) {
       const promptState = stage.worldStateBefore ?? worldState;
       stage.prompts = {
+        visual: '',
         nanoBanana: generateNanoBananaPrompt(
           scene, stage, promptState, dna, spatialMap, previousScene,
         ).fullText,
@@ -398,10 +405,100 @@ export function createProjectFromBlueprint(
   });
   worldState.construction = { ...worldState.construction, progress: 100, status: 'concluída' };
 
+  const visualDNA = {
+    id: `${blueprint.id}_visual_${createdAt}`,
+    character: {
+      id: config.character.id,
+      name: config.character.name,
+      appearance: config.character.appearance,
+      clothing: config.character.clothes,
+      physicalTraits: [config.character.hair, config.character.beard].filter(Boolean),
+      defaultPose: 'standing',
+      animationStyle: 'realistic',
+    },
+    environment: {
+      preset: config.environment,
+      climate: '',
+      light: 'dia',
+      timeOfDay: 'day' as SceneMetadata['timeOfDay'],
+      weather: 'clear' as SceneMetadata['weather'],
+      lightingBase: {
+        type: 'natural' as LightingConfig['type'],
+        keyLight: { direction: { x: 1, y: -1 }, intensity: 1, color: '#ffffff', temperature: 5600 },
+        fillLight: { direction: { x: -1, y: -0.5 }, intensity: 0.3, color: '#ffffff' },
+        ambientLight: { intensity: 0.2, color: '#ffffff' },
+        shadows: true,
+        shadowSoftness: 0.5,
+      },
+    },
+    camera: {
+      defaultConfig: {
+        position: { x: 0, y: 0 },
+        target: { x: 0, y: 0 },
+        up: { x: 0, y: -1 },
+        fov: 60,
+        aspectRatio: 16 / 9,
+        near: 0.1,
+        far: 1000,
+        movement: 'FIXA' as CameraConfig['movement'],
+      },
+      lensDefaults: {
+        focalLength: 35,
+        aperture: 'f/2.8',
+        focusDistance: 10,
+        depthOfField: false,
+      },
+      cameraA: cameraToCameraConfig(config.cameraA),
+      cameraB: cameraToCameraConfig(config.cameraB),
+      movementPreferences: ['FIXA', 'FOLLOW', 'PAN'] as CameraConfig['movement'][],
+    },
+    materials: {
+      palette: config.materials.map(m => ({
+        materialId: m,
+        displayName: m,
+        color: '#888888',
+        texture: 'matte',
+        roughness: 0.5,
+        metallic: 0.0,
+      })),
+      defaultQuantities: {},
+      residueRules: [],
+    },
+    consistencyRules: {
+      colorPalette: [],
+      lightingStyle: 'natural' as VisualDNA['consistencyRules']['lightingStyle'],
+      cameraStyle: 'static' as VisualDNA['consistencyRules']['cameraStyle'],
+      depthOfFieldDefault: false,
+      aspectRatio: 16 / 9,
+      forbiddenVisualElements: [],
+      requiredVisualElements: [],
+      compositionRules: [],
+    },
+    visualStyle: config.visualStyle,
+    detailLevel: config.detailLevel,
+    references: [],
+    updatedAt: createdAt,
+  };
+
+  const constructionState = createProjectConstructionSnapshot(
+    scenes,
+    worldState,
+    worldState.materials
+  );
+
+  const timeline = createConstructionTimeline(
+    blueprint.id,
+    scenes,
+    worldState
+  );
+
   return {
     id: `${blueprint.id}_${createdAt}`,
     name: config.name,
     dna,
+    visualDNA,
+    constructionState,
+    timeline,
     worldState,
     spatialMap,
     dependencyGraph,
@@ -411,5 +508,33 @@ export function createProjectFromBlueprint(
     createdAt,
     updatedAt: createdAt,
     status: 'complete',
+  };
+}
+
+function cameraToCameraConfig(camera: Camera): CameraConfig {
+  const positions: Record<string, Point> = {
+    'close': { x: 0, y: 2 },
+    'medium': { x: 0, y: 5 },
+    'wide': { x: 0, y: 10 },
+    'panoramic': { x: 0, y: 20 },
+  };
+  const heights: Record<string, number> = {
+    'baixa': 1.5,
+    'media': 3,
+    'alta': 6,
+    'aerea': 15,
+  };
+  const pos = positions[camera.framing] || { x: 0, y: 5 };
+  const height = heights[camera.conceptualHeight] || 3;
+
+  return {
+    position: { x: pos.x, y: height },
+    target: { x: 0, y: 0 },
+    up: { x: 0, y: -1 },
+    fov: camera.framing === 'close' ? 35 : camera.framing === 'wide' ? 70 : 60,
+    aspectRatio: 16 / 9,
+    near: 0.1,
+    far: 1000,
+    movement: camera.allowedMovement,
   };
 }

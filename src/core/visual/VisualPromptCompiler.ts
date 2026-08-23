@@ -1,4 +1,9 @@
 import type { VisualSceneState, VisualElement, SceneMetadata, CameraConfig, LensConfig, LightingConfig, SceneAction, Point } from './VisualSceneState';
+import type { VisualDNA } from '../types/project';
+import type { ConstructionStateSnapshot } from '../types/construction-state';
+import type { ConstructionTimeline, ConstructionTimelineFrame } from '../types/construction-timeline';
+import type { SimulationEvent, SimulationResult } from '../types/construction-simulation';
+import type { ConstructionDecision } from '../decision';
 
 /**
  * Resultado da compilação do prompt visual
@@ -17,6 +22,11 @@ export interface VisualPromptResult {
     lens: string;
     lighting: string;
     action: string;
+    visualDNA: string;
+    constructionState: string;
+    timeline: string;
+    simulation: string;
+    decision: string;
   };
   /** Metadados da compilação */
   metadata: {
@@ -289,9 +299,22 @@ function compileActionSection(action: SceneAction): string {
  * Compila VisualSceneState para prompt cinematográfico estruturado
  *
  * @param scene Estado visual completo da cena
+ * @param visualDNA DNA visual do projeto (opcional) para consistência visual
+ * @param constructionState Snapshot do estado da construção (opcional)
+ * @param timeline Timeline de construção (opcional) para contexto temporal
+ * @param simulation Estado de simulação (opcional) para contexto de execução
+ * @param decision Decisão de construção (opcional) para próxima ação
  * @returns VisualPromptResult com prompt completo, seções e metadados
  */
-export function compileVisualScene(scene: VisualSceneState): VisualPromptResult {
+export function compileVisualScene(scene: VisualSceneState, visualDNA?: VisualDNA, constructionState?: ConstructionStateSnapshot, timeline?: ConstructionTimeline, simulation?: {
+  lastOperationId: string;
+  lastResult: SimulationResult;
+  lastEvents: SimulationEvent[];
+  currentOperationId: string | null;
+  pendingOperations: string[];
+  completedOperations: string[];
+  failedOperations: string[];
+}, decision?: ConstructionDecision): VisualPromptResult {
   const sceneSection = compileSceneSection(scene.scene);
   const environmentSection = compileEnvironmentSection(scene.environment);
   const constructionSection = compileConstructionSection(scene.construction);
@@ -301,6 +324,267 @@ export function compileVisualScene(scene: VisualSceneState): VisualPromptResult 
   const lensSection = compileLensSection(scene.lens);
   const lightingSection = compileLightingSection(scene.lighting);
   const actionSection = compileActionSection(scene.action);
+
+  // Seções de consistência visual do VisualDNA
+  const visualDNASections: string[] = [];
+
+  if (visualDNA) {
+    // Estilo visual global
+    if (visualDNA.visualStyle) {
+      visualDNASections.push(`VISUAL STYLE: ${visualDNA.visualStyle.toUpperCase()}`);
+    }
+
+    // Nível de detalhe
+    if (visualDNA.detailLevel) {
+      visualDNASections.push(`DETAIL LEVEL: ${visualDNA.detailLevel.toUpperCase()}`);
+    }
+
+    // Regras de consistência
+    const consistency = visualDNA.consistencyRules;
+    if (consistency) {
+      if (consistency.lightingStyle) {
+        visualDNASections.push(`LIGHTING STYLE: ${consistency.lightingStyle.toUpperCase()}`);
+      }
+      if (consistency.cameraStyle) {
+        visualDNASections.push(`CAMERA STYLE: ${consistency.cameraStyle.toUpperCase()}`);
+      }
+      if (consistency.depthOfFieldDefault) {
+        visualDNASections.push('DEPTH OF FIELD: DEFAULT ON');
+      }
+      if (consistency.aspectRatio) {
+        visualDNASections.push(`ASPECT RATIO: ${consistency.aspectRatio.toFixed(2)}`);
+      }
+      if (consistency.colorPalette && consistency.colorPalette.length > 0) {
+        visualDNASections.push(`COLOR PALETTE: ${consistency.colorPalette.join(', ')}`);
+      }
+      if (consistency.requiredVisualElements && consistency.requiredVisualElements.length > 0) {
+        visualDNASections.push(`REQUIRED ELEMENTS: ${consistency.requiredVisualElements.join(', ')}`);
+      }
+      if (consistency.forbiddenVisualElements && consistency.forbiddenVisualElements.length > 0) {
+        visualDNASections.push(`FORBIDDEN ELEMENTS: ${consistency.forbiddenVisualElements.join(', ')}`);
+      }
+      if (consistency.compositionRules && consistency.compositionRules.length > 0) {
+        visualDNASections.push(`COMPOSITION RULES: ${consistency.compositionRules.join('; ')}`);
+      }
+    }
+
+    // Referências visuais
+    if (visualDNA.references && visualDNA.references.length > 0) {
+      const refs = visualDNA.references
+        .filter(r => r.description)
+        .map(r => `${r.type}: ${r.description} (weight: ${r.weight})`)
+        .join('; ');
+      if (refs) {
+        visualDNASections.push(`VISUAL REFERENCES: ${refs}`);
+      }
+    }
+  }
+
+  // Seções do Construction State Snapshot
+  const constructionStateSections: string[] = [];
+
+  if (constructionState) {
+    // Estado da construção
+    const stateParts: string[] = [];
+    if (constructionState.completedElements.length > 0) {
+      stateParts.push(`COMPLETED: ${constructionState.completedElements.join(', ')}`);
+    }
+    if (constructionState.activeElements.length > 0) {
+      stateParts.push(`ACTIVE: ${constructionState.activeElements.join(', ')}`);
+    }
+    if (constructionState.pendingElements.length > 0) {
+      stateParts.push(`PENDING: ${constructionState.pendingElements.join(', ')}`);
+    }
+    if (stateParts.length > 0) {
+      constructionStateSections.push(`STATE:\n${stateParts.join('\n')}`);
+    }
+
+    // Estado dos materiais
+    const materialParts: string[] = [];
+    if (constructionState.materialState.available.length > 0) {
+      materialParts.push(`AVAILABLE: ${constructionState.materialState.available.join(', ')}`);
+    }
+    if (constructionState.materialState.consumed.length > 0) {
+      materialParts.push(`CONSUMED: ${constructionState.materialState.consumed.join(', ')}`);
+    }
+    if (constructionState.materialState.remaining.length > 0) {
+      materialParts.push(`REMAINING: ${constructionState.materialState.remaining.join(', ')}`);
+    }
+    if (materialParts.length > 0) {
+      constructionStateSections.push(`MATERIAL STATE:\n${materialParts.join('\n')}`);
+    }
+
+    // Estado do worker
+    const workerParts: string[] = [];
+    if (constructionState.workerState.position) {
+      workerParts.push(`POSITION: ${constructionState.workerState.position}`);
+    }
+    if (constructionState.workerState.action) {
+      workerParts.push(`ACTION: ${constructionState.workerState.action}`);
+    }
+    if (constructionState.workerState.tools.length > 0) {
+      workerParts.push(`TOOLS: ${constructionState.workerState.tools.join(', ')}`);
+    }
+    if (workerParts.length > 0) {
+      constructionStateSections.push(`WORKER STATE:\n${workerParts.join('\n')}`);
+    }
+  }
+
+  // Seções do Construction Timeline
+  const timelineSections: string[] = [];
+
+  if (timeline) {
+    const currentFrame = timeline.frames.find(f => f.id === timeline.currentFrameId);
+    const previousFrame = currentFrame?.previousFrameId ? timeline.frames.find(f => f.id === currentFrame.previousFrameId) : undefined;
+    const nextFrame = currentFrame?.nextFrameId ? timeline.frames.find(f => f.id === currentFrame.nextFrameId) : undefined;
+
+    // Previous state
+    if (previousFrame) {
+      const prevParts: string[] = [];
+      if (previousFrame.state.completedElements.length > 0) {
+        prevParts.push(`COMPLETED: ${previousFrame.state.completedElements.join(', ')}`);
+      }
+      if (previousFrame.state.activeElements.length > 0) {
+        prevParts.push(`ACTIVE: ${previousFrame.state.activeElements.join(', ')}`);
+      }
+      if (previousFrame.state.pendingElements.length > 0) {
+        prevParts.push(`PENDING: ${previousFrame.state.pendingElements.join(', ')}`);
+      }
+      if (previousFrame.state.progress > 0) {
+        prevParts.push(`PROGRESS: ${previousFrame.state.progress}%`);
+      }
+      if (prevParts.length > 0) {
+        timelineSections.push(`PREVIOUS STATE:\n${prevParts.join('\n')}`);
+      }
+    }
+
+    // Current state
+    if (currentFrame) {
+      const currParts: string[] = [];
+      if (currentFrame.state.completedElements.length > 0) {
+        currParts.push(`COMPLETED: ${currentFrame.state.completedElements.join(', ')}`);
+      }
+      if (currentFrame.state.activeElements.length > 0) {
+        currParts.push(`ACTIVE: ${currentFrame.state.activeElements.join(', ')}`);
+      }
+      if (currentFrame.state.pendingElements.length > 0) {
+        currParts.push(`PENDING: ${currentFrame.state.pendingElements.join(', ')}`);
+      }
+      if (currentFrame.state.progress > 0) {
+        currParts.push(`PROGRESS: ${currentFrame.state.progress}%`);
+      }
+      if (currentFrame.visualChanges.added.length > 0) {
+        currParts.push(`ADDED: ${currentFrame.visualChanges.added.join(', ')}`);
+      }
+      if (currentFrame.visualChanges.removed.length > 0) {
+        currParts.push(`REMOVED: ${currentFrame.visualChanges.removed.join(', ')}`);
+      }
+      if (currentFrame.visualChanges.modified.length > 0) {
+        currParts.push(`MODIFIED: ${currentFrame.visualChanges.modified.join(', ')}`);
+      }
+      if (currParts.length > 0) {
+        timelineSections.push(`CURRENT STATE:\n${currParts.join('\n')}`);
+      }
+    }
+
+    // Next state
+    if (nextFrame) {
+      const nextParts: string[] = [];
+      if (nextFrame.state.completedElements.length > 0) {
+        nextParts.push(`COMPLETED: ${nextFrame.state.completedElements.join(', ')}`);
+      }
+      if (nextFrame.state.activeElements.length > 0) {
+        nextParts.push(`ACTIVE: ${nextFrame.state.activeElements.join(', ')}`);
+      }
+      if (nextFrame.state.pendingElements.length > 0) {
+        nextParts.push(`PENDING: ${nextFrame.state.pendingElements.join(', ')}`);
+      }
+      if (nextFrame.state.progress > 0) {
+        nextParts.push(`PROGRESS: ${nextFrame.state.progress}%`);
+      }
+      if (nextParts.length > 0) {
+        timelineSections.push(`NEXT STATE:\n${nextParts.join('\n')}`);
+      }
+    }
+  }
+
+  // Seções do Simulation State
+  const simulationSections: string[] = [];
+
+  if (simulation) {
+    // Last action
+    if (simulation.lastOperationId) {
+      simulationSections.push(`LAST ACTION: ${simulation.lastOperationId}`);
+    }
+
+    // Last simulation result
+    if (simulation.lastResult) {
+      const resultParts: string[] = [];
+      resultParts.push(`SUCCESS: ${simulation.lastResult.success}`);
+      if (simulation.lastResult.timelineFrameId) {
+        resultParts.push(`TIMELINE FRAME: ${simulation.lastResult.timelineFrameId}`);
+      }
+      if (simulation.lastResult.events && simulation.lastResult.events.length > 0) {
+        const eventTypes = [...new Set(simulation.lastResult.events.map(e => e.type))];
+        resultParts.push(`EVENTS: ${eventTypes.join(', ')}`);
+      }
+      simulationSections.push(`LAST RESULT:\n${resultParts.join('\n')}`);
+    }
+
+    // Current worker action
+    if (simulation.currentOperationId) {
+      simulationSections.push(`CURRENT WORKER ACTION: ${simulation.currentOperationId}`);
+    }
+
+    // Material status from last events
+    if (simulation.lastEvents && simulation.lastEvents.length > 0) {
+      const materialEvents = simulation.lastEvents.filter(e => e.type === 'MATERIAL_USED');
+      if (materialEvents.length > 0) {
+        const materialParts: string[] = [];
+        for (const evt of materialEvents) {
+          if (evt.payload.success === true && evt.payload.consumed) {
+            for (const [materialId, quantity] of Object.entries(evt.payload.consumed as Record<string, number>)) {
+              materialParts.push(`${materialId}: -${quantity}`);
+            }
+          } else if (evt.payload.success === false && evt.payload.missing) {
+            materialParts.push(`MISSING: ${evt.payload.missing.join(', ')}`);
+          }
+        }
+        if (materialParts.length > 0) {
+          simulationSections.push(`MATERIAL STATUS:\n${materialParts.join('\n')}`);
+        }
+      }
+    }
+
+    // Pending/Completed operations
+    if (simulation.completedOperations && simulation.completedOperations.length > 0) {
+      simulationSections.push(`COMPLETED OPERATIONS: ${simulation.completedOperations.join(', ')}`);
+    }
+    if (simulation.pendingOperations && simulation.pendingOperations.length > 0) {
+      simulationSections.push(`PENDING OPERATIONS: ${simulation.pendingOperations.join(', ')}`);
+    }
+    if (simulation.failedOperations && simulation.failedOperations.length > 0) {
+      simulationSections.push(`FAILED OPERATIONS: ${simulation.failedOperations.join(', ')}`);
+    }
+  }
+
+  // Seções do Decision State
+  const decisionSections: string[] = [];
+
+  if (decision) {
+    if (decision.action) {
+      decisionSections.push(`NEXT ACTION: ${decision.action}`);
+    }
+    if (decision.operationId) {
+      decisionSections.push(`NEXT OPERATION: ${decision.operationId}`);
+    }
+    if (decision.reason) {
+      decisionSections.push(`REASON: ${decision.reason}`);
+    }
+    if (decision.confidence !== undefined) {
+      decisionSections.push(`CONFIDENCE: ${(decision.confidence * 100).toFixed(0)}%`);
+    }
+  }
 
   // Monta o prompt final no formato cinematográfico
   const promptParts = [
@@ -313,6 +597,11 @@ export function compileVisualScene(scene: VisualSceneState): VisualPromptResult 
     lensSection,
     lightingSection,
     actionSection,
+    ...visualDNASections,
+    ...constructionStateSections,
+    ...timelineSections,
+    ...simulationSections,
+    ...decisionSections,
   ].filter(part => part && part !== 'NO VISUAL ELEMENTS' && part !== 'DEFAULT ENVIRONMENT' && part !== 'NO CONSTRUCTION DATA' && part !== 'NO MATERIALS DATA' && part !== 'ALL ELEMENTS HIDDEN');
 
   const prompt = promptParts.join('\n\n');
@@ -329,6 +618,11 @@ export function compileVisualScene(scene: VisualSceneState): VisualPromptResult 
       lens: lensSection,
       lighting: lightingSection,
       action: actionSection,
+      visualDNA: visualDNASections.join(' | '),
+      constructionState: constructionStateSections.join(' | '),
+      timeline: timelineSections.join(' | '),
+      simulation: simulationSections.join(' | '),
+      decision: decisionSections.join(' | '),
     },
     metadata: {
       timestamp: Date.now(),
@@ -345,8 +639,8 @@ export function compileVisualScene(scene: VisualSceneState): VisualPromptResult 
 /**
  * Gera versão curta do prompt (para uso em APIs com limite de tokens)
  */
-export function compileVisualSceneShort(scene: VisualSceneState): string {
-  const result = compileVisualScene(scene);
+export function compileVisualSceneShort(scene: VisualSceneState, visualDNA?: VisualDNA): string {
+  const result = compileVisualScene(scene, visualDNA);
 
   // Versão resumida: apenas as partes essenciais
   const essentialParts = [
@@ -356,6 +650,7 @@ export function compileVisualSceneShort(scene: VisualSceneState): string {
     result.sections.camera,
     result.sections.lens,
     result.sections.lighting,
+    result.sections.visualDNA,
   ].filter(Boolean);
 
   return essentialParts.join(' | ');
@@ -364,8 +659,8 @@ export function compileVisualSceneShort(scene: VisualSceneState): string {
 /**
  * Gera prompt focado apenas na composição visual (sem ação/tempo)
  */
-export function compileVisualSceneCompositionOnly(scene: VisualSceneState): string {
-  const result = compileVisualScene(scene);
+export function compileVisualSceneCompositionOnly(scene: VisualSceneState, visualDNA?: VisualDNA): string {
+  const result = compileVisualScene(scene, visualDNA);
 
   const compositionParts = [
     result.sections.scene,
@@ -376,6 +671,7 @@ export function compileVisualSceneCompositionOnly(scene: VisualSceneState): stri
     result.sections.camera,
     result.sections.lens,
     result.sections.lighting,
+    result.sections.visualDNA,
   ].filter(Boolean);
 
   return compositionParts.join('\n\n');

@@ -60,7 +60,7 @@ export interface Stage {
   qualityScore?: QualityScore;
   jumpRisk?: JumpRisk;
   /** Artefatos derivados do estágio real, nunca texto de demonstração isolado. */
-  prompts?: {
+  prompts?: {visual: string;
     nanoBanana: string;
     kling: string;
   };
@@ -113,6 +113,10 @@ export interface Operation {
     editedByUser?: boolean;
     humanConfirmed?: boolean;
     sourceChangedAt?: string;
+    /** Materiais necessários para esta operação (opcional, vindo do blueprint) */
+    materials?: string[];
+    /** Ferramentas necessárias para esta operação (opcional, vindo do blueprint) */
+    tools?: string[];
   };
   stages: StagePercentage[];
   topology: ZoneType;

@@ -2,6 +2,7 @@ import type {
   ProjectConfig,
   Project,
   ProjectDNA,
+  VisualDNA,
   SpatialMap,
   DependencyGraph,
   WorldState,
@@ -18,6 +19,9 @@ import type {
 } from '../../types';
 import type { FiscalRunner } from '../../fiscals/fiscal-runner';
 import type { BlueprintOperation, ConstructionBlueprint } from '../project-orchestrator';
+import type { ConstructionDecision } from '../../decision/ConstructionDecision';
+import type { CinematicScene } from '../../types/scene-director';
+import type { ConstructionEpisode } from '../../types/construction-series';
 
 /** Context passed through all pipeline stages */
 export interface PipelineContext {
@@ -27,6 +31,9 @@ export interface PipelineContext {
 
   /** Populated by DNA stage */
   dna?: ProjectDNA;
+
+  /** Populated by Assembly stage */
+  visualDNA?: VisualDNA;
 
   /** Populated by Spatial stage */
   spatialMap?: SpatialMap;
@@ -45,9 +52,16 @@ export interface PipelineContext {
   scenes?: Scene[];
   storyboard?: StoryboardEntry[];
 
+  /** Populated by SceneDirector stage */
+  cinematicScenes?: CinematicScene[];
+  episodes?: ConstructionEpisode[];
+
   /** Populated by Stages stage */
   fiscalRunner?: FiscalRunner;
   previousScene?: Scene;
+
+  /** Populated by Decision stage */
+  decision?: ConstructionDecision;
 
   /** Final output */
   project?: Project;

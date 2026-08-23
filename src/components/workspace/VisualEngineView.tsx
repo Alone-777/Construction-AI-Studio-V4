@@ -1,7 +1,8 @@
 import { useVisualEngineStore } from '../../store/useVisualEngineStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useState } from 'react';
-import type { VisualElement, Point, SceneMetadata, SceneAction, CameraConfig, LightingConfig } from '../../core/visual/VisualSceneState';
+import type { VisualElement, Point, SceneMetadata, SceneAction, CameraConfig, LightingConfig, VisualSceneState } from '../../core/visual/VisualSceneState';
+import type { VisualDNA } from '../../core/types/project';
 import { compileVisualScene, compileVisualSceneCompositionOnly, type VisualPromptResult } from '../../core/visual/VisualPromptCompiler';
 
 function generateId(): string {
@@ -109,7 +110,9 @@ export function VisualEngineView() {
             <button
               onClick={() => {
                 if (visualSceneState) {
-                  const result = compileVisualScene(visualSceneState);
+                  // Extract visualDNA if present (from project.visualDNA)
+                  const visualDNA = (visualSceneState as any).visualDNA as VisualDNA | undefined;
+                  const result = compileVisualScene(visualSceneState, visualDNA);
                   setCompiledPrompt(result);
                   setShowPromptOutput(true);
                 }

@@ -2,10 +2,12 @@ import { useUIStore } from './store/useUIStore';
 import { useProjectStore } from './store/useProjectStore';
 import { useSimulationStore } from './store/useSimulationStore';
 import { usePromptStore } from './store/usePromptStore';
+import { useVisualEngineStore } from './store/useVisualEngineStore';
 import { useEffect, useState } from 'react';
 import { VisualWorkspace } from './components/workspace/VisualWorkspace';
 import { importProjectJSON, listProjects, loadProject } from './db/repository';
 import type { DetailLevel, EnvironmentPreset } from './core/types';
+import { worldStateToVisualSceneState } from './core/visual/VisualSceneState';
 import { optimizePrompt } from './core/prompts/optimizer';
 import type { Project } from './core/types';
 import type { VisualProviderDescriptor } from './core/providers/visual-provider';
@@ -683,9 +685,11 @@ function ProjectScreen() {
   const debugMode = useUIStore(s => s.debugMode);
   const toggleDebugMode = useUIStore(s => s.toggleDebugMode);
   const selectedSceneId = useUIStore(s => s.selectedSceneId);
+  const selectedStagePercentage = useUIStore(s => s.selectedStagePercentage);
   const selectScene = useUIStore(s => s.selectScene);
   const selectStage = useUIStore(s => s.selectStage);
   const loadHistory = useSimulationStore(s => s.loadHistory);
+  const setVisualSceneState = useVisualEngineStore(s => s.setVisualSceneState);
 
   useEffect(() => {
     if (!project) return;
@@ -700,6 +704,40 @@ function ProjectScreen() {
       selectStage(0);
     }
   }, [project?.id, loadHistory, selectScene, selectStage]);
+
+  // Auto-populate Visual Engine when scene or stage is selected
+  useEffect(() => {
+    if (!project || !selectedSceneId) return;
+
+    const scene = project.scenes.find(s => s.id === selectedSceneId);
+    if (!scene || scene.stages.length === 0) return;
+
+    // Use the selected stage's worldStateBefore/After to populate the visual scene state
+    const selectedStage = scene.stages.find(s => s.percentage === selectedStagePercentage) ?? scene.stages[0];
+    const promptState = selectedStage.worldStateBefore ?? selectedStage.worldStateAfter;
+    if (promptState) {
+      const visualSceneState = worldStateToVisualSceneState(promptState);
+      visualSceneState.scene.title = `Cena ${scene.number} — ${scene.operationId}`;
+      visualSceneState.scene.description = selectedStage.physicalAction;
+      visualSceneState.activeZone = selectedStage.activeZone;
+      visualSceneState.timestamp = Date.now();
+      // Include project's visualDNA for consistent prompt generation
+      if (project.visualDNA) {
+        (visualSceneState as any).visualDNA = project.visualDNA;
+      }
+      // Include stage-specific data: completed/partial/future elements
+      visualSceneState.construction.existingComponents = selectedStage.physicalState?.completedElements || [];
+      visualSceneState.construction.partialComponents = selectedStage.physicalState?.partialElements || [];
+      visualSceneState.construction.futureComponents = selectedStage.futureElements || [];
+      // Compute progress from completed elements count vs total elements
+      const completedCount = selectedStage.physicalState?.completedElements?.length || 0;
+      const partialCount = selectedStage.physicalState?.partialElements?.length || 0;
+      const futureCount = selectedStage.futureElements?.length || 0;
+      const totalElements = completedCount + partialCount + futureCount;
+      visualSceneState.construction.progress = totalElements > 0 ? Math.round((completedCount + partialCount * 0.5) / totalElements * 100) : 0;
+      setVisualSceneState(visualSceneState);
+    }
+  }, [project?.id, selectedSceneId, selectedStagePercentage, setVisualSceneState]);
 
   if (!project) return null;
 
@@ -1250,7 +1288,7 @@ function PromptView() {
             const kling = generateKlingPrompt(scene, stage, stage.worldStateBefore, project.dna).fullText;
             updateScene(scene.id, {
               stages: scene.stages.map(item => item.percentage === stage.percentage
-                ? { ...item, prompts: { nanoBanana, kling } }
+                ? { ...item, prompts: { visual: '', nanoBanana, kling } }
                 : item),
             });
             startEditing(config.platform === 'nano_banana' ? nanoBanana : kling);

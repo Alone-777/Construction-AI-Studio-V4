@@ -6,6 +6,8 @@ import { WorldBuilderStage } from './world/WorldBuilder';
 import { OperationsBuilderStage } from './operations/OperationsBuilder';
 import { ScenesBuilderStage } from './scenes/ScenesBuilder';
 import { StagesExecutorStage } from './stages/StagesExecutor';
+import { DecisionStage } from './decision/DecisionStage';
+import { SceneDirectorStage } from './scene-director/SceneDirectorStage';
 import { PromptsGeneratorStage } from './prompts/PromptsGenerator';
 import { ProjectAssemblerStage } from './assembly/ProjectAssembler';
 
@@ -26,15 +28,17 @@ export class PipelineRegistry {
   static getStages(): PipelineStage[] {
     if (this._stages === null) {
       this._stages = [
-        new SpatialBuilderStage(),      // 1. Spatial map must come first (needed for DNA cameras)
-        new DNABuilderStage(),          // 2. DNA creation (uses spatial map for visible zones)
-        new DependencyBuilderStage(),   // 3. Dependency graph
-        new WorldBuilderStage(),        // 4. World state initialization
-        new OperationsBuilderStage(),   // 5. Operations creation
-        new ScenesBuilderStage(),       // 6. Scenes & storyboard
-        new StagesExecutorStage(),      // 7. Stages execution with fiscal validation
-        new PromptsGeneratorStage(),    // 8. Prompt generation
-        new ProjectAssemblerStage(),    // 9. Final project assembly
+        new SpatialBuilderStage(),         // 1. Spatial map must come first (needed for DNA cameras)
+        new DNABuilderStage(),             // 2. DNA creation (uses spatial map for visible zones)
+        new DependencyBuilderStage(),      // 3. Dependency graph
+        new WorldBuilderStage(),           // 4. World state initialization
+        new OperationsBuilderStage(),      // 5. Operations creation
+        new ScenesBuilderStage(),          // 6. Scenes & storyboard
+        new StagesExecutorStage(),         // 7. Stages execution with fiscal validation
+        new DecisionStage(),               // 7.5. Decision engine for next operation
+        new SceneDirectorStage(),          // 8. Scene director - cinematic TikTok scenes
+        new PromptsGeneratorStage(),       // 9. Prompt generation
+        new ProjectAssemblerStage(),       // 10. Final project assembly
       ];
     }
     return this._stages;

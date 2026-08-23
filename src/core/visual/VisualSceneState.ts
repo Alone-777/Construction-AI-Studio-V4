@@ -310,15 +310,118 @@ export const DEFAULT_VISUAL_SCENE_STATE: VisualSceneState = {
 
 /**
  * Conversor de WorldState para VisualSceneState
+ * Mapeia campos do WorldState real para o formato VisualSceneState
  */
 export function worldStateToVisualSceneState(worldState: any): VisualSceneState {
+  // Criar elementos visuais a partir do WorldState
+  const elements: VisualElement[] = [];
+  let layerCounter = 0;
+
+  // Adicionar personagem como elemento visual
+  if (worldState.character) {
+    elements.push({
+      id: `character-${worldState.character.characterId}`,
+      type: 'character',
+      name: 'Personagem',
+      position: { x: 0, y: 0 },
+      rotation: 0,
+      scale: 1,
+      visible: true,
+      layer: 10,
+      metadata: { characterId: worldState.character.characterId, zone: worldState.character.currentZone }
+    });
+  }
+
+  // Adicionar componentes existentes como elementos de construção
+  (worldState.existingComponents || []).forEach((compId: string, idx: number) => {
+    elements.push({
+      id: `construction-${compId}`,
+      type: 'construction',
+      name: compId,
+      position: { x: idx * 2, y: 0 },
+      rotation: 0,
+      scale: 1,
+      visible: true,
+      layer: 5 + idx,
+      metadata: { componentId: compId, status: 'completed' }
+    });
+  });
+
+  // Adicionar componentes parciais
+  (worldState.partialComponents || []).forEach((compId: string, idx: number) => {
+    elements.push({
+      id: `construction-partial-${compId}`,
+      type: 'construction',
+      name: `${compId} (parcial)`,
+      position: { x: idx * 2 + 1, y: 1 },
+      rotation: 0,
+      scale: 0.7,
+      visible: true,
+      layer: 5 + idx,
+      metadata: { componentId: compId, status: 'partial' }
+    });
+  });
+
+  // Adicionar materiais como elementos
+  (worldState.materials || []).forEach((mat: any, idx: number) => {
+    if (mat.quantity > 0) {
+      elements.push({
+        id: `material-${mat.materialId}`,
+        type: 'material',
+        name: `${mat.materialId} (${mat.quantity})`,
+        position: { x: idx * 1.5, y: -2 },
+        rotation: 0,
+        scale: 0.8,
+        visible: true,
+        layer: 3,
+        metadata: { materialId: mat.materialId, quantity: mat.quantity, status: mat.status }
+      });
+    }
+  });
+
+  // Adicionar ferramentas como elementos
+  (worldState.tools || []).forEach((tool: any, idx: number) => {
+    if (tool.inUse || tool.status === 'em_uso') {
+      elements.push({
+        id: `tool-${tool.toolId}`,
+        type: 'tool',
+        name: tool.toolId,
+        position: { x: idx * 1.5, y: -3 },
+        rotation: 0,
+        scale: 0.6,
+        visible: true,
+        layer: 4,
+        metadata: { toolId: tool.toolId, status: tool.status, location: tool.location }
+      });
+    }
+  });
+
+  // Adicionar resíduos como elementos
+  (worldState.residues || []).forEach((residue: any, idx: number) => {
+    elements.push({
+      id: `residue-${residue.id || idx}`,
+      type: 'prop',
+      name: `${residue.type || 'Resíduo'} (${residue.quantity || 1})`,
+      position: { x: idx * 1.5, y: -4 },
+      rotation: 0,
+      scale: 0.5,
+      visible: true,
+      layer: 2,
+      metadata: { residueType: residue.type, quantity: residue.quantity, location: residue.location }
+    });
+  });
+
+  // Determinar timeOfDay e weather a partir de climate/light
+  const timeOfDay = worldState.light === 'noite' ? 'night' : worldState.light === 'amanhecer' ? 'dawn' : worldState.light === 'entardecer' ? 'dusk' : 'day';
+  const weather = worldState.climate?.includes('chuva') ? 'rain' : worldState.climate?.includes('tempestade') ? 'storm' : worldState.climate?.includes('névoa') ? 'fog' : worldState.climate?.includes('nublado') ? 'cloudy' : 'clear';
+
   return {
     scene: {
-      title: worldState.scene?.title || '',
+      title: worldState.scene?.title || `Cena - Zona ${worldState.activeZone || 'desconhecida'}`,
       description: worldState.scene?.description || '',
-      locationType: worldState.scene?.locationType || '',
-      timeOfDay: worldState.scene?.timeOfDay || 'day',
-      weather: worldState.scene?.weather || 'clear'
+      locationType: worldState.terrain?.type || 'terreno_plano',
+      timeOfDay,
+      weather
     },
     cameraConfig: worldState.cameraConfig || {
       position: { x: 0, y: 0 },
@@ -337,12 +440,12 @@ export function worldStateToVisualSceneState(worldState: any): VisualSceneState 
       depthOfField: false
     },
     lighting: worldState.lighting || {
-      type: 'natural',
+      type: timeOfDay === 'night' ? 'artificial' : 'natural',
       keyLight: {
         direction: { x: 1, y: -1 },
-        intensity: 1,
+        intensity: timeOfDay === 'night' ? 0.5 : 1,
         color: '#ffffff',
-        temperature: 5600
+        temperature: timeOfDay === 'night' ? 3000 : 5600
       },
       fillLight: {
         direction: { x: -1, y: -0.5 },
@@ -350,16 +453,16 @@ export function worldStateToVisualSceneState(worldState: any): VisualSceneState 
         color: '#ffffff'
       },
       ambientLight: {
-        intensity: 0.2,
+        intensity: timeOfDay === 'night' ? 0.1 : 0.2,
         color: '#ffffff'
       },
       shadows: true,
       shadowSoftness: 0.5
     },
-    elements: worldState.elements || [],
+    elements,
     action: worldState.action || {
-      type: 'idle',
-      description: '',
+      type: worldState.character?.movementRequired ? 'walk' : 'idle',
+      description: worldState.character?.currentAction || '',
       startTime: 0,
       duration: 0
     },
@@ -367,8 +470,8 @@ export function worldStateToVisualSceneState(worldState: any): VisualSceneState 
       terrain: worldState.terrain || { type: '', slope: '', vegetation: '', soil: '' },
       climate: worldState.climate || '',
       light: worldState.light || '',
-      timeOfDay: 'day',
-      weather: 'clear'
+      timeOfDay,
+      weather
     },
     construction: {
       type: worldState.construction?.type || '',
@@ -386,24 +489,14 @@ export function worldStateToVisualSceneState(worldState: any): VisualSceneState 
       tools: worldState.tools || []
     },
     camera: {
-      current: worldState.camera ? {
-        id: 'A',
+      current: {
+        id: worldState.camera || 'A',
         relativePosition: { x: 0, y: 0 },
         orientation: 0,
         conceptualHeight: 'media',
         framing: 'medium',
         allowedMovement: 'FIXA',
-        visibleZones: [],
-        partiallyVisibleZones: [],
-        hiddenZones: []
-      } : {
-        id: 'A',
-        relativePosition: { x: 0, y: 0 },
-        orientation: 0,
-        conceptualHeight: 'media',
-        framing: 'medium',
-        allowedMovement: 'FIXA',
-        visibleZones: [],
+        visibleZones: [worldState.activeZone].filter(Boolean),
         partiallyVisibleZones: [],
         hiddenZones: []
       }
@@ -417,7 +510,7 @@ export function worldStateToVisualSceneState(worldState: any): VisualSceneState 
         movementRequired: false
       },
       position: { x: 0, y: 0 },
-      isMoving: false
+      isMoving: worldState.character?.movementRequired || false
     },
     renderStatus: {
       isRendering: false,
