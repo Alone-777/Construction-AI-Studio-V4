@@ -153,6 +153,7 @@ export class ProjectAssemblerStage {
         storyboard: context.storyboard,
         blueprint: context.blueprint,
         config: context.config,
+        cinematicScenes: context.cinematicScenes,
         createdAt: context.createdAt,
         updatedAt: context.createdAt,
         status: 'complete',

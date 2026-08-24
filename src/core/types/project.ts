@@ -13,6 +13,7 @@ import { ConstructionTimeline } from './construction-timeline';
 import type { SimulationEvent, SimulationResult } from './construction-simulation';
 import type { ConstructionDecision } from '../decision';
 import type { ConstructionBlueprint } from '../engines/project-orchestrator';
+import type { CinematicScene } from './scene-director';
 
 export type EnvironmentPreset = 'floresta_tropical' | 'floresta_temperada' | 'floresta_umida' | 'pinheiros' | 'clareira' | 'montanha' | 'margem_rio' | 'riacho' | 'vale' | 'area_rochosa' | 'terreno_plano' | 'terreno_inclinado' | 'personalizado';
 export type VisualStyle = 'cinematografico' | 'documental' | 'realista' | 'artistico' | 'personalizado';
@@ -282,6 +283,8 @@ export interface Project {
   blueprint?: ConstructionBlueprint;
   /** Config original usada para gerar o projeto (para replay/rollback/branching) */
   config?: ProjectConfig;
+  /** Cenas cinematográficas geradas pelo SceneDirectorStage (para produção TikTok) */
+  cinematicScenes?: CinematicScene[];
   createdAt: number;
   updatedAt: number;
   status: 'setup' | 'planning' | 'active' | 'complete';
