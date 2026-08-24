@@ -64,6 +64,8 @@ export interface Stage {
     nanoBanana: string;
     kling: string;
   };
+  /** Status do estágio após fiscalização: 'approved' | 'rejected' | undefined */
+  status?: 'approved' | 'rejected';
 }
 
 export interface TimelineEvent {

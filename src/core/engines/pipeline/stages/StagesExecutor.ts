@@ -80,7 +80,7 @@ export class StagesExecutorStage {
     }
 
     try {
-      const fiscalRunner = new FiscalRunner();
+      const fiscalRunner = context.fiscalRunner ?? new FiscalRunner();
       context.fiscalRunner = fiscalRunner;
       let worldState = context.worldState;
       let previousScene: Scene | undefined;
@@ -240,7 +240,15 @@ export class StagesExecutorStage {
           stage.jumpRisk = report.jumpRisk;
           sceneApproved = sceneApproved && report.approved;
           sceneRisk = maxRisk(sceneRisk, report.jumpRisk);
-          worldState = after;
+
+          // FISCAL GATE: Only commit candidate state if approved
+          if (report.approved) {
+            worldState = after;
+          } else {
+            // Keep official worldState as 'before' (pre-transformation)
+            // stage.worldStateAfter still holds the candidate for evidence/debugging
+            stage.status = 'rejected';
+          }
         });
 
         // Update component status
