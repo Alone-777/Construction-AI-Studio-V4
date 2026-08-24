@@ -12,6 +12,7 @@ import { ConstructionStateSnapshot } from './construction-state';
 import { ConstructionTimeline } from './construction-timeline';
 import type { SimulationEvent, SimulationResult } from './construction-simulation';
 import type { ConstructionDecision } from '../decision';
+import type { ConstructionBlueprint } from '../engines/project-orchestrator';
 
 export type EnvironmentPreset = 'floresta_tropical' | 'floresta_temperada' | 'floresta_umida' | 'pinheiros' | 'clareira' | 'montanha' | 'margem_rio' | 'riacho' | 'vale' | 'area_rochosa' | 'terreno_plano' | 'terreno_inclinado' | 'personalizado';
 export type VisualStyle = 'cinematografico' | 'documental' | 'realista' | 'artistico' | 'personalizado';
@@ -277,6 +278,10 @@ export interface Project {
     providerModel?: string;
     evaluation?: VisualEvaluationRecord;
   };
+  /** Blueprint original usado para gerar o projeto (para replay/rollback/branching) */
+  blueprint?: ConstructionBlueprint;
+  /** Config original usada para gerar o projeto (para replay/rollback/branching) */
+  config?: ProjectConfig;
   createdAt: number;
   updatedAt: number;
   status: 'setup' | 'planning' | 'active' | 'complete';

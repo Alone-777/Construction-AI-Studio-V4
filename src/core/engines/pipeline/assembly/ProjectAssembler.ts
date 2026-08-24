@@ -151,6 +151,8 @@ export class ProjectAssemblerStage {
         operations: context.operations,
         scenes: context.scenes,
         storyboard: context.storyboard,
+        blueprint: context.blueprint,
+        config: context.config,
         createdAt: context.createdAt,
         updatedAt: context.createdAt,
         status: 'complete',
