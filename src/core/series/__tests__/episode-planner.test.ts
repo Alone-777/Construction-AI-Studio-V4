@@ -382,7 +382,7 @@ describe('EpisodePlanner', () => {
           environment: { terrain: 'flat', slope: 'none', vegetation: 'grass', soil: 'dirt', climate: 'clear', lighting: 'day', timeOfDay: 'day', weather: 'clear', activeZone: 'zone-1' },
           visualPrompt: {
             prompt: '',
-            sections: { scene: '', environment: '', construction: '', materials: '', elements: '', camera: '', lens: '', lighting: '', action: '', visualDNA: '', constructionState: '', timeline: '', simulation: '', decision: '' },
+            sections: { scene: '', environment: '', construction: '', materials: '', elements: '', camera: '', lens: '', lighting: '', action: '', visualDNA: '', constructionState: '' },
             metadata: { timestamp: 0, elementCount: 0, hasCameraMovement: false, hasDepthOfField: false, hasCustomLighting: false }
           },
           estimatedDuration: 15,

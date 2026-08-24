@@ -204,10 +204,7 @@ function generateVisualPrompt(
   return compileVisualScene(
     visualSceneState,
     visualDNA,
-    frame.state,
-    project.timeline,
-    simulation,
-    decision
+    frame.state
   );
 }
 

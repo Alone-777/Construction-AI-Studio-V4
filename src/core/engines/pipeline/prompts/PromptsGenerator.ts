@@ -146,16 +146,13 @@ export class PromptsGeneratorStage {
     try {
       for (const scene of context.scenes) {
         for (const stage of scene.stages) {
-          const promptState: WorldState | undefined =
-            stage.worldStateBefore ??
-            context.worldState ??
-            stage.worldStateAfter;
+          const promptState: WorldState | undefined = stage.worldStateBefore;
 
           if (!promptState) {
             return {
               success: false,
               error: new Error(
-                `Missing world state for stage ${stage.percentage}% of scene ${scene.id}`
+                `Missing worldStateBefore for stage ${stage.percentage}% of scene ${scene.id}. Cannot generate prompt without pre-stage world state.`
               ),
             };
           }
@@ -164,10 +161,7 @@ export class PromptsGeneratorStage {
             visual: compileVisualScene(
               worldStateToVisualSceneState(promptState),
               visualDNA,
-              context.project?.constructionState,
-              context.project?.timeline,
-              context.project?.simulation,
-              context.decision
+              context.project?.constructionState
             ).prompt,
 
             nanoBanana: generateNanoBananaPrompt(

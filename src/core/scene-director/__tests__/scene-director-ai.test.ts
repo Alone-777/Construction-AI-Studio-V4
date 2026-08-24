@@ -28,9 +28,6 @@ const mockVisualPromptResult: VisualPromptResult = {
     action: 'ACTION: test',
     visualDNA: 'VISUAL_DNA: test',
     constructionState: 'STATE: test',
-    timeline: 'TIMELINE: test',
-    simulation: 'SIMULATION: test',
-    decision: 'DECISION: test',
   },
   metadata: {
     timestamp: Date.now(),

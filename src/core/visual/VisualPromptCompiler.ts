@@ -24,9 +24,6 @@ export interface VisualPromptResult {
     action: string;
     visualDNA: string;
     constructionState: string;
-    timeline: string;
-    simulation: string;
-    decision: string;
   };
   /** Metadados da compilação */
   metadata: {
@@ -300,21 +297,10 @@ function compileActionSection(action: SceneAction): string {
  *
  * @param scene Estado visual completo da cena
  * @param visualDNA DNA visual do projeto (opcional) para consistência visual
- * @param constructionState Snapshot do estado da construção (opcional)
- * @param timeline Timeline de construção (opcional) para contexto temporal
- * @param simulation Estado de simulação (opcional) para contexto de execução
- * @param decision Decisão de construção (opcional) para próxima ação
+ * @param constructionState Snapshot do estado da construção (opcional) - apenas stateBefore/stateAfter da cena atual
  * @returns VisualPromptResult com prompt completo, seções e metadados
  */
-export function compileVisualScene(scene: VisualSceneState, visualDNA?: VisualDNA, constructionState?: ConstructionStateSnapshot, timeline?: ConstructionTimeline, simulation?: {
-  lastOperationId: string;
-  lastResult: SimulationResult;
-  lastEvents: SimulationEvent[];
-  currentOperationId: string | null;
-  pendingOperations: string[];
-  completedOperations: string[];
-  failedOperations: string[];
-}, decision?: ConstructionDecision): VisualPromptResult {
+export function compileVisualScene(scene: VisualSceneState, visualDNA?: VisualDNA, constructionState?: ConstructionStateSnapshot): VisualPromptResult {
   const sceneSection = compileSceneSection(scene.scene);
   const environmentSection = compileEnvironmentSection(scene.environment);
   const constructionSection = compileConstructionSection(scene.construction);
@@ -430,162 +416,6 @@ export function compileVisualScene(scene: VisualSceneState, visualDNA?: VisualDN
     }
   }
 
-  // Seções do Construction Timeline
-  const timelineSections: string[] = [];
-
-  if (timeline) {
-    const currentFrame = timeline.frames.find(f => f.id === timeline.currentFrameId);
-    const previousFrame = currentFrame?.previousFrameId ? timeline.frames.find(f => f.id === currentFrame.previousFrameId) : undefined;
-    const nextFrame = currentFrame?.nextFrameId ? timeline.frames.find(f => f.id === currentFrame.nextFrameId) : undefined;
-
-    // Previous state
-    if (previousFrame) {
-      const prevParts: string[] = [];
-      if (previousFrame.state.completedElements.length > 0) {
-        prevParts.push(`COMPLETED: ${previousFrame.state.completedElements.join(', ')}`);
-      }
-      if (previousFrame.state.activeElements.length > 0) {
-        prevParts.push(`ACTIVE: ${previousFrame.state.activeElements.join(', ')}`);
-      }
-      if (previousFrame.state.pendingElements.length > 0) {
-        prevParts.push(`PENDING: ${previousFrame.state.pendingElements.join(', ')}`);
-      }
-      if (previousFrame.state.progress > 0) {
-        prevParts.push(`PROGRESS: ${previousFrame.state.progress}%`);
-      }
-      if (prevParts.length > 0) {
-        timelineSections.push(`PREVIOUS STATE:\n${prevParts.join('\n')}`);
-      }
-    }
-
-    // Current state
-    if (currentFrame) {
-      const currParts: string[] = [];
-      if (currentFrame.state.completedElements.length > 0) {
-        currParts.push(`COMPLETED: ${currentFrame.state.completedElements.join(', ')}`);
-      }
-      if (currentFrame.state.activeElements.length > 0) {
-        currParts.push(`ACTIVE: ${currentFrame.state.activeElements.join(', ')}`);
-      }
-      if (currentFrame.state.pendingElements.length > 0) {
-        currParts.push(`PENDING: ${currentFrame.state.pendingElements.join(', ')}`);
-      }
-      if (currentFrame.state.progress > 0) {
-        currParts.push(`PROGRESS: ${currentFrame.state.progress}%`);
-      }
-      if (currentFrame.visualChanges.added.length > 0) {
-        currParts.push(`ADDED: ${currentFrame.visualChanges.added.join(', ')}`);
-      }
-      if (currentFrame.visualChanges.removed.length > 0) {
-        currParts.push(`REMOVED: ${currentFrame.visualChanges.removed.join(', ')}`);
-      }
-      if (currentFrame.visualChanges.modified.length > 0) {
-        currParts.push(`MODIFIED: ${currentFrame.visualChanges.modified.join(', ')}`);
-      }
-      if (currParts.length > 0) {
-        timelineSections.push(`CURRENT STATE:\n${currParts.join('\n')}`);
-      }
-    }
-
-    // Next state
-    if (nextFrame) {
-      const nextParts: string[] = [];
-      if (nextFrame.state.completedElements.length > 0) {
-        nextParts.push(`COMPLETED: ${nextFrame.state.completedElements.join(', ')}`);
-      }
-      if (nextFrame.state.activeElements.length > 0) {
-        nextParts.push(`ACTIVE: ${nextFrame.state.activeElements.join(', ')}`);
-      }
-      if (nextFrame.state.pendingElements.length > 0) {
-        nextParts.push(`PENDING: ${nextFrame.state.pendingElements.join(', ')}`);
-      }
-      if (nextFrame.state.progress > 0) {
-        nextParts.push(`PROGRESS: ${nextFrame.state.progress}%`);
-      }
-      if (nextParts.length > 0) {
-        timelineSections.push(`NEXT STATE:\n${nextParts.join('\n')}`);
-      }
-    }
-  }
-
-  // Seções do Simulation State
-  const simulationSections: string[] = [];
-
-  if (simulation) {
-    // Last action
-    if (simulation.lastOperationId) {
-      simulationSections.push(`LAST ACTION: ${simulation.lastOperationId}`);
-    }
-
-    // Last simulation result
-    if (simulation.lastResult) {
-      const resultParts: string[] = [];
-      resultParts.push(`SUCCESS: ${simulation.lastResult.success}`);
-      if (simulation.lastResult.timelineFrameId) {
-        resultParts.push(`TIMELINE FRAME: ${simulation.lastResult.timelineFrameId}`);
-      }
-      if (simulation.lastResult.events && simulation.lastResult.events.length > 0) {
-        const eventTypes = [...new Set(simulation.lastResult.events.map(e => e.type))];
-        resultParts.push(`EVENTS: ${eventTypes.join(', ')}`);
-      }
-      simulationSections.push(`LAST RESULT:\n${resultParts.join('\n')}`);
-    }
-
-    // Current worker action
-    if (simulation.currentOperationId) {
-      simulationSections.push(`CURRENT WORKER ACTION: ${simulation.currentOperationId}`);
-    }
-
-    // Material status from last events
-    if (simulation.lastEvents && simulation.lastEvents.length > 0) {
-      const materialEvents = simulation.lastEvents.filter(e => e.type === 'MATERIAL_USED');
-      if (materialEvents.length > 0) {
-        const materialParts: string[] = [];
-        for (const evt of materialEvents) {
-          if (evt.payload.success === true && evt.payload.consumed) {
-            for (const [materialId, quantity] of Object.entries(evt.payload.consumed as Record<string, number>)) {
-              materialParts.push(`${materialId}: -${quantity}`);
-            }
-          } else if (evt.payload.success === false && evt.payload.missing) {
-            materialParts.push(`MISSING: ${evt.payload.missing.join(', ')}`);
-          }
-        }
-        if (materialParts.length > 0) {
-          simulationSections.push(`MATERIAL STATUS:\n${materialParts.join('\n')}`);
-        }
-      }
-    }
-
-    // Pending/Completed operations
-    if (simulation.completedOperations && simulation.completedOperations.length > 0) {
-      simulationSections.push(`COMPLETED OPERATIONS: ${simulation.completedOperations.join(', ')}`);
-    }
-    if (simulation.pendingOperations && simulation.pendingOperations.length > 0) {
-      simulationSections.push(`PENDING OPERATIONS: ${simulation.pendingOperations.join(', ')}`);
-    }
-    if (simulation.failedOperations && simulation.failedOperations.length > 0) {
-      simulationSections.push(`FAILED OPERATIONS: ${simulation.failedOperations.join(', ')}`);
-    }
-  }
-
-  // Seções do Decision State
-  const decisionSections: string[] = [];
-
-  if (decision) {
-    if (decision.action) {
-      decisionSections.push(`NEXT ACTION: ${decision.action}`);
-    }
-    if (decision.operationId) {
-      decisionSections.push(`NEXT OPERATION: ${decision.operationId}`);
-    }
-    if (decision.reason) {
-      decisionSections.push(`REASON: ${decision.reason}`);
-    }
-    if (decision.confidence !== undefined) {
-      decisionSections.push(`CONFIDENCE: ${(decision.confidence * 100).toFixed(0)}%`);
-    }
-  }
-
   // Monta o prompt final no formato cinematográfico
   const promptParts = [
     sceneSection,
@@ -599,9 +429,6 @@ export function compileVisualScene(scene: VisualSceneState, visualDNA?: VisualDN
     actionSection,
     ...visualDNASections,
     ...constructionStateSections,
-    ...timelineSections,
-    ...simulationSections,
-    ...decisionSections,
   ].filter(part => part && part !== 'NO VISUAL ELEMENTS' && part !== 'DEFAULT ENVIRONMENT' && part !== 'NO CONSTRUCTION DATA' && part !== 'NO MATERIALS DATA' && part !== 'ALL ELEMENTS HIDDEN');
 
   const prompt = promptParts.join('\n\n');
@@ -620,9 +447,6 @@ export function compileVisualScene(scene: VisualSceneState, visualDNA?: VisualDN
       action: actionSection,
       visualDNA: visualDNASections.join(' | '),
       constructionState: constructionStateSections.join(' | '),
-      timeline: timelineSections.join(' | '),
-      simulation: simulationSections.join(' | '),
-      decision: decisionSections.join(' | '),
     },
     metadata: {
       timestamp: Date.now(),
