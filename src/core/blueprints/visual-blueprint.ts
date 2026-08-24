@@ -4,7 +4,7 @@ import {
   type DescriptionBlueprintResult,
   type ProjectDescriptionInput,
 } from './description-blueprint';
-import { createProjectFromBlueprint, type BlueprintOperation } from '../engines/project-orchestrator';
+import { createProjectFromBlueprint, type BlueprintOperation } from '../engines/pipeline';
 import type {
   VisualAnalysisRequest,
   VisualAnalysisResult,

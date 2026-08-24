@@ -3,7 +3,7 @@ import { DEFAULT_CHARACTER } from '../types';
 import {
   createProjectFromBlueprint,
   type ConstructionBlueprint,
-} from '../engines/project-orchestrator';
+} from '../engines/pipeline';
 
 const WORK_ZONES = ['Z1', 'Z2', 'Z4', 'Z3'];
 
