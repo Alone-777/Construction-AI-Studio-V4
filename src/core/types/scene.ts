@@ -2,6 +2,7 @@ import { ZoneType } from './spatial';
 import { ValidationError } from './errors';
 import type { WorldState, ExecutionProof } from './world-state';
 import type { QualityScore } from './quality';
+import type { ConstructionDecision } from '../decision/ConstructionDecision';
 
 export type StagePercentage = 0 | 25 | 50 | 75 | 100;
 export type JumpRisk = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -66,6 +67,8 @@ export interface Stage {
   };
   /** Status do estágio após fiscalização: 'approved' | 'rejected' | undefined */
   status?: 'approved' | 'rejected';
+  /** Decisão temporal calculada após fiscalização deste estágio */
+  decision?: ConstructionDecision;
 }
 
 export interface TimelineEvent {

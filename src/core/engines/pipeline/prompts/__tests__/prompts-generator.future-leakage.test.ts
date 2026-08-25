@@ -348,30 +348,6 @@ describe('PromptsGeneratorStage - Future Leakage Prevention', () => {
   });
 
   describe('no future decision data in visual prompt', () => {
-    it('does not include context.decision in visual prompt compilation', () => {
-      const pastWorldState = createWorldState('PAST_STATE_MARKER');
-      const stage = createStage({ worldStateBefore: pastWorldState });
-      const scene = createSceneWithStages([stage]);
-
-      const context = createMinimalContext({
-        scenes: [scene],
-        decision: {
-          action: 'EXECUTE_OPERATION',
-          operationId: 'FUTURE_DECISION_MARKER', // Unique marker
-          reason: 'Future operation',
-          confidence: 0.9,
-        },
-      });
-
-      const result = generator.execute(context);
-
-      expect(result.success).toBe(true);
-      const visualPrompt = scene.stages[0].prompts?.visual;
-      expect(visualPrompt).toBeDefined();
-      // Verify future decision marker does not appear in visual prompt
-      expect(visualPrompt).not.toContain('FUTURE_DECISION_MARKER');
-    });
-
     it('does not include future timeline data in visual prompt', () => {
       const pastWorldState = createWorldState('PAST_STATE_MARKER');
       const stage = createStage({ worldStateBefore: pastWorldState });

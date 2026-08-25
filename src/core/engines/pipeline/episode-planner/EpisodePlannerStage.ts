@@ -7,10 +7,10 @@ import type { WorldState, Operation } from '../../../types';
 import type { ConstructionBlueprint } from '../../project-orchestrator';
 
 /**
- * Stage 9: Episode Planner
+ * Stage 8: Episode Planner
  * Transforms ConstructionEpisode[] into cinematic EpisodePlan with prioritization,
  * shot planning, duration adjustment, and vertical video structure.
- * Runs after DecisionStage, before SceneDirectorStage.
+ * Runs after StagesExecutorStage, before SceneDirectorStage.
  */
 export class EpisodePlannerStage {
   name = 'episode-planner';
@@ -98,7 +98,6 @@ export class EpisodePlannerStage {
       storyboard: context.storyboard || [],
       timeline,
       simulation: undefined,
-      decision: context.decision,
       constructionState: {
         sceneId: 'scene-1',
         progress: 0,

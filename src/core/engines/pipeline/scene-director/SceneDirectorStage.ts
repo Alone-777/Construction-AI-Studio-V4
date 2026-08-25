@@ -11,9 +11,9 @@ import type { ConstructionBlueprint } from '../../project-orchestrator';
 import type { ProjectConfig } from '../../../types';
 
 /**
- * Stage 8.5: Scene Director
+ * Stage 9: Scene Director
  * Transforms ConstructionEpisode into cinematic scenes for TikTok
- * Runs after DecisionStage, before PromptsGeneratorStage
+ * Runs after EpisodePlannerStage, before PromptsGeneratorStage
  * Works without full Project by constructing minimal project from context
  */
 export class SceneDirectorStage {
@@ -128,7 +128,6 @@ export class SceneDirectorStage {
         completedOperations: simulation.completedOperations || [],
         failedOperations: simulation.failedOperations || [],
       } : undefined,
-      decision: context.decision,
       constructionState: {
         sceneId: 'scene-1',
         progress: 0,

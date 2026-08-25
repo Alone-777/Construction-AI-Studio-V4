@@ -65,9 +65,6 @@ export interface PipelineContext {
   fiscalRunner?: FiscalRunner;
   previousScene?: Scene;
 
-  /** Populated by Decision stage */
-  decision?: ConstructionDecision;
-
   /** Final output */
   project?: Project;
 }

@@ -6,7 +6,6 @@ import { WorldBuilderStage } from './world/WorldBuilder';
 import { OperationsBuilderStage } from './operations/OperationsBuilder';
 import { ScenesBuilderStage } from './scenes/ScenesBuilder';
 import { StagesExecutorStage } from './stages/StagesExecutor';
-import { DecisionStage } from './decision/DecisionStage';
 import { EpisodePlannerStage } from './episode-planner/EpisodePlannerStage';
 import { SceneDirectorStage } from './scene-director/SceneDirectorStage';
 import { PromptsGeneratorStage } from './prompts/PromptsGenerator';
@@ -35,8 +34,7 @@ export class PipelineRegistry {
         new WorldBuilderStage(),           // 4. World state initialization
         new OperationsBuilderStage(),      // 5. Operations creation
         new ScenesBuilderStage(),          // 6. Scenes & storyboard
-        new StagesExecutorStage(),         // 7. Stages execution with fiscal validation
-        new DecisionStage(),               // 7.5. Decision engine for next operation
+        new StagesExecutorStage(),         // 7. Stages execution with fiscal validation + temporal decision
         new EpisodePlannerStage(),         // 8. Episode planner - cinematic prioritization & shot planning
         new SceneDirectorStage(),          // 9. Scene director - cinematic TikTok scenes (uses plan)
         new PromptsGeneratorStage(),       // 10. Prompt generation

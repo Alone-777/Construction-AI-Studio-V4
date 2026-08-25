@@ -19,6 +19,9 @@ import { FiscalRunner } from '../../../fiscals/fiscal-runner';
 import { updateComponentStatus } from '../../../engines/dependency-graph';
 import { planWorkRoute } from '../../../engines/work-route';
 import type { PipelineContext, StageResult } from '../types';
+import { ConstructionDecisionEngine, createDecisionEngine } from '../../../decision/ConstructionDecisionEngine';
+import type { DecisionContext, ConstructionDecision, OperationDependency } from '../../../decision/ConstructionDecision';
+import type { Stage } from '../../../types/scene';
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
@@ -69,9 +72,15 @@ function updateTools(
 /**
  * Stage 7: Stages Execution
  * Executes all stages for each scene with world state transformations and fiscal validation
+ * Calculates temporal decision per-stage after fiscal validation
  */
 export class StagesExecutorStage {
   name = 'stages';
+  private engine: ConstructionDecisionEngine;
+
+  constructor() {
+    this.engine = createDecisionEngine();
+  }
 
   execute(context: PipelineContext): StageResult {
     if (!context.scenes || !context.operations || !context.blueprint || !context.spatialMap ||
@@ -85,8 +94,8 @@ export class StagesExecutorStage {
       let worldState = context.worldState;
       let previousScene: Scene | undefined;
 
-      for (let operationIndex = 0; operationIndex < context.operations.length; operationIndex++) {
-        const operation = context.operations[operationIndex];
+      for (let operationIndex = 0; operationIndex < (context.operations?.length ?? 0); operationIndex++) {
+        const operation = context.operations![operationIndex];
         const scene = context.scenes[operationIndex];
         const specification = context.blueprint.operations.find(op => op.id === operation.id);
 
@@ -249,6 +258,15 @@ export class StagesExecutorStage {
             // stage.worldStateAfter still holds the candidate for evidence/debugging
             stage.status = 'rejected';
           }
+
+          // TEMPORAL DECISION: Calculate decision for THIS stage's committed state
+          // Uses the worldState AFTER fiscal gate (committed state)
+          const decisionContext = this.buildDecisionContext(
+            context.operations!,
+            worldState,
+            context.blueprint
+          );
+          stage.decision = this.engine.decide(decisionContext);
         });
 
         // Update component status
@@ -270,6 +288,88 @@ export class StagesExecutorStage {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error : new Error(String(error)) };
     }
+  }
+
+  private buildDecisionContext(
+    operations: Operation[],
+    worldState: WorldState,
+    blueprint: any
+  ): DecisionContext {
+    const completedElements = this.getCompletedElements(worldState, operations, blueprint);
+    const activeElements = this.getActiveElements(worldState, operations);
+    const pendingElements = this.getPendingElements(operations, completedElements, activeElements);
+    const materialState = this.getMaterialState(worldState);
+    const workerState = this.getWorkerState(worldState);
+    const availableOperations = this.buildAvailableOperations(operations, blueprint);
+    const inventory = this.buildInventory(worldState);
+    const dependencies = this.buildDependencies(blueprint);
+
+    return {
+      constructionState: { completedElements, activeElements, pendingElements, materialState, workerState },
+      availableOperations,
+      inventory,
+      dependencies,
+    };
+  }
+
+  private getCompletedElements(worldState: WorldState, operations: Operation[], blueprint: any): string[] {
+    const completed: string[] = [];
+    if (worldState.existingComponents) completed.push(...worldState.existingComponents);
+    for (const operation of operations) {
+      const spec = blueprint.operations.find((op: any) => op.id === operation.id);
+      if (spec && spec.components) {
+        for (const component of spec.components) {
+          if (!completed.includes(component)) completed.push(component);
+        }
+      }
+    }
+    return completed;
+  }
+
+  private getActiveElements(worldState: WorldState, operations: Operation[]): string[] {
+    return worldState.partialComponents || [];
+  }
+
+  private getPendingElements(operations: Operation[], completedElements: string[], activeElements: string[]): string[] {
+    const allElements = new Set<string>();
+    for (const op of operations) if (op.elements) op.elements.forEach(el => allElements.add(el));
+    return Array.from(allElements).filter(el => !completedElements.includes(el) && !activeElements.includes(el));
+  }
+
+  private getMaterialState(worldState: WorldState): DecisionContext['constructionState']['materialState'] {
+    const available: string[] = [], consumed: string[] = [], remaining: string[] = [];
+    for (const material of worldState.materials) {
+      if (material.status === 'disponivel' && material.quantity > 0) available.push(material.materialId);
+      else if (material.status === 'incorporado' || material.status === 'em_uso') consumed.push(material.materialId);
+      if (material.quantity > 0) remaining.push(material.materialId);
+    }
+    for (const consumedMat of worldState.consumedMaterials) if (!consumed.includes(consumedMat.materialId)) consumed.push(consumedMat.materialId);
+    return { available, consumed, remaining };
+  }
+
+  private getWorkerState(worldState: WorldState): DecisionContext['constructionState']['workerState'] {
+    return { position: worldState.character?.currentZone || 'site', action: worldState.character?.currentAction || 'idle', tools: worldState.tools?.filter(t => t.status === 'em_uso').map(t => t.toolId) || [] };
+  }
+
+  private buildAvailableOperations(operations: Operation[], blueprint: any): DecisionContext['availableOperations'] {
+    return operations.map(op => {
+      const spec = blueprint.operations.find((bop: any) => bop.id === op.id);
+      return { id: op.id, name: op.name || spec?.name || op.id, elements: op.elements || [], zones: op.zones || [], visualBasis: { materials: spec?.materialUse ? Object.keys(spec.materialUse) : undefined, tools: spec?.tool ? [spec.tool] : undefined } };
+    });
+  }
+
+  private buildInventory(worldState: WorldState): DecisionContext['inventory'] {
+    const materials: Record<string, number> = {};
+    for (const material of worldState.materials) materials[material.materialId] = material.quantity;
+    return { materials, tools: worldState.tools?.map(t => t.toolId) || [] };
+  }
+
+  private buildDependencies(blueprint: any): OperationDependency[] {
+    const dependencies: OperationDependency[] = [];
+    if (blueprint.operations) {
+      for (const op of blueprint.operations) if (op.dependsOn && op.dependsOn.length > 0) dependencies.push({ operationId: op.id, dependsOn: op.dependsOn });
+    }
+    return dependencies;
   }
 
   validate(context: PipelineContext): StageResult {

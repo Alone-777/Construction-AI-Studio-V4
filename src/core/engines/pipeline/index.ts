@@ -6,7 +6,6 @@ export { WorldBuilderStage } from './world/WorldBuilder';
 export { OperationsBuilderStage } from './operations/OperationsBuilder';
 export { ScenesBuilderStage } from './scenes/ScenesBuilder';
 export { StagesExecutorStage } from './stages/StagesExecutor';
-export { DecisionStage } from './decision/DecisionStage';
 export { SceneDirectorStage } from './scene-director/SceneDirectorStage';
 export { PromptsGeneratorStage } from './prompts/PromptsGenerator';
 export { ProjectAssemblerStage } from './assembly/ProjectAssembler';

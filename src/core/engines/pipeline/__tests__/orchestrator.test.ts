@@ -31,9 +31,9 @@ describe('PipelineOrchestrator', () => {
   it('constrói com estágios do registry', () => {
     const stageNames = orchestrator.getStageNames();
 
-    expect(stageNames).toHaveLength(12);
+    expect(stageNames).toHaveLength(11);
     expect(stageNames[0]).toBe('spatial');
-    expect(stageNames[11]).toBe('assembly');
+    expect(stageNames[10]).toBe('assembly');
   });
 
   it('execute retorna PipelineResult com sucesso', () => {
