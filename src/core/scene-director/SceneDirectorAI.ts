@@ -1,4 +1,4 @@
-import { ConstructionEpisode } from '../types/construction-series';
+import { ConstructionEpisode, PlannedEpisode } from '../types/construction-series';
 import {
   ShotType,
   CinematicCameraMovement,
@@ -143,11 +143,13 @@ export class SceneDirectorAI {
   }
 
   /**
-   * Seleciona movimento para shot de estabelecimento
+   * Seleciona movimento para shot de estabelecimento (determinístico)
    */
   private selectEstablishingMovement(objectiveType: string): CinematicCameraMovement {
     const movements: CinematicCameraMovement[] = ['crane_up', 'dolly_in', 'orbit', 'push_in'];
-    return movements[Math.floor(Math.random() * movements.length)];
+    // Deterministic selection based on objectiveType hash
+    const hash = this.hashString(objectiveType);
+    return movements[hash % movements.length];
   }
 
   /**
@@ -163,7 +165,7 @@ export class SceneDirectorAI {
   }
 
   /**
-   * Seleciona movimento para shot de ação
+   * Seleciona movimento para shot de ação (determinístico)
    */
   private selectActionMovement(actionType: string): CinematicCameraMovement {
     const actionMovements: Record<string, CinematicCameraMovement[]> = {
@@ -176,7 +178,9 @@ export class SceneDirectorAI {
       prepare: ['pan_left', 'tilt_up', 'smooth', 'static'],
     };
     const movements = actionMovements[actionType] || ['smooth', 'pan_right'];
-    return movements[Math.floor(Math.random() * movements.length)];
+    // Deterministic selection based on actionType hash
+    const hash = this.hashString(actionType);
+    return movements[hash % movements.length];
   }
 
   /**
@@ -192,12 +196,14 @@ export class SceneDirectorAI {
   }
 
   /**
-   * Seleciona movimento para clímax
+   * Seleciona movimento para clímax (determinístico)
    */
   private selectClimaxMovement(objectiveType: string, progress: number): CinematicCameraMovement {
     if (progress >= 90) return 'static'; // Parado no resultado final
     const movements: CinematicCameraMovement[] = ['push_in', 'orbit', 'crane_up', 'smooth'];
-    return movements[Math.floor(Math.random() * movements.length)];
+    // Deterministic selection based on objectiveType + progress hash
+    const hash = this.hashString(objectiveType + progress.toString());
+    return movements[hash % movements.length];
   }
 
   /**
@@ -526,6 +532,70 @@ export class SceneDirectorAI {
     });
 
     return allScenes;
+  }
+
+  /**
+   * Direciona episódios já planejados (do EpisodePlanner) em cenas cinematográficas
+   * Usa plannedShots, plannedDuration, verticalStructure do plano - NÃO recalcula
+   */
+  directFromPlan(plannedEpisodes: PlannedEpisode[], episodePlan?: { verticalStructure: any }): CinematicScene[] {
+    const allScenes: CinematicScene[] = [];
+    const globalVerticalStructure = episodePlan?.verticalStructure;
+
+    for (const plannedEp of plannedEpisodes) {
+      const episode = plannedEp.episode;
+
+      for (let i = 0; i < plannedEp.plannedShots.length; i++) {
+        const shot = plannedEp.plannedShots[i];
+        const isFirstShot = i === 0 && plannedEp.cinematicOrder === 1;
+
+        const scene: CinematicScene = {
+          id: `scene-${episode.id}-${i + 1}`,
+          episodeId: episode.id,
+          sequence: plannedEp.cinematicOrder * plannedEp.plannedShots.length + i + 1 - plannedEp.plannedShots.length,
+          shotType: shot.shotType,
+          cameraMovement: shot.cameraMovement,
+          duration: shot.duration,
+          hook: isFirstShot ? shot.hook : undefined,
+          visualProgression: shot.visualProgression,
+          satisfyingMoments: shot.satisfyingMoments.map(m => ({
+            ...m,
+            timestamp: m.timestamp,
+          })),
+          prompt: this.generateScenePrompt(episode, shot, shot.visualProgression, isFirstShot ? shot.hook : undefined),
+          verticalStructure: isFirstShot ? globalVerticalStructure : undefined,
+          metadata: {
+            objectiveType: episode.objective.type,
+            actionType: episode.action.type,
+            element: episode.objective.elements[0] || 'construction',
+            zone: episode.action.zone,
+            progress: episode.metadata.progress,
+          },
+        };
+
+        allScenes.push(scene);
+      }
+    }
+
+    // Ajustar sequência global
+    allScenes.forEach((scene, index) => {
+      scene.sequence = index + 1;
+    });
+
+    return allScenes;
+  }
+
+  /**
+   * Simple deterministic hash for string-based selection
+   */
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
   }
 
   /**

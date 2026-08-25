@@ -324,7 +324,7 @@ export class EpisodePlanner {
   }
 
   /**
-   * Seleciona movimento de câmera
+   * Seleciona movimento de câmera (determinístico)
    */
   private selectCameraMovement(
     episode: ConstructionEpisode,
@@ -335,12 +335,14 @@ export class EpisodePlanner {
   ): CinematicCameraMovement {
     if (isOpening) {
       const openingMovements: CinematicCameraMovement[] = ['crane_up', 'dolly_in', 'orbit', 'push_in'];
-      return openingMovements[Math.floor(Math.random() * openingMovements.length)];
+      const hash = this.hashString(episode.id + 'opening');
+      return openingMovements[hash % openingMovements.length];
     }
 
     if (isClosing) {
       const closingMovements: CinematicCameraMovement[] = ['static', 'push_in', 'orbit', 'smooth'];
-      return closingMovements[Math.floor(Math.random() * closingMovements.length)];
+      const hash = this.hashString(episode.id + 'closing');
+      return closingMovements[hash % closingMovements.length];
     }
 
     const actionMovements: Record<EpisodeAction['type'], CinematicCameraMovement[]> = {
@@ -637,6 +639,19 @@ export class EpisodePlanner {
    */
   getConfig(): EpisodePlannerConfig {
     return { ...this.config };
+  }
+
+  /**
+   * Simple deterministic hash for string-based selection
+   */
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
   }
 }
 

@@ -139,3 +139,6 @@ export interface SeriesGenerationConfig {
   /** Callback para personalizar prompt visual */
   visualPromptCustomizer?: (episode: ConstructionEpisode, project: any) => VisualPromptResult;
 }
+
+// Re-export types from EpisodePlanner for cross-module usage
+export type { PlannedEpisode, EpisodePlan } from '../series/EpisodePlanner';

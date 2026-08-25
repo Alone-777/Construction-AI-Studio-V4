@@ -22,6 +22,7 @@ import type { BlueprintOperation, ConstructionBlueprint } from '../project-orche
 import type { ConstructionDecision } from '../../decision/ConstructionDecision';
 import type { CinematicScene } from '../../types/scene-director';
 import type { ConstructionEpisode } from '../../types/construction-series';
+import type { PlannedEpisode, EpisodePlan } from '../../series/EpisodePlanner';
 
 /** Context passed through all pipeline stages */
 export interface PipelineContext {
@@ -55,6 +56,10 @@ export interface PipelineContext {
   /** Populated by SceneDirector stage */
   cinematicScenes?: CinematicScene[];
   episodes?: ConstructionEpisode[];
+
+  /** Populated by EpisodePlanner stage */
+  plannedEpisodes?: PlannedEpisode[];
+  episodePlan?: EpisodePlan;
 
   /** Populated by Stages stage */
   fiscalRunner?: FiscalRunner;

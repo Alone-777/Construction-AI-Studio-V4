@@ -7,6 +7,7 @@ import { OperationsBuilderStage } from './operations/OperationsBuilder';
 import { ScenesBuilderStage } from './scenes/ScenesBuilder';
 import { StagesExecutorStage } from './stages/StagesExecutor';
 import { DecisionStage } from './decision/DecisionStage';
+import { EpisodePlannerStage } from './episode-planner/EpisodePlannerStage';
 import { SceneDirectorStage } from './scene-director/SceneDirectorStage';
 import { PromptsGeneratorStage } from './prompts/PromptsGenerator';
 import { ProjectAssemblerStage } from './assembly/ProjectAssembler';
@@ -36,9 +37,10 @@ export class PipelineRegistry {
         new ScenesBuilderStage(),          // 6. Scenes & storyboard
         new StagesExecutorStage(),         // 7. Stages execution with fiscal validation
         new DecisionStage(),               // 7.5. Decision engine for next operation
-        new SceneDirectorStage(),          // 8. Scene director - cinematic TikTok scenes
-        new PromptsGeneratorStage(),       // 9. Prompt generation
-        new ProjectAssemblerStage(),       // 10. Final project assembly
+        new EpisodePlannerStage(),         // 8. Episode planner - cinematic prioritization & shot planning
+        new SceneDirectorStage(),          // 9. Scene director - cinematic TikTok scenes (uses plan)
+        new PromptsGeneratorStage(),       // 10. Prompt generation
+        new ProjectAssemblerStage(),       // 11. Final project assembly
       ];
     }
     return this._stages;

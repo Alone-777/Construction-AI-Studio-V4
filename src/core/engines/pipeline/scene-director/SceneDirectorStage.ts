@@ -4,6 +4,7 @@ import type { PipelineContext, StageResult } from '../types';
 import type { CinematicScene } from '../../../types/scene-director';
 import type { CinematicCameraMovement } from '../../../types/scene-director';
 import type { ConstructionEpisode } from '../../../types/construction-series';
+import type { PlannedEpisode } from '../../../series/EpisodePlanner';
 import type { Project, VisualDNA, WorldState, SimulationResult, SimulationEvent, ConstructionDecision, ConstructionStateSnapshot, ConstructionTimeline } from '../../../types';
 import type { Operation } from '../../../types';
 import type { ConstructionBlueprint } from '../../project-orchestrator';
@@ -27,7 +28,22 @@ export class SceneDirectorStage {
   }
 
   execute(context: PipelineContext): StageResult<{ cinematicScenes: CinematicScene[]; episodes: ConstructionEpisode[] }> {
-    // Build minimal project from available context
+    // Check if EpisodePlannerStage already provided planned episodes
+    if (context.plannedEpisodes && context.plannedEpisodes.length > 0) {
+      // Use pre-planned episodes from EpisodePlannerStage
+      context.episodes = context.plannedEpisodes.map(p => p.episode);
+
+      // Direct planned episodes into cinematic scenes (uses planned shots, no recalculation)
+      const cinematicScenes = this.sceneDirector.directFromPlan(context.plannedEpisodes, context.episodePlan);
+      context.cinematicScenes = cinematicScenes;
+
+      return {
+        success: true,
+        data: { cinematicScenes, episodes: context.episodes },
+      };
+    }
+
+    // Fallback: Legacy path - build minimal project and generate series from operations
     const minimalProject = this.buildMinimalProject(context);
     if (!minimalProject) {
       return {

@@ -25,6 +25,7 @@ describe('PipelineRegistry', () => {
       'scenes',
       'stages',
       'decision',
+      'episode-planner',
       'scene-director',
       'prompts',
       'assembly',
@@ -32,14 +33,14 @@ describe('PipelineRegistry', () => {
   });
 
   it('fornece lista pre-computada pipelineStages', () => {
-    expect(pipelineStages).toHaveLength(11);
+    expect(pipelineStages).toHaveLength(12);
     expect(pipelineStages[0].name).toBe('spatial');
-    expect(pipelineStages[10].name).toBe('assembly');
+    expect(pipelineStages[11].name).toBe('assembly');
   });
 
   it('getStageNames retorna apenas nomes', () => {
     const names = PipelineRegistry.getStageNames();
-    expect(names).toHaveLength(11);
+    expect(names).toHaveLength(12);
     expect(typeof names[0]).toBe('string');
   });
 
