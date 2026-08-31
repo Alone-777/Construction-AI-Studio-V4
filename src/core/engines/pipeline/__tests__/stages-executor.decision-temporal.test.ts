@@ -228,7 +228,8 @@ describe('PipelineOrchestrator - Integração decisão temporal', () => {
     });
 
     const project = createProjectFromBlueprint(compiled.config, compiled.blueprint);
-    expect(project.status).toBe('complete');
+    // project.status field removed in #5D - no longer persisted
+    // expect(project.status).toBe('complete');
     expect(project.scenes.length).toBeGreaterThan(0);
 
     // Verificar decisões em todos os stages

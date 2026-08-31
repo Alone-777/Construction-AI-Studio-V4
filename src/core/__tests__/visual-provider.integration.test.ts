@@ -36,7 +36,8 @@ describe('Arquitetura de reconstrução por imagem', () => {
       mimeType: 'image/png',
       name: 'Reconstrução Controlada',
     });
-    expect(project.status).toBe('complete');
+    // project.status field removed in #5D - no longer persisted
+    // expect(project.status).toBe('complete');
     expect(project.planning?.source).toBe('visual');
     expect(project.planning?.providerId).toBe('openai-test');
     expect(project.planning?.assumptions.some(item => item.includes('Dimensões exatas'))).toBe(true);

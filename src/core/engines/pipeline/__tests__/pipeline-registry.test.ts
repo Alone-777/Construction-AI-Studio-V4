@@ -96,7 +96,8 @@ describe('PipelineRegistry - integração com orchestrator', () => {
       description: 'Abrigo simples de madeira em uma clareira.',
       name: 'Teste Registry',
     });
-    expect(project.status).toBe('complete');
+    // project.status field removed in #5D - no longer persisted
+    // expect(project.status).toBe('complete');
     expect(project.operations.length).toBeGreaterThan(0);
   });
 

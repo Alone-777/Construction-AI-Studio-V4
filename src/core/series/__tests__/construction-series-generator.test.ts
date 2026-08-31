@@ -426,15 +426,9 @@ describe('ConstructionSeriesGenerator', () => {
         },
         lastEvents: [],
       },
-      decision: {
-        action: 'EXECUTE_OPERATION',
-        operationId: 'op-1',
-        reason: 'Start foundation',
-        confidence: 0.9,
-      },
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      status: 'active',
+      // status: 'active', // removed in #5D
     };
   });
 
@@ -548,7 +542,7 @@ describe('ConstructionSeriesGenerator', () => {
       expect(episode.metadata.activeElements).toEqual(['foundation']);
       expect(episode.metadata.pendingElements).toEqual(['walls', 'roof']);
       expect(episode.metadata.decision).toBeDefined();
-      expect(episode.metadata.decisionConfidence).toBe(0.9);
+      expect(episode.metadata.decisionConfidence).toBe(0.8);
     });
 
     it('should use visualPrompt from VisualPromptCompiler', () => {
@@ -584,7 +578,8 @@ describe('ConstructionSeriesGenerator', () => {
 
       expect(series.episodes[0].metadata.decision).toBeDefined();
       expect(series.episodes[0].metadata.decision?.action).toBe('EXECUTE_OPERATION');
-      expect(series.episodes[0].metadata.decisionConfidence).toBe(0.9);
+      // decisionConfidence is 0.8 when inferred from simulation (per #5D - no global project.decision fallback)
+      expect(series.episodes[0].metadata.decisionConfidence).toBe(0.8);
     });
   });
 

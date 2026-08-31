@@ -748,7 +748,7 @@ function ProjectScreen() {
         <div className="flex items-center gap-3">
           <button onClick={() => { setScreen('home'); }} className="text-studio-muted hover:text-studio-text text-xs">← Início</button>
           <span className="text-sm font-semibold text-studio-accent">{project.name}</span>
-          <span className="badge-info text-[10px]">{project.status}</span>
+          <span className="badge-info text-[10px]">{project.constructionState.progress === 100 ? 'completo' : project.constructionState.progress + '%'}</span>
           <span className="text-[9px] text-emerald-400">{isDirty ? 'salvando…' : 'autosave ativo'}</span>
         </div>
         <div className="flex items-center gap-2">

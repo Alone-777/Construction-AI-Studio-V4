@@ -3,6 +3,7 @@ import type { ConstructionBlueprint } from '../../project-orchestrator';
 import type { PipelineContext, StageResult } from '../types';
 import type { Camera } from '../../../types/camera';
 import type { Point } from '../../../types/spatial';
+import type { PlannedEpisode, EpisodePlan } from '../../../series/EpisodePlanner';
 import { createProjectConstructionSnapshot } from '../../../state/createConstructionSnapshot';
 import { createConstructionTimeline } from '../../../timeline/createConstructionTimeline';
 
@@ -142,7 +143,7 @@ export class ProjectAssemblerStage {
         id: `${context.blueprint.id}_${context.createdAt}`,
         name: context.config.name,
         dna: context.dna,
-        visualDNA: createDefaultVisualDNA(context.config, context.createdAt, context.blueprint.id),
+        visualDNA: context.visualDNA ?? createDefaultVisualDNA(context.config, context.createdAt, context.blueprint.id),
         constructionState,
         timeline,
         worldState: context.worldState,
@@ -154,9 +155,10 @@ export class ProjectAssemblerStage {
         blueprint: context.blueprint,
         config: context.config,
         cinematicScenes: context.cinematicScenes,
+        plannedEpisodes: context.plannedEpisodes,
+        episodePlan: context.episodePlan,
         createdAt: context.createdAt,
         updatedAt: context.createdAt,
-        status: 'complete',
       };
 
       context.project = project;

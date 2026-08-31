@@ -409,7 +409,7 @@ describe('PromptsGeneratorStage - Future Leakage Prevention', () => {
           storyboard: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          status: 'setup',
+          // status: 'setup', // removed in #5D
         },
       });
 
@@ -487,7 +487,7 @@ describe('PromptsGeneratorStage - Future Leakage Prevention', () => {
           },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-          status: 'setup',
+          // status: 'setup', // removed in #5D
         },
       });
 

@@ -278,12 +278,21 @@ export class ConstructionSeriesGenerator {
 
   /**
    * Obtém decisão para um frame específico
+   * Prioridade: Stage.decision (autoridade temporal) → simulation fallback
    */
   private getDecisionForFrame(frame: ConstructionTimelineFrame, project: Project): ConstructionDecision | undefined {
-    // Se já há decisão no projeto, usar
-    if (project.decision) return project.decision;
+    // 1. Tentar obter Stage.decision correspondente ao frame
+    // Frame ID format: ${sceneId}_frame_${frameIndex}
+    const frameIndexMatch = frame.id.match(/_frame_(\d+)$/);
+    if (frameIndexMatch) {
+      const frameIndex = parseInt(frameIndexMatch[1], 10);
+      const scene = project.scenes.find(s => s.id === frame.sceneId);
+      if (scene && scene.stages[frameIndex]?.decision) {
+        return scene.stages[frameIndex].decision;
+      }
+    }
 
-    // Tentar inferir do simulation
+    // 2. Fallback: inferir do simulation
     if (project.simulation?.currentOperationId) {
       return {
         action: 'EXECUTE_OPERATION',
