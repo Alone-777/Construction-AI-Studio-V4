@@ -1,54 +1,14 @@
 import { Scene, Stage, WorldState } from '../types';
 import { ConstructionStateSnapshot } from '../types/construction-state';
 
-/**
- * Cria um snapshot temporal do estado da construção
- * Gera automaticamente:
- * - completedElements baseado nos elementos finalizados
- * - activeElements baseado no stage atual
- * - pendingElements baseado nas próximas operações
- */
+/** Creates a construction snapshot from one official temporal WorldState. */
 export function createConstructionSnapshot(
   scene: Scene,
-  stage: Stage,
+  _stage: Stage,
   worldState: WorldState,
-  materials: WorldState['materials'] = []
+  _legacyMaterials: WorldState['materials'] = []
 ): ConstructionStateSnapshot {
-  // completedElements: elementos finalizados do stage atual e anteriores
-  const completedElements = stage.physicalState?.completedElements || [];
-
-  // activeElements: elementos em execução no stage atual
-  const activeElements = stage.physicalState?.partialElements || [];
-
-  // pendingElements: futuros elementos do stage + próximas operações
-  const pendingElements = stage.futureElements || [];
-
-  // Material state
-  const available = materials
-    .filter(m => m.quantity > 0 && m.status !== 'incorporado' && m.status !== 'descartado')
-    .map(m => `${m.materialId} (${m.quantity} ${m.status})`);
-
-  const consumed = materials
-    .filter(m => m.status === 'incorporado' || m.status === 'descartado')
-    .map(m => `${m.materialId} (${m.quantity})`);
-
-  const remaining = materials
-    .filter(m => m.quantity > 0 && m.status === 'disponivel')
-    .map(m => `${m.materialId} (${m.quantity})`);
-
-  // Worker state
-  const workerState = {
-    position: stage.characterPosition,
-    action: stage.physicalAction,
-    tools: stage.tool ? [stage.tool] : [],
-  };
-
-  // Environment state
-  const environmentState = {
-    terrain: worldState.terrain?.type || 'terreno_plano',
-    weather: worldState.climate || 'clear',
-    lighting: worldState.light || 'dia',
-  };
+  const { completedElements, activeElements, pendingElements } = getOfficialElements(worldState);
 
   return {
     sceneId: scene.id,
@@ -56,82 +16,8 @@ export function createConstructionSnapshot(
     completedElements,
     activeElements,
     pendingElements,
-    materialState: {
-      available,
-      consumed,
-      remaining,
-    },
-    workerState,
-    environmentState,
-    createdAt: new Date(),
-  };
-}
-
-/**
- * Cria snapshot para o projeto todo (agregado de todas as cenas)
- */
-export function createProjectConstructionSnapshot(
-  scenes: Scene[],
-  worldState: WorldState,
-  materials: WorldState['materials'] = []
-): ConstructionStateSnapshot {
-  const allCompleted: string[] = [];
-  const allActive: string[] = [];
-  const allPending: string[] = [];
-
-  for (const scene of scenes) {
-    for (const stage of scene.stages) {
-      if (stage.physicalState?.completedElements) {
-        allCompleted.push(...stage.physicalState.completedElements);
-      }
-      if (stage.physicalState?.partialElements) {
-        allActive.push(...stage.physicalState.partialElements);
-      }
-      if (stage.futureElements) {
-        allPending.push(...stage.futureElements);
-      }
-    }
-  }
-
-  // Remove duplicatas
-  const completedElements = [...new Set(allCompleted)];
-  const activeElements = [...new Set(allActive)];
-  const pendingElements = [...new Set(allPending)];
-
-  const available = materials
-    .filter(m => m.quantity > 0 && m.status !== 'incorporado' && m.status !== 'descartado')
-    .map(m => `${m.materialId} (${m.quantity} ${m.status})`);
-
-  const consumed = materials
-    .filter(m => m.status === 'incorporado' || m.status === 'descartado')
-    .map(m => `${m.materialId} (${m.quantity})`);
-
-  const remaining = materials
-    .filter(m => m.quantity > 0 && m.status === 'disponivel')
-    .map(m => `${m.materialId} (${m.quantity})`);
-
-  const lastStage = scenes.flatMap(s => s.stages).pop();
-
-  return {
-    sceneId: scenes.map(s => s.id).join(','),
-    progress: worldState.construction?.progress || 0,
-    completedElements,
-    activeElements,
-    pendingElements,
-    materialState: {
-      available,
-      consumed,
-      remaining,
-    },
-    workerState: lastStage ? {
-      position: lastStage.characterPosition,
-      action: lastStage.physicalAction,
-      tools: lastStage.tool ? [lastStage.tool] : [],
-    } : {
-      position: '',
-      action: '',
-      tools: [],
-    },
+    materialState: getMaterialState(worldState),
+    workerState: getWorkerState(worldState),
     environmentState: {
       terrain: worldState.terrain?.type || 'terreno_plano',
       weather: worldState.climate || 'clear',
@@ -139,4 +25,77 @@ export function createProjectConstructionSnapshot(
     },
     createdAt: new Date(),
   };
+}
+
+/** Creates the final project snapshot from the final official WorldState. */
+export function createProjectConstructionSnapshot(
+  scenes: Scene[],
+  worldState: WorldState,
+  _legacyMaterials: WorldState['materials'] = []
+): ConstructionStateSnapshot {
+  const { completedElements, activeElements, pendingElements } = getOfficialElements(worldState);
+
+  return {
+    sceneId: scenes.map(scene => scene.id).join(','),
+    progress: worldState.construction?.progress || 0,
+    completedElements,
+    activeElements,
+    pendingElements,
+    materialState: getMaterialState(worldState),
+    workerState: getWorkerState(worldState),
+    environmentState: {
+      terrain: worldState.terrain?.type || 'terreno_plano',
+      weather: worldState.climate || 'clear',
+      lighting: worldState.light || 'dia',
+    },
+    createdAt: new Date(),
+  };
+}
+
+function getOfficialElements(worldState: WorldState): Pick<
+  ConstructionStateSnapshot,
+  'completedElements' | 'activeElements' | 'pendingElements'
+> {
+  const completedElements = unique(worldState.existingComponents);
+  const activeElements = unique(worldState.partialComponents)
+    .filter(element => !completedElements.includes(element));
+  const pendingElements = unique(worldState.futureComponents)
+    .filter(element => !completedElements.includes(element) && !activeElements.includes(element));
+
+  return { completedElements, activeElements, pendingElements };
+}
+
+function getMaterialState(worldState: WorldState): ConstructionStateSnapshot['materialState'] {
+  const materials = worldState.materials;
+  const available = materials
+    .filter(material => material.quantity > 0 && material.status !== 'incorporado' && material.status !== 'descartado')
+    .map(material => `${material.materialId} (${material.quantity} ${material.status})`);
+
+  const consumed = unique([
+    ...materials
+      .filter(material => material.status === 'incorporado' || material.status === 'descartado')
+      .map(material => `${material.materialId} (${material.quantity})`),
+    ...(worldState.consumedMaterials ?? [])
+      .map(material => `${material.materialId} (${material.quantity})`),
+  ]);
+
+  const remaining = materials
+    .filter(material => material.quantity > 0 && material.status === 'disponivel')
+    .map(material => `${material.materialId} (${material.quantity})`);
+
+  return { available, consumed, remaining };
+}
+
+function getWorkerState(worldState: WorldState): ConstructionStateSnapshot['workerState'] {
+  return {
+    position: worldState.character?.currentZone || '',
+    action: worldState.character?.currentAction || '',
+    tools: worldState.tools
+      .filter(tool => tool.status === 'em_uso')
+      .map(tool => tool.toolId),
+  };
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
 }

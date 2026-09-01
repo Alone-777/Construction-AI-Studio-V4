@@ -236,17 +236,18 @@ export class ConstructionSeriesGenerator {
       throw new Error('Projeto deve ter timeline com frames para gerar série');
     }
 
-    // Ordenar frames por progresso
-    const sortedFrames = [...project.timeline.frames].sort((a, b) => a.progress - b.progress);
+    // Project.timeline order is the official global temporal sequence.
+    // Progress can repeat after rejection and is not a safe ordering key.
+    const orderedFrames = project.timeline.frames;
 
     const episodes: ConstructionEpisode[] = [];
     let sequence = 0;
 
-    for (let i = 0; i < sortedFrames.length; i++) {
+    for (let i = 0; i < orderedFrames.length; i++) {
       if (this.config.maxEpisodes && sequence >= this.config.maxEpisodes) break;
 
-      const frame = sortedFrames[i];
-      const prevFrame = i > 0 ? sortedFrames[i - 1] : undefined;
+      const frame = orderedFrames[i];
+      const prevFrame = i > 0 ? orderedFrames[i - 1] : undefined;
 
       // Verificar se deve pular frame baseado na decisão
       const decision = this.getDecisionForFrame(frame, project);

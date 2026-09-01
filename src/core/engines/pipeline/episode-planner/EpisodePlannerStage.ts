@@ -2,9 +2,9 @@ import { ConstructionSeriesGenerator, createConstructionSeriesGenerator } from '
 import { EpisodePlanner, createEpisodePlanner } from '../../../series/EpisodePlanner';
 import type { PipelineContext, StageResult } from '../types';
 import type { PlannedEpisode, EpisodePlan } from '../../../series/EpisodePlanner';
-import type { Project, ProjectConfig } from '../../../types';
-import type { WorldState, Operation } from '../../../types';
-import type { ConstructionBlueprint } from '../../project-orchestrator';
+import type { Project } from '../../../types';
+import { createConstructionTimeline } from '../../../timeline/createConstructionTimeline';
+import { createProjectConstructionSnapshot } from '../../../state/createConstructionSnapshot';
 
 /**
  * Stage 8: Episode Planner
@@ -24,11 +24,11 @@ export class EpisodePlannerStage {
   }
 
   execute(context: PipelineContext): StageResult<{ plannedEpisodes: PlannedEpisode[]; episodePlan: EpisodePlan }> {
-    // Need operations, dna, worldState, config to build minimal project
-    if (!context.operations || !context.dna || !context.worldState || !context.config) {
+    // Real executed scenes are required: operations alone are not temporal evidence.
+    if (!context.operations || !context.scenes || !context.dna || !context.worldState || !context.config) {
       return {
         success: false,
-        error: new Error('Insufficient context for EpisodePlannerStage (need operations, dna, worldState, config)'),
+        error: new Error('Insufficient context for EpisodePlannerStage (need scenes, operations, dna, worldState, config)'),
       };
     }
 
@@ -36,8 +36,8 @@ export class EpisodePlannerStage {
       // Build minimal project from context (similar to SceneDirectorStage)
       const minimalProject = this.buildMinimalProject(context);
 
-      // Generate construction series from operations
-      const series = this.seriesGenerator.generateFromOperations(minimalProject, context.operations);
+      // Generate from the official Stage-derived temporal timeline.
+      const series = this.seriesGenerator.generate(minimalProject);
       context.episodes = series.episodes;
 
       // Plan episodes cinematically
@@ -60,28 +60,23 @@ export class EpisodePlannerStage {
 
   /**
    * Builds a minimal Project-like object from pipeline context
-   * Includes all fields required by ConstructionSeriesGenerator.generateFromOperations
+   * Includes all fields required by ConstructionSeriesGenerator.generate
    */
   private buildMinimalProject(context: PipelineContext): Project {
     const config = context.config!;
     const dna = context.dna!;
     const worldState = context.worldState!;
     const blueprint = context.blueprint;
-    const operations = context.operations!;
 
     // Build minimal visualDNA from available context
     const visualDNA = this.buildMinimalVisualDNA(context);
 
-    // Build minimal timeline from operations
-    const timelineFrames = this.buildTimelineFromOperations(operations, worldState);
-
-    const timeline: any = {
-      id: `timeline-${Date.now()}`,
-      projectId: config.name || `project-${Date.now()}`,
-      frames: timelineFrames,
-      currentFrameId: timelineFrames[0]?.id || `frame-${Date.now()}`,
-      createdAt: new Date(),
-    };
+    const timeline = createConstructionTimeline(blueprint.id, context.scenes!);
+    const constructionState = createProjectConstructionSnapshot(
+      context.scenes!,
+      worldState,
+      worldState.materials
+    );
 
     return {
       id: config.name || `project-${Date.now()}`,
@@ -93,36 +88,12 @@ export class EpisodePlannerStage {
       spatialMap: context.spatialMap,
       dependencyGraph: context.dependencyGraph,
       worldState,
-      operations,
+      operations: context.operations!,
       scenes: context.scenes || [],
       storyboard: context.storyboard || [],
       timeline,
       simulation: undefined,
-      constructionState: {
-        sceneId: 'scene-1',
-        progress: 0,
-        completedElements: [],
-        activeElements: operations[0]?.elements || [],
-        pendingElements: operations.flatMap(op => op.elements || []),
-        materialState: {
-          available: worldState.materials
-            ?.filter(m => m.status === 'disponivel')
-            .map(m => m.materialId) || [],
-          consumed: [],
-          remaining: [],
-        },
-        workerState: {
-          position: operations[0]?.zones?.[0] || 'site',
-          action: 'starting',
-          tools: operations[0]?.visualBasis?.tools || [],
-        },
-        environmentState: {
-          terrain: worldState.terrain?.type || 'flat',
-          weather: worldState.climate || 'clear',
-          lighting: worldState.light || 'day',
-        },
-        createdAt: new Date(),
-      },
+      constructionState,
       status: 'active',
       createdAt: context.createdAt,
       updatedAt: Date.now(),
@@ -244,49 +215,6 @@ export class EpisodePlannerStage {
       far: 1000,
       movement: camera.allowedMovement,
     };
-  }
-
-  /**
-   * Builds minimal timeline frames from operations
-   */
-  private buildTimelineFromOperations(operations: Operation[], worldState: WorldState): any[] {
-    return operations.map((operation, index) => ({
-      id: `frame-${operation.id}`,
-      sceneId: operation.scenes?.[0] || 'scene-1',
-      progress: ((index + 1) / operations.length) * 100,
-      state: {
-        sceneId: operation.scenes?.[0] || 'scene-1',
-        progress: ((index + 1) / operations.length) * 100,
-        completedElements: operations.slice(0, index).flatMap(op => op.elements || []),
-        activeElements: operation.elements || [],
-        pendingElements: operations.slice(index + 1).flatMap(op => op.elements || []),
-        materialState: {
-          available: worldState.materials
-            ?.filter(m => m.status === 'disponivel')
-            .map(m => m.materialId) || [],
-          consumed: [],
-          remaining: [],
-        },
-        workerState: {
-          position: operation.zones?.[0] || 'site',
-          action: `Executando ${operation.name}`,
-          tools: operation.visualBasis?.tools || [],
-        },
-        environmentState: {
-          terrain: worldState.terrain?.type || 'flat',
-          weather: worldState.climate || 'clear',
-          lighting: worldState.light || 'day',
-        },
-        createdAt: new Date(),
-      },
-      visualChanges: {
-        added: operation.elements || [],
-        removed: [],
-        modified: [],
-      },
-      previousFrameId: index > 0 ? `frame-${operations[index - 1].id}` : undefined,
-      createdAt: new Date(),
-    }));
   }
 
   validate(context: PipelineContext): StageResult {

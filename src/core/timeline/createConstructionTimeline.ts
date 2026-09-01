@@ -9,18 +9,19 @@ import { createSceneFrames } from './createTimelineFrame';
 export function createConstructionTimeline(
   projectId: string,
   scenes: Scene[],
-  worldState: WorldState
+  _legacyFinalWorldState?: WorldState
 ): ConstructionTimeline {
   const allFrames: ConstructionTimelineFrame[] = [];
 
   // Gerar frames para cada cena na ordem
   for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
     const scene = scenes[sceneIndex];
-    const sceneFrames = createSceneFrames(scene, worldState);
-    // Prefix frame IDs with scene index for determinism
-    sceneFrames.forEach((frame, frameIndex) => {
-      frame.id = `${scene.id}_frame_${frameIndex}`;
-    });
+    const previousFrame = allFrames[allFrames.length - 1];
+    const sceneFrames = createSceneFrames(scene, previousFrame);
+
+    if (previousFrame && sceneFrames.length > 0) {
+      previousFrame.nextFrameId = sceneFrames[0].id;
+    }
     allFrames.push(...sceneFrames);
   }
 

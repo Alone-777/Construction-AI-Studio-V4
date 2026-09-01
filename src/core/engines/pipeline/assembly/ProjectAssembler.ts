@@ -135,8 +135,7 @@ export class ProjectAssemblerStage {
 
       const timeline = createConstructionTimeline(
         context.blueprint.id,
-        context.scenes,
-        context.worldState
+        context.scenes
       );
 
       const project: Project = {

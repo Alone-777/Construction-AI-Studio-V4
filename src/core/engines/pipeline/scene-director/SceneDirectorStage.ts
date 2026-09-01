@@ -5,10 +5,9 @@ import type { CinematicScene } from '../../../types/scene-director';
 import type { CinematicCameraMovement } from '../../../types/scene-director';
 import type { ConstructionEpisode } from '../../../types/construction-series';
 import type { PlannedEpisode } from '../../../series/EpisodePlanner';
-import type { Project, VisualDNA, WorldState, SimulationResult, SimulationEvent, ConstructionDecision, ConstructionStateSnapshot, ConstructionTimeline } from '../../../types';
-import type { Operation } from '../../../types';
-import type { ConstructionBlueprint } from '../../project-orchestrator';
-import type { ProjectConfig } from '../../../types';
+import type { Project, VisualDNA } from '../../../types';
+import { createConstructionTimeline } from '../../../timeline/createConstructionTimeline';
+import { createProjectConstructionSnapshot } from '../../../state/createConstructionSnapshot';
 
 /**
  * Stage 9: Scene Director
@@ -43,7 +42,7 @@ export class SceneDirectorStage {
       };
     }
 
-    // Fallback: Legacy path - build minimal project and generate series from operations
+    // Fallback: build from the same official Stage-derived temporal history.
     const minimalProject = this.buildMinimalProject(context);
     if (!minimalProject) {
       return {
@@ -53,8 +52,7 @@ export class SceneDirectorStage {
     }
 
     try {
-      // Generate construction series from minimal project + operations
-      const series = this.seriesGenerator.generateFromOperations(minimalProject, context.operations || []);
+      const series = this.seriesGenerator.generate(minimalProject);
       context.episodes = series.episodes;
 
       // Direct each episode into cinematic scenes
@@ -80,30 +78,25 @@ export class SceneDirectorStage {
 
   /**
    * Builds a minimal Project-like object from pipeline context
-   * Includes all fields required by ConstructionSeriesGenerator.generateFromOperations
+   * Includes all fields required by ConstructionSeriesGenerator.generate
    */
   private buildMinimalProject(context: PipelineContext): Project {
-    if (!context.operations || !context.dna || !context.worldState || !context.config) {
-      throw new Error('Insufficient context for SceneDirectorStage (need operations, dna, worldState, config)');
+    if (!context.operations || !context.scenes || !context.dna || !context.worldState || !context.config) {
+      throw new Error('Insufficient context for SceneDirectorStage (need scenes, operations, dna, worldState, config)');
     }
 
     // Build minimal visualDNA from available context (config, worldState, dna)
     const visualDNA = this.buildMinimalVisualDNA(context);
 
-    // Create a minimal timeline from operations if not available
-    const timelineFrames = this.buildTimelineFromOperations(context.operations, context.worldState);
+    const timeline = createConstructionTimeline(context.blueprint.id, context.scenes);
+    const constructionState = createProjectConstructionSnapshot(
+      context.scenes,
+      context.worldState,
+      context.worldState.materials
+    );
 
     // Build minimal simulation from context if available
     const simulation = (context as any).simulation;
-
-    // Build minimal timeline object
-    const timeline: ConstructionTimeline = {
-      id: `timeline-${Date.now()}`,
-      projectId: context.config?.name || `project-${Date.now()}`,
-      frames: timelineFrames as any,
-      currentFrameId: timelineFrames[0]?.id || `frame-${Date.now()}`,
-      createdAt: new Date(),
-    };
 
     return {
       id: context.config?.name || `project-${Date.now()}`,
@@ -128,31 +121,7 @@ export class SceneDirectorStage {
         completedOperations: simulation.completedOperations || [],
         failedOperations: simulation.failedOperations || [],
       } : undefined,
-      constructionState: {
-        sceneId: 'scene-1',
-        progress: 0,
-        completedElements: [],
-        activeElements: context.operations[0]?.elements || [],
-        pendingElements: context.operations.flatMap(op => op.elements || []),
-        materialState: {
-          available: context.worldState.materials
-            ?.filter(m => m.status === 'disponivel')
-            .map(m => m.materialId) || [],
-          consumed: [],
-          remaining: [],
-        },
-        workerState: {
-          position: context.operations[0]?.zones?.[0] || 'site',
-          action: 'starting',
-          tools: context.operations[0]?.visualBasis?.tools || [],
-        },
-        environmentState: {
-          terrain: context.worldState.terrain?.type || 'flat',
-          weather: context.worldState.climate || 'clear',
-          lighting: context.worldState.light || 'day',
-        },
-        createdAt: new Date(),
-      },
+      constructionState,
       status: 'active',
       createdAt: context.createdAt,
       updatedAt: Date.now(),
@@ -275,49 +244,6 @@ export class SceneDirectorStage {
       far: 1000,
       movement: camera.allowedMovement,
     };
-  }
-
-  /**
-   * Builds minimal timeline frames from operations
-   */
-  private buildTimelineFromOperations(operations: Operation[], worldState: WorldState): any[] {
-    return operations.map((operation, index) => ({
-      id: `frame-${operation.id}`,
-      sceneId: operation.scenes?.[0] || 'scene-1',
-      progress: ((index + 1) / operations.length) * 100,
-      state: {
-        sceneId: operation.scenes?.[0] || 'scene-1',
-        progress: ((index + 1) / operations.length) * 100,
-        completedElements: operations.slice(0, index).flatMap(op => op.elements || []),
-        activeElements: operation.elements || [],
-        pendingElements: operations.slice(index + 1).flatMap(op => op.elements || []),
-        materialState: {
-          available: worldState.materials
-            ?.filter(m => m.status === 'disponivel')
-            .map(m => m.materialId) || [],
-          consumed: [],
-          remaining: [],
-        },
-        workerState: {
-          position: operation.zones?.[0] || 'site',
-          action: `Executando ${operation.name}`,
-          tools: operation.visualBasis?.tools || [],
-        },
-        environmentState: {
-          terrain: worldState.terrain?.type || 'flat',
-          weather: worldState.climate || 'clear',
-          lighting: worldState.light || 'day',
-        },
-        createdAt: new Date(),
-      },
-      visualChanges: {
-        added: operation.elements || [],
-        removed: [],
-        modified: [],
-      },
-      previousFrameId: index > 0 ? `frame-${operations[index - 1].id}` : undefined,
-      createdAt: new Date(),
-    }));
   }
 
   /**

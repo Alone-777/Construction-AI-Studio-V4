@@ -74,15 +74,29 @@ export function createTimelineFrame(
  */
 export function createSceneFrames(
   scene: Scene,
-  worldState: WorldState
+  previousFrameOrLegacyWorldState?: ConstructionTimelineFrame | WorldState
 ): ConstructionTimelineFrame[] {
   const frames: ConstructionTimelineFrame[] = [];
+  const previousFrame = previousFrameOrLegacyWorldState && 'state' in previousFrameOrLegacyWorldState
+    ? previousFrameOrLegacyWorldState
+    : undefined;
 
   for (let i = 0; i < scene.stages.length; i++) {
     const stage = scene.stages[i];
-    const snapshot = createConstructionSnapshot(scene, stage, worldState, worldState.materials);
-    const previousFrame = frames[frames.length - 1];
-    const frame = createTimelineFrame(scene, snapshot, previousFrame, i);
+    const officialWorldState = getOfficialWorldState(stage);
+
+    // A stage without committed/rejected temporal evidence was not executed.
+    // It must not create a frame from planned physicalState/futureElements.
+    if (!officialWorldState) continue;
+
+    const frameBefore = frames[frames.length - 1] ?? previousFrame;
+    const snapshot = createConstructionSnapshot(
+      scene,
+      stage,
+      officialWorldState,
+      officialWorldState.materials
+    );
+    const frame = createTimelineFrame(scene, snapshot, frameBefore, i);
     frames.push(frame);
   }
 
@@ -92,4 +106,17 @@ export function createSceneFrames(
   }
 
   return frames;
+}
+
+/**
+ * Resolves the official state represented by a temporal stage.
+ * Rejected worldStateAfter remains on Stage as candidate evidence only.
+ */
+function getOfficialWorldState(stage: Stage): WorldState | undefined {
+  if (stage.status === 'rejected') {
+    return stage.worldStateBefore;
+  }
+
+  const isCommitted = stage.status === 'approved' || stage.decision !== undefined;
+  return isCommitted ? stage.worldStateAfter : undefined;
 }
