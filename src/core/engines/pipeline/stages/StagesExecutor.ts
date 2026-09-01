@@ -22,6 +22,11 @@ import type { PipelineContext, StageResult } from '../types';
 import { ConstructionDecisionEngine, createDecisionEngine } from '../../../decision/ConstructionDecisionEngine';
 import type { DecisionContext, ConstructionDecision, OperationDependency } from '../../../decision/ConstructionDecision';
 import type { Stage } from '../../../types/scene';
+import {
+  beginStageTransaction,
+  commitStageTransaction,
+  rejectStageTransaction,
+} from '../../../transactions/stage-transaction';
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
@@ -215,6 +220,14 @@ export class StagesExecutorStage {
           };
 
           const after = applyTransformation(before, transformation);
+          const transaction = beginStageTransaction({
+            id: `stage-transaction:${scene.id}:${stage.percentage}`,
+            sceneId: scene.id,
+            stageId: String(stage.percentage),
+            operationId: operation.id,
+            officialStateBefore: worldState,
+            candidateState: after,
+          });
 
           stage.initialState = {
             ...stage.initialState,
@@ -229,18 +242,18 @@ export class StagesExecutorStage {
             partialComponents: after.partialComponents,
           };
           stage.worldStateBefore = before;
-          stage.worldStateAfter = after;
+          stage.worldStateAfter = transaction.candidateState;
           stage.executionProof = generateExecutionProof(stage);
 
           const report = fiscalRunner.runAllFiscals({
             scene,
             stage,
             worldStateBefore: before,
-            worldStateAfter: after,
+            worldStateAfter: transaction.candidateState,
             transformation,
             spatialMap: context.spatialMap!,
             dependencyGraph: context.dependencyGraph!,
-            character: after.character,
+            character: transaction.candidateState.character,
             previousScene,
             projectDNA: context.dna!,
             operation,
@@ -254,7 +267,8 @@ export class StagesExecutorStage {
 
           // FISCAL GATE: Only commit candidate state if approved
           if (report.approved) {
-            worldState = after;
+            const committedTransaction = commitStageTransaction(transaction);
+            worldState = committedTransaction.officialStateAfter;
             // TEMPORAL DECISION: Calculate decision for THIS stage's committed state
             // Uses the worldState AFTER fiscal gate (committed state)
             const decisionContext = this.buildDecisionContext(
@@ -264,6 +278,8 @@ export class StagesExecutorStage {
             );
             stage.decision = this.engine.decide(decisionContext);
           } else {
+            const rejectedTransaction = rejectStageTransaction(transaction);
+            worldState = rejectedTransaction.officialStateAfter;
             // Keep official worldState as 'before' (pre-transformation)
             // stage.worldStateAfter still holds the candidate for evidence/debugging
             stage.status = 'rejected';
