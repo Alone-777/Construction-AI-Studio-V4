@@ -126,14 +126,37 @@ export function withImageGenerationReferences(
   request: ImageGenerationRequest,
   references: readonly ImageReference[],
 ): ImageGenerationRequest {
-  const normalizedReferences = normalizeReferences(references);
+  return rebuildImageGenerationRequest(request, { references });
+}
+
+/** Rebuilds request identity through the canonical hash while preserving upstream temporal data. */
+export function withImageGenerationPrompt(
+  request: ImageGenerationRequest,
+  prompt: string,
+  metadataAttributes?: Readonly<Record<string, ImageMetadataValue>>,
+): ImageGenerationRequest {
+  if (!prompt.trim()) throw new Error('Derived image generation prompt is required.');
+  return rebuildImageGenerationRequest(request, { prompt, metadataAttributes });
+}
+
+interface RebuildImageGenerationRequestOverrides {
+  readonly prompt?: string;
+  readonly references?: readonly ImageReference[];
+  readonly metadataAttributes?: Readonly<Record<string, ImageMetadataValue>>;
+}
+
+function rebuildImageGenerationRequest(
+  request: ImageGenerationRequest,
+  overrides: RebuildImageGenerationRequestOverrides,
+): ImageGenerationRequest {
+  const normalizedReferences = normalizeReferences(overrides.references ?? request.references);
   const base = {
     projectId: request.projectId,
     sceneId: request.sceneId,
     stageId: request.stageId,
     providerId: request.providerId,
     mode: request.mode,
-    prompt: request.prompt,
+    prompt: overrides.prompt ?? request.prompt,
     negativePrompt: request.negativePrompt,
     temporalAuthority: request.temporalAuthority,
     snapshotKind: request.snapshotKind,
@@ -153,6 +176,10 @@ export function withImageGenerationReferences(
       ? { ...request.metadata.temporalPosition }
       : undefined,
   };
+  const mergedAttributes = {
+    ...(request.metadata.attributes ?? {}),
+    ...(overrides.metadataAttributes ?? {}),
+  };
 
   return freezeImageGenerationRequest({
     ...base,
@@ -162,8 +189,8 @@ export function withImageGenerationReferences(
       temporalPosition: request.metadata.temporalPosition
         ? { ...request.metadata.temporalPosition }
         : undefined,
-      attributes: request.metadata.attributes
-        ? cloneMetadata(request.metadata.attributes)
+      attributes: Object.keys(mergedAttributes).length > 0
+        ? cloneMetadata(mergedAttributes)
         : undefined,
     },
   });

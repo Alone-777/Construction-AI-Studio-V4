@@ -42,7 +42,7 @@ export function createVisualValidationRequest(
     : undefined;
 
   return {
-    validationId: `visual-validation:${request.requestId}:${result.asset.id}`,
+    validationId: createVisualValidationId(request.requestId, result.asset.id),
     projectId: request.projectId,
     sceneId: request.sceneId,
     stageId: request.stageId,
@@ -63,6 +63,10 @@ export function createVisualValidationRequest(
     expected: deriveExpectedVisualFacts(canonicalSpec),
     metadata: input.metadata ? structuredClone(input.metadata) : undefined,
   };
+}
+
+export function createVisualValidationId(requestId: string, assetId: string): string {
+  return `visual-validation:${requestId}:${assetId}`;
 }
 
 export function deriveExpectedVisualFacts(
