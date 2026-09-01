@@ -33,7 +33,10 @@ export async function saveProject(project: Project): Promise<void> {
     const snapshots: SnapshotRecord[] = [];
     project.scenes.forEach((scene, sceneIndex) => {
       scene.stages.forEach((stage, stageIndex) => {
+        // Only save snapshots for official (approved) state
+        // Rejected stages have worldStateAfter as candidate, not official
         if (!stage.worldStateAfter) return;
+        if (stage.status === 'rejected') return;
         snapshots.push({
           id: `${project.id}:${sceneIndex}:${stageIndex}`,
           projectId: project.id,

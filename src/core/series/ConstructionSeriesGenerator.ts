@@ -279,6 +279,7 @@ export class ConstructionSeriesGenerator {
   /**
    * Obtém decisão para um frame específico
    * Prioridade: Stage.decision (autoridade temporal) → simulation fallback
+   * Rejected stages: NO decision, NO simulation fallback
    */
   private getDecisionForFrame(frame: ConstructionTimelineFrame, project: Project): ConstructionDecision | undefined {
     // 1. Tentar obter Stage.decision correspondente ao frame
@@ -287,13 +288,26 @@ export class ConstructionSeriesGenerator {
     if (frameIndexMatch) {
       const frameIndex = parseInt(frameIndexMatch[1], 10);
       const scene = project.scenes.find(s => s.id === frame.sceneId);
-      if (scene && scene.stages[frameIndex]?.decision) {
-        return scene.stages[frameIndex].decision;
+      if (scene && scene.stages[frameIndex]) {
+        const stage = scene.stages[frameIndex];
+        // Rejected stage: no decision, no simulation fallback
+        if (stage.status === 'rejected') {
+          return undefined;
+        }
+        if (stage.decision) {
+          return stage.decision;
+        }
       }
     }
 
     // 2. Fallback: inferir do simulation
-    if (project.simulation?.currentOperationId) {
+    // ONLY if there is no corresponding Stage (no temporal authority)
+    // If Stage exists but has no decision (e.g., rejected), do NOT fallback
+    const hasStageAuthority = frameIndexMatch && project.scenes.some(s =>
+      s.id === frame.sceneId && s.stages[parseInt(frameIndexMatch[1], 10)]
+    );
+
+    if (!hasStageAuthority && project.simulation?.currentOperationId) {
       return {
         action: 'EXECUTE_OPERATION',
         operationId: project.simulation.currentOperationId,

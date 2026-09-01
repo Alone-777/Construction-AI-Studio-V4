@@ -121,8 +121,10 @@ export class StagesExecutorStage {
 
         let sceneApproved = true;
         let sceneRisk: JumpRisk = 'LOW';
+        let sceneRejected = false;
 
-        scene.stages.forEach((stage, stageIndex) => {
+        for (let stageIndex = 0; stageIndex < scene.stages.length; stageIndex++) {
+          const stage = scene.stages[stageIndex];
           const before = snapshotState(worldState);
           const movement = moveCharacter(before.character, stage.activeZone, context.spatialMap!);
           if (movement.error) throw new Error(movement.error.message);
@@ -253,35 +255,47 @@ export class StagesExecutorStage {
           // FISCAL GATE: Only commit candidate state if approved
           if (report.approved) {
             worldState = after;
+            // TEMPORAL DECISION: Calculate decision for THIS stage's committed state
+            // Uses the worldState AFTER fiscal gate (committed state)
+            const decisionContext = this.buildDecisionContext(
+              context.operations!,
+              worldState,
+              context.blueprint
+            );
+            stage.decision = this.engine.decide(decisionContext);
           } else {
             // Keep official worldState as 'before' (pre-transformation)
             // stage.worldStateAfter still holds the candidate for evidence/debugging
             stage.status = 'rejected';
+            // Rejected stages have NO decision (undefined) - Stage.decision is temporal authority only for committed state
+            stage.decision = undefined;
+            // Stop further stage progression for this scene
+            sceneRejected = true;
+            break;
           }
+        }
 
-          // TEMPORAL DECISION: Calculate decision for THIS stage's committed state
-          // Uses the worldState AFTER fiscal gate (committed state)
-          const decisionContext = this.buildDecisionContext(
-            context.operations!,
-            worldState,
-            context.blueprint
-          );
-          stage.decision = this.engine.decide(decisionContext);
-        });
-
-        // Update component status
-        updateComponentStatus(context.dependencyGraph, component.id, 'COMPLETE');
-        scene.status = sceneApproved ? 'validated' : 'draft';
+        // Update component status only if scene was fully approved
+        if (sceneApproved && !sceneRejected) {
+          updateComponentStatus(context.dependencyGraph, component.id, 'COMPLETE');
+        }
+        scene.status = sceneApproved && !sceneRejected ? 'validated' : 'draft';
         scene.riskLevel = sceneRisk;
 
         previousScene = scene;
       }
 
-      // Finalize world state
+      // Finalize world state - only mark complete if all scenes approved
+      const allScenesApproved = context.scenes!.every(s => s.status === 'validated');
       context.spatialMap.zones.forEach(zone => {
-        zone.status = context.blueprint!.protectedZoneIds.includes(zone.id) ? 'pristine' : 'complete';
+        if (context.blueprint!.protectedZoneIds.includes(zone.id)) {
+          zone.status = 'pristine';
+        } else if (allScenesApproved) {
+          zone.status = 'complete';
+        }
+        // Else: preserve existing zone status (don't force 'incomplete')
       });
-      worldState.construction = { ...worldState.construction, progress: 100, status: 'concluída' };
+      worldState.construction = { ...worldState.construction, progress: allScenesApproved ? 100 : worldState.construction.progress, status: allScenesApproved ? 'concluída' : 'em andamento' };
       context.worldState = worldState;
 
       return { success: true };
@@ -313,17 +327,9 @@ export class StagesExecutorStage {
   }
 
   private getCompletedElements(worldState: WorldState, operations: Operation[], blueprint: any): string[] {
-    const completed: string[] = [];
-    if (worldState.existingComponents) completed.push(...worldState.existingComponents);
-    for (const operation of operations) {
-      const spec = blueprint.operations.find((op: any) => op.id === operation.id);
-      if (spec && spec.components) {
-        for (const component of spec.components) {
-          if (!completed.includes(component)) completed.push(component);
-        }
-      }
-    }
-    return completed;
+    // Only return actually completed elements from worldState (no future leakage)
+    // worldState.existingComponents reflects the official committed state
+    return worldState.existingComponents || [];
   }
 
   private getActiveElements(worldState: WorldState, operations: Operation[]): string[] {
