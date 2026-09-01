@@ -227,7 +227,7 @@ function buildVisualStateSnapshot({
   const futureForbidden = uniqueSorted([
     ...pendingComponents,
     ...actionIR.constraints.preventPrematureElements,
-  ]);
+  ]).filter(component => !visibleComponents.includes(component));
   const visibility = actionVisibility(kind, temporalPoint, outcome);
   const relevantZoneIds = uniqueSorted([actionIR.zone, ...actionIR.constraints.preserveZones]);
   const relevantZones = relevantZoneIds.map(zoneId => {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { PromptsGeneratorStage } from '../PromptsGenerator';
 import type { PipelineContext, StageResult } from '../../types';
-import type { Scene, Stage, ValidationResult, JumpRisk } from '../../../../types/scene';
+import type { Operation, Scene, Stage, ValidationResult, JumpRisk } from '../../../../types/scene';
 import type { WorldState } from '../../../../types';
 import type { ProjectDNA } from '../../../../types/project';
 import type { SpatialMap } from '../../../../types/spatial';
@@ -90,6 +90,18 @@ function createMinimalContext(overrides: Partial<PipelineContext> = {}): Pipelin
     forbiddenElements: [],
     rules: [] as ConstructionRule[],
   };
+  const operation: Operation = {
+    id: 'op-1',
+    name: 'Wall',
+    type: 'construction',
+    componentId: 'walls',
+    elements: ['walls'],
+    zones: ['zone-1'],
+    stages: [0, 25, 50, 75, 100],
+    topology: 'AREA',
+    estimatedDuration: 10,
+    scenes: ['scene-1'],
+  };
 
   const timeline: ConstructionTimeline = {
     id: 'timeline-1',
@@ -155,13 +167,23 @@ function createMinimalContext(overrides: Partial<PipelineContext> = {}): Pipelin
     } as ProjectDNA,
     spatialMap: {
       id: 'spatial-1',
-      zones: [],
+      zones: [{
+        id: 'zone-1',
+        name: 'Work Zone',
+        type: 'AREA',
+        shape: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        status: 'active',
+        adjacentZones: [],
+        occluded: false,
+      }],
       width: 100,
       height: 100,
       orientation: { front: 'north', back: 'south', left: 'west', right: 'east', center: 'center' },
       gridSize: 10,
     } as SpatialMap,
     worldState: defaultWorldState,
+    operations: [operation],
     createdAt: Date.now(),
     ...overrides,
   };
@@ -203,6 +225,9 @@ function createStage(overrides: Partial<Stage> = {}): Stage {
     errors: [],
   };
 
+  const before = createWorldState('STAGE_BEFORE');
+  const after = createWorldState('STAGE_AFTER');
+
   return {
     percentage: 50,
     initialState: {},
@@ -241,6 +266,56 @@ function createStage(overrides: Partial<Stage> = {}): Stage {
     } as QualityScore,
     jumpRisk: 'LOW' as JumpRisk,
     workRoute: [],
+    worldStateBefore: before,
+    worldStateAfter: after,
+    physicalActionIR: {
+      id: 'physical-action:scene-1:op-1:50',
+      sceneId: 'scene-1',
+      stageId: '50',
+      operationId: 'op-1',
+      primaryAction: { type: 'FASTEN', verb: 'build', description: 'build Wall' },
+      actor: { characterId: 'builder_01' },
+      target: { id: 'walls', label: 'Wall', elements: ['walls'] },
+      zone: 'zone-1',
+      tools: ['hammer'],
+      materials: ['concrete'],
+      preconditions: ['foundation exists'],
+      expectedEffects: {
+        constructionProgress: { before: 50, after: 50 },
+        targetStatus: { before: 'PARTIAL', after: 'PARTIAL' },
+        actorZone: { before: 'zone-1', after: 'zone-1' },
+        materialQuantityChanges: [],
+        newlyCompletedComponents: [],
+        newlyPartialComponents: [],
+      },
+      before: {
+        targetStatus: 'PARTIAL',
+        constructionProgress: 50,
+        actorZone: 'zone-1',
+        materialQuantities: { concrete: 10 },
+      },
+      after: {
+        targetStatus: 'PARTIAL',
+        constructionProgress: 50,
+        actorZone: 'zone-1',
+        materialQuantities: { concrete: 10 },
+      },
+      constraints: {
+        preserveActorId: 'builder_01',
+        allowedZone: 'zone-1',
+        preserveComponents: ['foundation'],
+        preserveZones: [],
+        forbiddenFutureComponents: ['roof'],
+        preventPrematureElements: ['roof'],
+      },
+      evidence: ['wall built'],
+    },
+    decision: {
+      action: 'EXECUTE_OPERATION',
+      operationId: 'op-1',
+      reason: 'committed stage fixture',
+      confidence: 1,
+    },
     ...overrides,
   };
 }

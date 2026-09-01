@@ -232,7 +232,7 @@ function fullPrompt(
       `permanent objects: ${spec.environment.permanentObjects.join(', ') || 'none specified'}`,
     ]),
     section('SPATIAL CONTEXT', [
-      `active zone ${spec.spatialContext.activeZone}; state zone ${spec.spatialContext.stateZone}`,
+      `ACTIVE ZONE ${spec.spatialContext.activeZone}; state zone ${spec.spatialContext.stateZone}`,
       ...spec.spatialContext.relevantZones.map(zone =>
         `${zone.id}: ${zone.name}, ${zone.type}${zone.orientation ? `, ${zone.orientation}` : ''}`
       ),
