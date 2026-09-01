@@ -9,8 +9,6 @@ describe('Integração ponta a ponta: Cabana do Riacho', () => {
 
   it('gera projeto completo pelo pipeline real', () => {
     expect(project.name).toBe('Cabana do Riacho');
-    // project.status field removed in #5D - no longer persisted
-    // expect(project.status).toBe('complete');
     expect(project.operations).toHaveLength(8);
     expect(project.scenes).toHaveLength(8);
     expect(project.storyboard).toHaveLength(8);

@@ -21,8 +21,6 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
   });
 
   it('gera projeto completo com origem e hipóteses rastreáveis', () => {
-    // project.status field removed in #5D - no longer persisted
-    // expect(project.status).toBe('complete');
     expect(project.planning?.source).toBe('description');
     expect(project.planning?.sourceDescription).toBe(description);
     expect(project.planning?.interpretation.length).toBeGreaterThan(3);

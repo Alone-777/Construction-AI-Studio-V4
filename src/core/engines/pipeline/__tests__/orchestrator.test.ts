@@ -41,8 +41,6 @@ describe('PipelineOrchestrator', () => {
 
     expect(result.success).toBe(true);
     expect(result.project).toBeDefined();
-    // project.status field removed in #5D - no longer persisted
-    // expect(result.project?.status).toBe('complete');
     expect(result.errors).toHaveLength(0);
     expect(result.stageResults).toBeDefined();
   });
@@ -155,8 +153,6 @@ describe('PipelineOrchestrator - createProjectFromBlueprint', () => {
       compiled.blueprint
     );
 
-    // project.status field removed in #5D - no longer persisted
-    // expect(project.status).toBe('complete');
     expect(project.planning).toBeUndefined();
   });
 

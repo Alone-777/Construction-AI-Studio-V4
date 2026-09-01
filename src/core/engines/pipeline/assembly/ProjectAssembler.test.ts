@@ -477,9 +477,6 @@ describe('ProjectAssemblerStage - Blueprint/Config Persistence', () => {
     // Timeline's projectId uses blueprint.id (not project.id which includes timestamp)
     expect(project.timeline.projectId).toBe(context.blueprint.id);
     expect(project.timeline.frames.length).toBeGreaterThan(0);
-
-    // project.status field removed in #5D - no longer persisted
-    // expect(project.status).toBe('complete');
   });
 
   it('legacy project without blueprint/config still loads (backward compatibility)', () => {
@@ -506,8 +503,6 @@ describe('ProjectAssemblerStage - Blueprint/Config Persistence', () => {
     expect(project.storyboard).toHaveLength(1);
     expect(project.constructionState).toBeDefined();
     expect(project.timeline).toBeDefined();
-    // project.status field removed in #5D - no longer persisted
-    // expect(project.status).toBe('complete');
 
     // blueprint and config are now preserved in the project (Update #4)
     expect(project.blueprint).toBeDefined();
