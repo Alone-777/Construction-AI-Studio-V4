@@ -3,3 +3,4 @@ export * from './memory';
 export * from './selector';
 export * from './approval';
 export * from './enrich-request';
+export * from './visual-continuity-image-service';
