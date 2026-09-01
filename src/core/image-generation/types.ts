@@ -47,6 +47,12 @@ export interface ImageResolution {
   readonly height: number;
 }
 
+/** Official caller ordering carried by request identity for temporal reference safety. */
+export interface ImageTemporalPosition {
+  readonly sceneOrder: number;
+  readonly stageOrder: number;
+}
+
 export interface ImageGenerationRequestMetadata {
   readonly canonicalSpecId: string;
   readonly snapshotId: string;
@@ -54,6 +60,7 @@ export interface ImageGenerationRequestMetadata {
   readonly temporalPoint: VisualTemporalPoint;
   readonly stageOutcome: VisualStageOutcome;
   readonly worldStateSource: VisualWorldStateSource;
+  readonly temporalPosition?: ImageTemporalPosition;
   readonly adapterId?: string;
   readonly attributes?: Readonly<Record<string, ImageMetadataValue>>;
 }

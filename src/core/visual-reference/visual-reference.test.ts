@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDeterministicMockImageProvider,
   createManualImageProvider,
+  withImageGenerationReferences,
   type ImageAssetRef,
   type ImageGenerationFailure,
   type ImageGenerationRequest,
@@ -33,6 +34,10 @@ interface RequestOptions {
   readonly temporalAuthority?: 'OFFICIAL' | 'CANDIDATE';
   readonly stageOutcome?: 'COMMITTED' | 'REJECTED' | 'PENDING';
   readonly references?: readonly ImageReference[];
+  readonly sceneOrder?: number;
+  readonly stageOrder?: number;
+  readonly snapshotId?: string;
+  readonly canonicalSpecId?: string;
 }
 
 function request(options: RequestOptions = {}): ImageGenerationRequest {
@@ -51,12 +56,13 @@ function request(options: RequestOptions = {}): ImageGenerationRequest {
     references: options.references ?? [],
     aspectRatio: 16 / 9,
     metadata: {
-      canonicalSpecId: 'canonical-a',
-      snapshotId: 'snapshot-a',
+      canonicalSpecId: options.canonicalSpecId ?? 'canonical-a',
+      snapshotId: options.snapshotId ?? 'snapshot-a',
       operationId: 'operation-a',
       temporalPoint: 'AFTER',
       stageOutcome: options.stageOutcome ?? 'COMMITTED',
       worldStateSource: 'CANDIDATE',
+      temporalPosition: position(options.sceneOrder ?? 0, options.stageOrder ?? 0),
       attributes: { continuity: 'official' },
     },
   };
@@ -92,14 +98,12 @@ function position(sceneOrder: number, stageOrder: number): VisualReferenceTempor
 
 function approvalInput(
   imageRequest = request(),
-  temporalPosition = position(0, 0),
   imageResult = success(imageRequest),
 ): ApproveGeneratedImageAsOfficialInput {
   return {
     request: imageRequest,
     result: imageResult,
     providerKind: imageRequest.providerId === 'manual' ? 'MANUAL' : 'MOCK',
-    temporalPosition,
     approval: {
       approved: true,
       recordedAt: 100,
@@ -112,8 +116,6 @@ function approvalInput(
 function record(
   options: RequestOptions & {
     readonly assetId?: string;
-    readonly sceneOrder?: number;
-    readonly stageOrder?: number;
     readonly recordedAt?: number;
     readonly role?: VisualReferenceRecord['role'];
   } = {},
@@ -122,7 +124,6 @@ function record(
   return approveGeneratedImageAsOfficial({
     ...approvalInput(
       imageRequest,
-      position(options.sceneOrder ?? 0, options.stageOrder ?? 0),
       success(imageRequest, asset(options.assetId ?? imageRequest.requestId)),
     ),
     approval: {
@@ -162,7 +163,7 @@ describe('visual reference approval and memory', () => {
     };
 
     expect(() =>
-      approveGeneratedImageAsOfficial(approvalInput(imageRequest, position(0, 0), failure)),
+      approveGeneratedImageAsOfficial(approvalInput(imageRequest, failure)),
     ).toThrow('cannot be approved');
   });
 
@@ -192,6 +193,33 @@ describe('visual reference approval and memory', () => {
     expect(next.records).toHaveLength(1);
     expect(next).not.toBe(original);
     expect(Object.isFrozen(next.records)).toBe(true);
+  });
+
+  it('isolates appended records, metadata and source arrays from later external mutation', () => {
+    const mutableMetadata = { nested: { label: 'before' } };
+    const mutableAssetMetadata = { nested: { checksumSource: 'before' } };
+    const sourceRecord = {
+      ...record(),
+      metadata: mutableMetadata,
+      asset: {
+        ...asset('isolated'),
+        metadata: mutableAssetMetadata,
+      },
+    };
+    const sourceRecords = [sourceRecord as VisualReferenceRecord];
+    const memory = createVisualReferenceMemory().append(sourceRecords[0]);
+
+    sourceRecord.sceneId = 'externally-mutated';
+    mutableMetadata.nested.label = 'after';
+    mutableAssetMetadata.nested.checksumSource = 'after';
+    sourceRecords.length = 0;
+
+    expect(memory.records).toHaveLength(1);
+    expect(memory.records[0].sceneId).toBe('scene-a');
+    expect(memory.records[0].metadata).toEqual({ nested: { label: 'before' } });
+    expect(memory.records[0].asset.metadata).toEqual({
+      nested: { checksumSource: 'before' },
+    });
   });
 
   it('appends approval and record as an explicit separate operation', () => {
@@ -247,12 +275,14 @@ describe('visual reference approval and memory', () => {
 describe('deterministic official reference selection', () => {
   it('returns no invented reference for empty memory', () => {
     expect(
-      selectBestOfficialReference(createVisualReferenceMemory(), {
+      selectBestOfficialReference(createVisualReferenceMemory(), request({
+        requestId: 'target-empty',
         projectId: 'project-a',
         sceneId: 'scene-a',
         stageId: 'stage-b',
-        temporalPosition: position(0, 1),
-      }),
+        sceneOrder: 0,
+        stageOrder: 1,
+      })),
     ).toBeUndefined();
   });
 
@@ -262,12 +292,14 @@ describe('deterministic official reference selection', () => {
     const memory = createVisualReferenceMemory([earlier, latest]);
 
     expect(
-      selectBestOfficialReference(memory, {
+      selectBestOfficialReference(memory, request({
+        requestId: 'target-latest',
         projectId: 'project-a',
         sceneId: 'scene-next',
         stageId: 'stage-next',
-        temporalPosition: position(2, 0),
-      }),
+        sceneOrder: 2,
+        stageOrder: 0,
+      })),
     ).toEqual(latest);
   });
 
@@ -288,12 +320,14 @@ describe('deterministic official reference selection', () => {
     const memory = createVisualReferenceMemory([sameScene, closerOtherScene]);
 
     expect(
-      selectBestOfficialReference(memory, {
+      selectBestOfficialReference(memory, request({
+        requestId: 'target-same-scene',
         projectId: 'project-a',
         sceneId: 'scene-target',
         stageId: 'stage-target',
-        temporalPosition: position(2, 0),
-      }),
+        sceneOrder: 2,
+        stageOrder: 0,
+      })),
     ).toEqual(sameScene);
   });
 
@@ -310,12 +344,14 @@ describe('deterministic official reference selection', () => {
     ]);
 
     expect(
-      selectBestOfficialReference(memory, {
+      selectBestOfficialReference(memory, request({
+        requestId: 'target-fallback',
         projectId: 'project-a',
         sceneId: 'scene-c',
         stageId: 'stage-c',
-        temporalPosition: position(2, 0),
-      }),
+        sceneOrder: 2,
+        stageOrder: 0,
+      })),
     ).toEqual(closest);
   });
 
@@ -325,12 +361,14 @@ describe('deterministic official reference selection', () => {
     ]);
 
     expect(
-      selectBestOfficialReference(memory, {
+      selectBestOfficialReference(memory, request({
+        requestId: 'target-project',
         projectId: 'project-a',
         sceneId: 'scene-a',
         stageId: 'stage-b',
-        temporalPosition: position(1, 0),
-      }),
+        sceneOrder: 1,
+        stageOrder: 0,
+      })),
     ).toBeUndefined();
   });
 
@@ -341,12 +379,14 @@ describe('deterministic official reference selection', () => {
     ]);
 
     expect(
-      selectBestOfficialReference(memory, {
+      selectBestOfficialReference(memory, request({
+        requestId: 'target-future',
         projectId: 'project-a',
         sceneId: 'scene-target',
         stageId: 'stage-target',
-        temporalPosition: position(1, 0),
-      }),
+        sceneOrder: 1,
+        stageOrder: 0,
+      })),
     ).toBeUndefined();
   });
 
@@ -363,14 +403,16 @@ describe('deterministic official reference selection', () => {
       assetId: 'a',
       sceneOrder: 0,
       stageOrder: 0,
-      recordedAt: 101,
+      recordedAt: 100,
     });
-    const target = {
+    const target = request({
+      requestId: 'target-tie',
       projectId: 'project-a',
       sceneId: 'scene-next',
       stageId: 'stage-next',
-      temporalPosition: position(1, 0),
-    } as const;
+      sceneOrder: 1,
+      stageOrder: 0,
+    });
 
     expect(selectBestOfficialReference(createVisualReferenceMemory([first, preferred]), target)).toEqual(preferred);
     expect(selectBestOfficialReference(createVisualReferenceMemory([preferred, first]), target)).toEqual(preferred);
@@ -379,8 +421,12 @@ describe('deterministic official reference selection', () => {
 
 describe('request enrichment', () => {
   it('adds an official image reference and recalculates request identity', () => {
-    const original = request();
-    const enriched = enrichImageGenerationRequestWithOfficialReference(original, record());
+    const original = request({ sceneOrder: 1, stageOrder: 0 });
+    const previous = record({ sceneOrder: 0, stageOrder: 0 });
+    const enriched = enrichImageGenerationRequestWithOfficialReference(original, previous);
+    const expected = withImageGenerationReferences(original, [
+      { asset: previous.asset, role: previous.role },
+    ]);
 
     expect(enriched.references).toHaveLength(1);
     expect(enriched.references[0]).toMatchObject({
@@ -388,10 +434,12 @@ describe('request enrichment', () => {
       asset: { id: 'image-request:a' },
     });
     expect(enriched.requestId).not.toBe(original.requestId);
+    expect(enriched.requestId).toBe(expected.requestId);
+    expect(original.requestId).toBe('image-request:a');
   });
 
   it('does not mutate the original request or nested metadata', () => {
-    const original = request();
+    const original = request({ sceneOrder: 1, stageOrder: 0 });
     const before = structuredClone(original);
 
     enrichImageGenerationRequestWithOfficialReference(original, record());
@@ -405,7 +453,7 @@ describe('request enrichment', () => {
       asset: previous.asset,
       role: 'PREVIOUS_OFFICIAL',
     };
-    const original = request({ references: [existingReference] });
+    const original = request({ references: [existingReference], sceneOrder: 1, stageOrder: 0 });
     const enriched = enrichImageGenerationRequestWithOfficialReference(original, previous);
 
     expect(enriched.references).toHaveLength(1);
@@ -426,7 +474,12 @@ describe('request enrichment', () => {
       asset: asset('edit-base', 'IMPORTED'),
       role: 'MANUAL_REFERENCE',
     };
-    const original = request({ mode: 'EDIT', references: [editReference] });
+    const original = request({
+      mode: 'EDIT',
+      references: [editReference],
+      sceneOrder: 1,
+      stageOrder: 0,
+    });
     const enriched = enrichImageGenerationRequestWithOfficialReference(original, record());
 
     expect(enriched.mode).toBe('EDIT');
@@ -437,7 +490,7 @@ describe('request enrichment', () => {
   });
 
   it('ignores a reference from a divergent project', () => {
-    const original = request({ projectId: 'project-a' });
+    const original = request({ projectId: 'project-a', sceneOrder: 1, stageOrder: 0 });
     const divergent = record({ projectId: 'project-b' });
     const enriched = enrichImageGenerationRequestWithOfficialReference(original, divergent);
 
@@ -446,12 +499,22 @@ describe('request enrichment', () => {
   });
 
   it('produces the same enriched request for the same semantic inputs', () => {
-    const original = request();
+    const original = request({ sceneOrder: 1, stageOrder: 0 });
     const previous = record();
 
     expect(enrichImageGenerationRequestWithOfficialReference(original, previous)).toEqual(
       enrichImageGenerationRequestWithOfficialReference(original, previous),
     );
+  });
+
+  it('ignores a future record passed directly to enrichment', () => {
+    const target = request({ sceneOrder: 1, stageOrder: 0 });
+    const future = record({ requestId: 'future-direct', sceneOrder: 2, stageOrder: 0 });
+    const enriched = enrichImageGenerationRequestWithOfficialReference(target, future);
+
+    expect(enriched).toEqual(target);
+    expect(enriched.references).toEqual([]);
+    expect(enriched.requestId).toBe(target.requestId);
   });
 });
 
@@ -461,7 +524,7 @@ describe('manual approval bridge and temporal isolation', () => {
     const invalid = success(imageRequest, { id: '', source: 'MOCK', uri: '' });
 
     expect(() =>
-      approveGeneratedImageAsOfficial(approvalInput(imageRequest, position(0, 0), invalid)),
+      approveGeneratedImageAsOfficial(approvalInput(imageRequest, invalid)),
     ).toThrow('asset with id and uri');
   });
 
@@ -486,8 +549,28 @@ describe('manual approval bridge and temporal isolation', () => {
     const mismatched = { ...success(imageRequest), requestId: 'different' } as ImageGenerationResult;
 
     expect(() =>
-      approveGeneratedImageAsOfficial(approvalInput(imageRequest, position(0, 0), mismatched)),
+      approveGeneratedImageAsOfficial(approvalInput(imageRequest, mismatched)),
     ).toThrow('does not match');
+  });
+
+  it.each<[string, RequestOptions]>([
+    ['requestId', { requestId: '' }],
+    ['requestId', { requestId: '   ' }],
+    ['providerId', { providerId: '' }],
+    ['providerId', { providerId: '\t' }],
+    ['snapshotId', { snapshotId: '' }],
+    ['snapshotId', { snapshotId: '   ' }],
+    ['canonicalSpecId', { canonicalSpecId: '' }],
+    ['canonicalSpecId', { canonicalSpecId: '\n' }],
+    ['projectId', { projectId: '   ' }],
+    ['sceneId', { sceneId: '' }],
+    ['stageId', { stageId: '\t' }],
+  ])('rejects a blank required approval %s', (field, options) => {
+    const invalidRequest = request(options);
+
+    expect(() => approveGeneratedImageAsOfficial(approvalInput(invalidRequest))).toThrow(
+      `Image approval ${field} is required.`,
+    );
   });
 
   it('requires a supplied asset to approve MANUAL_READY', async () => {
@@ -495,7 +578,7 @@ describe('manual approval bridge and temporal isolation', () => {
     const manualResult = await createManualImageProvider().generate(imageRequest);
 
     expect(() =>
-      approveGeneratedImageAsOfficial(approvalInput(imageRequest, position(0, 0), manualResult)),
+      approveGeneratedImageAsOfficial(approvalInput(imageRequest, manualResult)),
     ).toThrow('asset with id and uri');
   });
 
@@ -503,7 +586,7 @@ describe('manual approval bridge and temporal isolation', () => {
     const imageRequest = request({ providerId: 'manual' });
     const manualResult = await createManualImageProvider().generate(imageRequest);
     const approved = approveGeneratedImageAsOfficial({
-      ...approvalInput(imageRequest, position(0, 0), manualResult),
+      ...approvalInput(imageRequest, manualResult),
       approvedAsset: asset('manual-import', 'IMPORTED'),
     });
 
@@ -540,9 +623,9 @@ describe('manual approval bridge and temporal isolation', () => {
     const mockResult = await createDeterministicMockImageProvider().generate(mockRequest);
     const manualResult = await createManualImageProvider().generate(manualRequest);
 
-    approveGeneratedImageAsOfficial(approvalInput(mockRequest, position(0, 0), mockResult));
+    approveGeneratedImageAsOfficial(approvalInput(mockRequest, mockResult));
     approveGeneratedImageAsOfficial({
-      ...approvalInput(manualRequest, position(0, 0), manualResult),
+      ...approvalInput(manualRequest, manualResult),
       approvedAsset: asset('manual-import', 'IMPORTED'),
     });
 

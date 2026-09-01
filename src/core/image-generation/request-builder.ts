@@ -6,6 +6,7 @@ import type {
   ImageMetadataValue,
   ImageReference,
   ImageResolution,
+  ImageTemporalPosition,
 } from './types';
 
 export interface AdaptedImagePrompt {
@@ -24,6 +25,7 @@ export interface CreateImageGenerationRequestInput {
   readonly references?: readonly ImageReference[];
   readonly aspectRatio?: number;
   readonly resolution?: ImageResolution;
+  readonly temporalPosition?: ImageTemporalPosition;
   readonly metadata?: Readonly<Record<string, ImageMetadataValue>>;
 }
 
@@ -34,6 +36,7 @@ type RequestIdentity = Omit<ImageGenerationRequest, 'requestId' | 'metadata'> & 
   readonly canonicalSpecId: string;
   readonly snapshotId: string;
   readonly operationId: string;
+  readonly temporalPosition?: ImageTemporalPosition;
 };
 
 export function createImageGenerationRequest(
@@ -77,6 +80,9 @@ export function createImageGenerationRequest(
     canonicalSpecId: canonicalSpec.id,
     snapshotId: canonicalSpec.identity.snapshotId,
     operationId: canonicalSpec.identity.operationId,
+    temporalPosition: input.temporalPosition
+      ? { ...input.temporalPosition }
+      : undefined,
   };
 
   return freezeImageGenerationRequest({
@@ -89,6 +95,9 @@ export function createImageGenerationRequest(
       temporalPoint: canonicalSpec.identity.temporalPoint,
       stageOutcome: canonicalSpec.identity.stageOutcome,
       worldStateSource: canonicalSpec.identity.worldStateSource,
+      temporalPosition: input.temporalPosition
+        ? { ...input.temporalPosition }
+        : undefined,
       adapterId: providerPrompt.adapterId,
       attributes: input.metadata ? cloneMetadata(input.metadata) : undefined,
     },
@@ -102,6 +111,9 @@ export function cloneImageGenerationRequest(request: ImageGenerationRequest): Im
     resolution: request.resolution ? { ...request.resolution } : undefined,
     metadata: {
       ...request.metadata,
+      temporalPosition: request.metadata.temporalPosition
+        ? { ...request.metadata.temporalPosition }
+        : undefined,
       attributes: request.metadata.attributes
         ? cloneMetadata(request.metadata.attributes)
         : undefined,
@@ -137,6 +149,9 @@ export function withImageGenerationReferences(
     canonicalSpecId: request.metadata.canonicalSpecId,
     snapshotId: request.metadata.snapshotId,
     operationId: request.metadata.operationId,
+    temporalPosition: request.metadata.temporalPosition
+      ? { ...request.metadata.temporalPosition }
+      : undefined,
   };
 
   return freezeImageGenerationRequest({
@@ -144,6 +159,9 @@ export function withImageGenerationReferences(
     requestId: createDeterministicRequestId(identity),
     metadata: {
       ...request.metadata,
+      temporalPosition: request.metadata.temporalPosition
+        ? { ...request.metadata.temporalPosition }
+        : undefined,
       attributes: request.metadata.attributes
         ? cloneMetadata(request.metadata.attributes)
         : undefined,

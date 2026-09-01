@@ -3,17 +3,15 @@ import type {
   ImageMetadataValue,
   ImageProviderKind,
   ImageReferenceRole,
+  ImageTemporalPosition,
 } from '../image-generation';
 import type {
   VisualTemporalPoint,
   VisualWorldStateSource,
 } from '../visual-state/visual-state-snapshot';
 
-/** Caller-supplied official ordering; never inferred from ids, dates or operations. */
-export interface VisualReferenceTemporalPosition {
-  readonly sceneOrder: number;
-  readonly stageOrder: number;
-}
+/** Request-bound official ordering; never inferred from ids, dates or operations. */
+export type VisualReferenceTemporalPosition = ImageTemporalPosition;
 
 export interface VisualReferenceRecord {
   readonly id: string;
@@ -38,11 +36,4 @@ export interface VisualReferenceRecord {
   readonly recordedAt: number;
   readonly role: ImageReferenceRole;
   readonly metadata?: Readonly<Record<string, ImageMetadataValue>>;
-}
-
-export interface VisualReferenceSelectionTarget {
-  readonly projectId: string;
-  readonly sceneId: string;
-  readonly stageId: string;
-  readonly temporalPosition: VisualReferenceTemporalPosition;
 }

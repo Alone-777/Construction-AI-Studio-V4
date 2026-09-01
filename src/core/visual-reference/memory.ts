@@ -69,7 +69,18 @@ function cloneAndValidateOfficialRecord(record: VisualReferenceRecord): VisualRe
   ) {
     throw new Error('VisualReferenceMemory accepts only explicitly approved official committed records.');
   }
-  if (!record.id || !record.projectId || !record.sceneId || !record.stageId) {
+  if (
+    [
+      record.id,
+      record.projectId,
+      record.sceneId,
+      record.stageId,
+      record.snapshotId,
+      record.canonicalSpecId,
+      record.requestId,
+      record.providerId,
+    ].some(isBlank)
+  ) {
     throw new Error('Visual reference identity fields are required.');
   }
   if (!Number.isFinite(record.recordedAt)) {
@@ -83,7 +94,7 @@ function cloneAndValidateOfficialRecord(record: VisualReferenceRecord): VisualRe
   ) {
     throw new Error('Visual reference temporal position must contain non-negative integer orders.');
   }
-  if (!record.asset.id || !record.asset.uri) {
+  if (isBlank(record.asset.id) || isBlank(record.asset.uri)) {
     throw new Error('Visual reference asset must have an id and uri.');
   }
 
@@ -96,6 +107,10 @@ function cloneAndValidateOfficialRecord(record: VisualReferenceRecord): VisualRe
     },
     metadata: record.metadata ? cloneMetadata(record.metadata) : undefined,
   });
+}
+
+function isBlank(value: string): boolean {
+  return !value.trim();
 }
 
 function cloneMetadata(

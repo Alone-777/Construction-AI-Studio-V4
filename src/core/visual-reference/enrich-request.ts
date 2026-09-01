@@ -3,6 +3,7 @@ import {
   withImageGenerationReferences,
   type ImageGenerationRequest,
 } from '../image-generation';
+import { isVisualReferenceStrictlyBefore } from './selector';
 import type { VisualReferenceRecord } from './types';
 
 export function enrichImageGenerationRequestWithOfficialReference(
@@ -33,6 +34,7 @@ function isValidForRequest(
     record.approvalStatus === 'APPROVED' &&
     record.temporalAuthority === 'OFFICIAL' &&
     record.snapshotKind === 'OFFICIAL' &&
-    record.stageOutcome === 'COMMITTED'
+    record.stageOutcome === 'COMMITTED' &&
+    isVisualReferenceStrictlyBefore(record, request)
   );
 }

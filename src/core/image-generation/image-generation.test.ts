@@ -152,6 +152,7 @@ function request(options: {
   mode?: 'GENERATE' | 'EDIT';
   references?: readonly ImageReference[];
   promptSuffix?: string;
+  temporalPosition?: { readonly sceneOrder: number; readonly stageOrder: number };
 } = {}): ImageGenerationRequest {
   const spec = canonicalSpec(options.authority);
   const mode = options.mode ?? 'GENERATE';
@@ -166,6 +167,7 @@ function request(options: {
     providerId: options.providerId ?? 'mock',
     mode,
     references: options.references,
+    temporalPosition: options.temporalPosition,
   });
 }
 
@@ -218,6 +220,15 @@ describe('#12 Image Provider Foundation', () => {
 
   it('2. changes requestId when semantic content changes', () => {
     expect(request().requestId).not.toBe(request({ promptSuffix: '\nextra constraint' }).requestId);
+  });
+
+  it('binds temporal position to request metadata and deterministic identity', () => {
+    const first = request({ temporalPosition: { sceneOrder: 0, stageOrder: 0 } });
+    const next = request({ temporalPosition: { sceneOrder: 0, stageOrder: 1 } });
+
+    expect(first.metadata.temporalPosition).toEqual({ sceneOrder: 0, stageOrder: 0 });
+    expect(next.metadata.temporalPosition).toEqual({ sceneOrder: 0, stageOrder: 1 });
+    expect(first.requestId).not.toBe(next.requestId);
   });
 
   it('3. allows GENERATE with zero references', async () => {

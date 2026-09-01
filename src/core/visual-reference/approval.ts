@@ -13,7 +13,6 @@ export interface ApproveGeneratedImageAsOfficialInput {
   readonly request: ImageGenerationRequest;
   readonly result: ImageGenerationResult;
   readonly providerKind: ImageProviderKind;
-  readonly temporalPosition: VisualReferenceTemporalPosition;
   readonly approval: {
     readonly approved: true;
     readonly recordedAt: number;
@@ -28,12 +27,17 @@ export function approveGeneratedImageAsOfficial(
   input: ApproveGeneratedImageAsOfficialInput,
 ): VisualReferenceRecord {
   const { request, result } = input;
+  const temporalPosition = request.metadata.temporalPosition;
 
   if (input.approval.approved !== true) {
     throw new Error('Explicit manual approval is required.');
   }
   if (result.status === 'FAILURE') {
     throw new Error('A failed image generation result cannot be approved as official.');
+  }
+  validateRequiredIdentity(request);
+  if (!isValidTemporalPosition(temporalPosition)) {
+    throw new Error('A valid request temporal position is required for official approval.');
   }
   if (request.temporalAuthority !== 'OFFICIAL' || request.snapshotKind !== 'OFFICIAL') {
     throw new Error('Only an OFFICIAL visual snapshot request can become an official reference.');
@@ -46,7 +50,7 @@ export function approveGeneratedImageAsOfficial(
   }
 
   const asset = result.status === 'SUCCESS' ? result.asset : input.approvedAsset;
-  if (!asset?.id || !asset.uri) {
+  if (!asset || isBlank(asset.id) || isBlank(asset.uri)) {
     throw new Error('An approved image asset with id and uri is required.');
   }
 
@@ -69,7 +73,7 @@ export function approveGeneratedImageAsOfficial(
     stageOutcome: 'COMMITTED',
     snapshotKind: 'OFFICIAL',
     worldStateSource: request.metadata.worldStateSource,
-    temporalPosition: input.temporalPosition,
+    temporalPosition,
     recordedAt: input.approval.recordedAt,
     role: input.approval.role ?? 'PREVIOUS_OFFICIAL',
     metadata: input.approval.metadata,
@@ -77,6 +81,34 @@ export function approveGeneratedImageAsOfficial(
 
   // Reuse the memory boundary for validation, cloning and deep immutability.
   return createVisualReferenceMemory([record]).records[0];
+}
+
+function validateRequiredIdentity(request: ImageGenerationRequest): void {
+  const fields: ReadonlyArray<readonly [string, string]> = [
+    ['requestId', request.requestId],
+    ['providerId', request.providerId],
+    ['projectId', request.projectId],
+    ['sceneId', request.sceneId],
+    ['stageId', request.stageId],
+    ['snapshotId', request.metadata.snapshotId],
+    ['canonicalSpecId', request.metadata.canonicalSpecId],
+  ];
+  const invalid = fields.find(([, value]) => isBlank(value));
+  if (invalid) throw new Error(`Image approval ${invalid[0]} is required.`);
+}
+
+function isValidTemporalPosition(
+  position: VisualReferenceTemporalPosition | undefined,
+): position is VisualReferenceTemporalPosition {
+  return !!position &&
+    Number.isInteger(position.sceneOrder) &&
+    Number.isInteger(position.stageOrder) &&
+    position.sceneOrder >= 0 &&
+    position.stageOrder >= 0;
+}
+
+function isBlank(value: string): boolean {
+  return !value.trim();
 }
 
 /** Approval never mutates memory; callers append the returned record explicitly. */
