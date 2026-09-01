@@ -10,6 +10,8 @@ export type ImageProviderKind = 'MANUAL' | 'MOCK' | 'REMOTE' | 'LOCAL';
 export type ImageTemporalAuthority = VisualStateKind;
 export type ImageReferenceRole =
   | 'PREVIOUS_OFFICIAL'
+  | 'SAME_SCENE_OFFICIAL'
+  | 'MANUAL_REFERENCE'
   | 'CHARACTER'
   | 'ENVIRONMENT'
   | 'CONSTRUCTION'

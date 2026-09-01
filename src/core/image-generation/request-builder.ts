@@ -109,6 +109,48 @@ export function cloneImageGenerationRequest(request: ImageGenerationRequest): Im
   });
 }
 
+/** Returns a new immutable request and keeps reference changes inside request identity. */
+export function withImageGenerationReferences(
+  request: ImageGenerationRequest,
+  references: readonly ImageReference[],
+): ImageGenerationRequest {
+  const normalizedReferences = normalizeReferences(references);
+  const base = {
+    projectId: request.projectId,
+    sceneId: request.sceneId,
+    stageId: request.stageId,
+    providerId: request.providerId,
+    mode: request.mode,
+    prompt: request.prompt,
+    negativePrompt: request.negativePrompt,
+    temporalAuthority: request.temporalAuthority,
+    snapshotKind: request.snapshotKind,
+    references: normalizedReferences,
+    aspectRatio: request.aspectRatio,
+    resolution: request.resolution ? { ...request.resolution } : undefined,
+  } as const;
+  const identity: RequestIdentity = {
+    ...base,
+    temporalPoint: request.metadata.temporalPoint,
+    stageOutcome: request.metadata.stageOutcome,
+    worldStateSource: request.metadata.worldStateSource,
+    canonicalSpecId: request.metadata.canonicalSpecId,
+    snapshotId: request.metadata.snapshotId,
+    operationId: request.metadata.operationId,
+  };
+
+  return freezeImageGenerationRequest({
+    ...base,
+    requestId: createDeterministicRequestId(identity),
+    metadata: {
+      ...request.metadata,
+      attributes: request.metadata.attributes
+        ? cloneMetadata(request.metadata.attributes)
+        : undefined,
+    },
+  });
+}
+
 function createDeterministicRequestId(identity: RequestIdentity): string {
   const serialized = stableSerialize(identity);
   let hash = 0xcbf29ce484222325n;
