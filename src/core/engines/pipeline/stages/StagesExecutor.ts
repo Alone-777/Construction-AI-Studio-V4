@@ -27,6 +27,7 @@ import {
   commitStageTransaction,
   rejectStageTransaction,
 } from '../../../transactions/stage-transaction';
+import { compilePhysicalActionIR } from '../../../actions/physical-action-ir';
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
@@ -244,6 +245,13 @@ export class StagesExecutorStage {
           stage.worldStateBefore = before;
           stage.worldStateAfter = transaction.candidateState;
           stage.executionProof = generateExecutionProof(stage);
+          stage.physicalActionIR = compilePhysicalActionIR({
+            scene,
+            stage,
+            operation,
+            worldStateBefore: before,
+            candidateState: transaction.candidateState,
+          });
 
           const report = fiscalRunner.runAllFiscals({
             scene,

@@ -3,6 +3,7 @@ import { ValidationError } from './errors';
 import type { WorldState, ExecutionProof } from './world-state';
 import type { QualityScore } from './quality';
 import type { ConstructionDecision } from '../decision/ConstructionDecision';
+import type { PhysicalActionIR } from '../actions/physical-action-ir';
 
 export type StagePercentage = 0 | 25 | 50 | 75 | 100;
 export type JumpRisk = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -58,6 +59,8 @@ export interface Stage {
   worldStateAfter?: WorldState;
   /** Prova causal produzida pelo Execution Proof Engine. */
   executionProof?: ExecutionProof;
+  /** Ação física primária canônica desta tentativa temporal. */
+  physicalActionIR?: PhysicalActionIR;
   qualityScore?: QualityScore;
   jumpRisk?: JumpRisk;
   /** Artefatos derivados do estágio real, nunca texto de demonstração isolado. */
