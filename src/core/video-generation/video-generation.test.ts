@@ -19,6 +19,7 @@ import {
   validateVisualContinuity,
 } from '../visual-validation';
 import {
+  completeManualVideoGeneration,
   createCanonicalAnimationPromptSpec,
   createDeterministicMockVideoProvider,
   createManualVideoProvider,
@@ -26,7 +27,9 @@ import {
   createVideoGenerationService,
   renderCanonicalAnimationPrompt,
   type CanonicalAnimationPromptSpecResult,
+  type ManualVideoSubmission,
   type VideoGenerationRequest,
+  type VideoGenerationResult,
   type VideoProvider,
 } from './index';
 
@@ -767,6 +770,310 @@ describe('official image to video temporal safety', () => {
     await createVideoGenerationService({ providers: [createManualVideoProvider()] }).generate(manual.request);
     await createVideoGenerationService({ providers: [createDeterministicMockVideoProvider()] })
       .generate(mock.request);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+async function manualCompletionFixture(label: Label = 'a') {
+  const value = await fixture(label, 'manual-video');
+  const manualReady = await createVideoGenerationService({ providers: [createManualVideoProvider()] })
+    .generate(value.request);
+  if (manualReady.status !== 'MANUAL_READY') throw new Error('Expected MANUAL_READY fixture.');
+  const submission: ManualVideoSubmission = {
+    submissionId: `video-submission-${label}`,
+    requestId: value.request.requestId,
+    asset: {
+      id: `completed-video-${label}`,
+      source: 'IMPORTED',
+      uri: `file:///videos/completed-video-${label}.mp4`,
+      mimeType: 'video/mp4',
+      checksum: `sha256-video-${label}`,
+      durationSeconds: value.request.durationSeconds,
+      metadata: { containsVideoBytes: false },
+    },
+    submittedAt: label === 'a' ? 1_000 : 2_000,
+    metadata: { submittedBy: 'user' },
+  };
+  return { ...value, manualReady, submission };
+}
+
+describe('manual video completion bridge', () => {
+  it('completes MANUAL_READY with a valid submission as unreviewed SUCCESS', async () => {
+    const value = await manualCompletionFixture();
+    const result = completeManualVideoGeneration({
+      request: value.request,
+      manualReadyResult: value.manualReady,
+      submission: value.submission,
+    });
+    expect(result).toMatchObject({
+      status: 'SUCCESS',
+      requestId: value.request.requestId,
+      providerId: 'manual-video',
+      asset: { id: 'completed-video-a', uri: 'file:///videos/completed-video-a.mp4' },
+      outputStatus: 'UNREVIEWED',
+    });
+    expect(Object.isFrozen(result)).toBe(true);
+  });
+
+  it('preserves official source image and temporal identity from the request', async () => {
+    const value = await manualCompletionFixture();
+    const result = completeManualVideoGeneration({
+      request: value.request,
+      manualReadyResult: value.manualReady,
+      submission: value.submission,
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(result.providerMetadata).toMatchObject({
+      sourceReferenceId: value.request.source.referenceId,
+      sourceImageAssetId: value.request.sourceImage.id,
+      temporalIdentity: value.request.temporalIdentity,
+    });
+    expect(value.manualReady.package.sourceImage).toEqual(value.request.sourceImage);
+  });
+
+  it('rejects submission B for request and MANUAL_READY A', async () => {
+    const a = await manualCompletionFixture('a');
+    const b = await manualCompletionFixture('b');
+    expect(completeManualVideoGeneration({
+      request: a.request, manualReadyResult: a.manualReady, submission: b.submission,
+    })).toMatchObject({
+      status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_REQUEST_ID_MISMATCH',
+    });
+  });
+
+  it('rejects MANUAL_READY B for request and submission A', async () => {
+    const a = await manualCompletionFixture('a');
+    const b = await manualCompletionFixture('b');
+    expect(completeManualVideoGeneration({
+      request: a.request, manualReadyResult: b.manualReady, submission: a.submission,
+    })).toMatchObject({
+      status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_REQUEST_ID_MISMATCH',
+    });
+  });
+
+  it.each([
+    { field: 'submissionId', value: '' },
+    { field: 'submissionId', value: '   ' },
+    { field: 'requestId', value: '' },
+    { field: 'requestId', value: '\t  ' },
+  ] as const)('rejects invalid submission $field=$value', async ({ field, value: invalidValue }) => {
+    const value = await manualCompletionFixture();
+    const submission = { ...structuredClone(value.submission), [field]: invalidValue };
+    expect(completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission,
+    })).toMatchObject({
+      status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_INVALID_SUBMISSION',
+    });
+  });
+
+  it.each([
+    { name: 'empty id', asset: { id: '' } },
+    { name: 'whitespace id', asset: { id: '   ' } },
+    { name: 'empty uri', asset: { uri: '' } },
+    { name: 'whitespace uri', asset: { uri: '  \t' } },
+    { name: 'mock asset', asset: { source: 'MOCK' as const } },
+    { name: 'embedded data', asset: { uri: 'data:video/mp4;base64,AAAA' } },
+    { name: 'non-video mime', asset: { mimeType: 'image/png' } },
+    { name: 'whitespace mime', asset: { mimeType: '   ' } },
+    { name: 'whitespace checksum', asset: { checksum: '  ' } },
+  ])('rejects invalid manual video asset: $name', async ({ asset }) => {
+    const value = await manualCompletionFixture();
+    const submission = {
+      ...structuredClone(value.submission),
+      asset: { ...structuredClone(value.submission.asset), ...asset },
+    } as ManualVideoSubmission;
+    expect(completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission,
+    })).toMatchObject({ status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_INVALID_ASSET' });
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid optional asset duration %s',
+    async durationSeconds => {
+      const value = await manualCompletionFixture();
+      const submission: ManualVideoSubmission = {
+        ...structuredClone(value.submission),
+        asset: { ...structuredClone(value.submission.asset), durationSeconds },
+      };
+      expect(completeManualVideoGeneration({
+        request: value.request, manualReadyResult: value.manualReady, submission,
+      })).toMatchObject({
+        status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_INVALID_DURATION',
+      });
+    },
+  );
+
+  it('rejects FAILURE and unknown results instead of throwing', async () => {
+    const value = await manualCompletionFixture();
+    const failure: VideoGenerationResult = {
+      status: 'FAILURE', requestId: value.request.requestId, providerId: value.request.providerId,
+      errorCode: 'EXTERNAL_FAILURE', message: 'failed', retryable: false,
+    };
+    const unknown = { ...failure, status: 'UNKNOWN' } as unknown as VideoGenerationResult;
+    for (const manualReadyResult of [failure, unknown]) {
+      expect(completeManualVideoGeneration({
+        request: value.request, manualReadyResult, submission: value.submission,
+      })).toMatchObject({
+        status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_INVALID_RESULT_STATUS',
+      });
+    }
+  });
+
+  it('rejects a SUCCESS result, including a previously completed result', async () => {
+    const value = await manualCompletionFixture();
+    const completed = completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission: value.submission,
+    });
+    expect(completed.status).toBe('SUCCESS');
+    expect(completeManualVideoGeneration({
+      request: value.request, manualReadyResult: completed, submission: value.submission,
+    })).toMatchObject({
+      status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_INVALID_RESULT_STATUS',
+    });
+  });
+
+  it('rejects a MOCK result from manual completion', async () => {
+    const value = await fixture('a', 'mock-video');
+    const mock = await createVideoGenerationService({ providers: [createDeterministicMockVideoProvider()] })
+      .generate(value.request);
+    const manual = await manualCompletionFixture();
+    expect(completeManualVideoGeneration({
+      request: value.request, manualReadyResult: mock, submission: manual.submission,
+    })).toMatchObject({
+      status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_INVALID_RESULT_STATUS',
+    });
+  });
+
+  it('rejects MANUAL_READY carrying a non-manual provider kind or provider id', async () => {
+    const value = await manualCompletionFixture();
+    const wrongKind = {
+      ...structuredClone(value.manualReady),
+      providerMetadata: { providerKind: 'MOCK' },
+    } as VideoGenerationResult;
+    const wrongId = {
+      ...structuredClone(value.manualReady),
+      providerId: 'other-manual-video',
+    } as VideoGenerationResult;
+    for (const manualReadyResult of [wrongKind, wrongId]) {
+      expect(completeManualVideoGeneration({
+        request: value.request, manualReadyResult, submission: value.submission,
+      })).toMatchObject({
+        status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_PROVIDER_MISMATCH',
+      });
+    }
+  });
+
+  it('rejects a manual package that swaps the official source image', async () => {
+    const a = await manualCompletionFixture('a');
+    const b = await manualCompletionFixture('b');
+    const swapped = {
+      ...structuredClone(a.manualReady),
+      package: {
+        ...structuredClone(a.manualReady.package),
+        sourceImage: structuredClone(b.request.sourceImage),
+      },
+    } as VideoGenerationResult;
+    expect(completeManualVideoGeneration({
+      request: a.request, manualReadyResult: swapped, submission: a.submission,
+    })).toMatchObject({
+      status: 'FAILURE', errorCode: 'MANUAL_COMPLETION_REQUEST_ID_MISMATCH',
+    });
+  });
+
+  it('is deterministic and does not use submittedAt as completed asset identity', async () => {
+    const value = await manualCompletionFixture();
+    const first = completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission: value.submission,
+    });
+    const second = completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission: value.submission,
+    });
+    const later = completeManualVideoGeneration({
+      request: value.request,
+      manualReadyResult: value.manualReady,
+      submission: { ...value.submission, submittedAt: value.submission.submittedAt + 1 },
+    });
+    expect(first).toEqual(second);
+    expect(later).toMatchObject({
+      status: 'SUCCESS', requestId: value.request.requestId, asset: value.submission.asset,
+    });
+  });
+
+  it('does not mutate request, MANUAL_READY, submission, spec, source or snapshot inputs', async () => {
+    const value = await manualCompletionFixture();
+    const before = structuredClone({
+      request: value.request,
+      manualReady: value.manualReady,
+      submission: value.submission,
+      spec: value.spec,
+      source: value.source,
+      snapshot: value.state,
+      action: value.action,
+    });
+    completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission: value.submission,
+    });
+    expect({
+      request: value.request,
+      manualReady: value.manualReady,
+      submission: value.submission,
+      spec: value.spec,
+      source: value.source,
+      snapshot: value.state,
+      action: value.action,
+    }).toEqual(before);
+  });
+
+  it('completes official image A as video A and official image B as video B', async () => {
+    const a = await manualCompletionFixture('a');
+    const b = await manualCompletionFixture('b');
+    const completedA = completeManualVideoGeneration({
+      request: a.request, manualReadyResult: a.manualReady, submission: a.submission,
+    });
+    const completedB = completeManualVideoGeneration({
+      request: b.request, manualReadyResult: b.manualReady, submission: b.submission,
+    });
+    expect(completedA).toMatchObject({
+      status: 'SUCCESS', requestId: a.request.requestId,
+      asset: { id: 'completed-video-a' },
+      providerMetadata: {
+        sourceImageAssetId: a.reference.asset.id,
+        temporalIdentity: { stageId: 'stage-a' },
+      },
+    });
+    expect(completedB).toMatchObject({
+      status: 'SUCCESS', requestId: b.request.requestId,
+      asset: { id: 'completed-video-b' },
+      providerMetadata: {
+        sourceImageAssetId: b.reference.asset.id,
+        temporalIdentity: { stageId: 'stage-b' },
+      },
+    });
+    expect(completedA.requestId).not.toBe(completedB.requestId);
+  });
+
+  it('does not auto-approve or mutate visual memory and domain sentinels', async () => {
+    const value = await manualCompletionFixture();
+    const memory = createVisualReferenceMemory([value.reference]);
+    const worldState = Object.freeze({ progress: 25, existingComponents: ['component-a'] });
+    const stage = Object.freeze({ id: 'stage-a', decision: Object.freeze({ status: 'PASS' }) });
+    const before = structuredClone({ records: memory.records, worldState, stage });
+    const result = completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission: value.submission,
+    });
+    expect({ records: memory.records, worldState, stage }).toEqual(before);
+    expect(result).toMatchObject({ status: 'SUCCESS', outputStatus: 'UNREVIEWED' });
+    expect(result).not.toHaveProperty('approvalStatus');
+  });
+
+  it('completes offline without API key or paid provider', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const value = await manualCompletionFixture();
+    const result = completeManualVideoGeneration({
+      request: value.request, manualReadyResult: value.manualReady, submission: value.submission,
+    });
+    expect(result.status).toBe('SUCCESS');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

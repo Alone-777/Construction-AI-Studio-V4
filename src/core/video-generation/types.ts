@@ -174,6 +174,23 @@ export interface VideoAssetRef {
   readonly metadata?: Readonly<Record<string, ImageMetadataValue>>;
 }
 
+export interface ManualVideoSubmission {
+  readonly submissionId: string;
+  readonly requestId: string;
+  readonly asset: VideoAssetRef;
+  readonly submittedAt: number;
+  readonly metadata?: Readonly<Record<string, ImageMetadataValue>>;
+}
+
+export type ManualVideoCompletionErrorCode =
+  | 'MANUAL_COMPLETION_INVALID_REQUEST'
+  | 'MANUAL_COMPLETION_REQUEST_ID_MISMATCH'
+  | 'MANUAL_COMPLETION_INVALID_SUBMISSION'
+  | 'MANUAL_COMPLETION_INVALID_ASSET'
+  | 'MANUAL_COMPLETION_INVALID_RESULT_STATUS'
+  | 'MANUAL_COMPLETION_PROVIDER_MISMATCH'
+  | 'MANUAL_COMPLETION_INVALID_DURATION';
+
 export type VideoGenerationErrorCode =
   | 'INVALID_REQUEST'
   | 'INVALID_SOURCE_IMAGE'
@@ -181,7 +198,8 @@ export type VideoGenerationErrorCode =
   | 'INVALID_DURATION'
   | 'UNKNOWN_PROVIDER'
   | 'PROVIDER_MISMATCH'
-  | 'PROVIDER_EXECUTION_ERROR';
+  | 'PROVIDER_EXECUTION_ERROR'
+  | ManualVideoCompletionErrorCode;
 
 export interface VideoGenerationSuccess {
   readonly status: 'SUCCESS';
