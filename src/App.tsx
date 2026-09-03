@@ -772,10 +772,10 @@ function ProjectScreen() {
         {/* Center Panel */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex border-b border-studio-border shrink-0">
-            {(['map', 'dependencies', 'scenes', 'stages'] as const).map(tab => (
+            {(['map', 'dependencies', 'scenes', 'stages', 'pipeline'] as const).map(tab => (
               <button key={tab} onClick={() => setCenterWorkspaceTab(tab)}
                 className={centerWorkspaceTab === tab ? 'tab-active' : 'tab'}>
-                {tab === 'map' ? '🗺️ Mapa' : tab === 'dependencies' ? '📊 Grafo' : tab === 'scenes' ? '🎬 Cenas' : '⚙️ Stages'}
+                {tab === 'map' ? '🗺️ Mapa' : tab === 'dependencies' ? '📊 Grafo' : tab === 'scenes' ? '🎬 Cenas' : tab === 'stages' ? '⚙️ Stages' : 'Pipeline Visual'}
               </button>
             ))}
           </div>

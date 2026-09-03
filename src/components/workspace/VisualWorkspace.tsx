@@ -4,6 +4,7 @@ import { DependencyGraphView } from './DependencyGraphView';
 import { StoryboardView } from './StoryboardView';
 import { StagesView } from './StagesView';
 import { VisualEngineView } from './VisualEngineView';
+import { VisualPipelineWorkspace } from '../visual-pipeline/VisualPipelineWorkspace';
 
 const TABS = [
   { id: 'map', label: '🗺️ MAPA', shortLabel: 'MAPA' },
@@ -11,6 +12,7 @@ const TABS = [
   { id: 'scenes', label: '🎬 CENAS', shortLabel: 'CENAS' },
   { id: 'stages', label: '⚙️ STAGES', shortLabel: 'STAGES' },
   { id: 'visual', label: '🎬 VISUAL', shortLabel: 'VISUAL' },
+  { id: 'pipeline', label: 'PIPELINE VISUAL', shortLabel: 'PIPELINE' },
 ] as const;
 
 type WorkspaceTab = typeof TABS[number]['id'];
@@ -38,6 +40,7 @@ export function VisualWorkspace() {
         {centerWorkspaceTab === 'scenes' && <StoryboardView />}
         {centerWorkspaceTab === 'stages' && <StagesView />}
         {centerWorkspaceTab === 'visual' && <VisualEngineView />}
+        {centerWorkspaceTab === 'pipeline' && <VisualPipelineWorkspace />}
       </div>
     </div>
   );
