@@ -19,6 +19,9 @@ export type EnvironmentPreset = 'floresta_tropical' | 'floresta_temperada' | 'fl
 export type VisualStyle = 'cinematografico' | 'documental' | 'realista' | 'artistico' | 'personalizado';
 export type DetailLevel = 'baixo' | 'medio' | 'alto' | 'ultra';
 
+/** Aspect ratio operacional padrão do workflow vertical TikTok. */
+export const DEFAULT_VISUAL_ASPECT_RATIO = 9 / 16;
+
 export interface ProjectConfig {
   name: string;
   environment: EnvironmentPreset;
@@ -172,7 +175,7 @@ export const DEFAULT_VISUAL_DNA: VisualDNA = {
       target: { x: 0, y: 0 },
       up: { x: 0, y: -1 },
       fov: 60,
-      aspectRatio: 16 / 9,
+      aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
       near: 0.1,
       far: 1000,
       movement: 'FIXA',
@@ -188,7 +191,7 @@ export const DEFAULT_VISUAL_DNA: VisualDNA = {
       target: { x: 0, y: 0 },
       up: { x: 0, y: -1 },
       fov: 60,
-      aspectRatio: 16 / 9,
+      aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
       near: 0.1,
       far: 1000,
       movement: 'FIXA',
@@ -198,7 +201,7 @@ export const DEFAULT_VISUAL_DNA: VisualDNA = {
       target: { x: 0, y: 0 },
       up: { x: 0, y: -1 },
       fov: 60,
-      aspectRatio: 16 / 9,
+      aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
       near: 0.1,
       far: 1000,
       movement: 'FIXA',
@@ -215,7 +218,7 @@ export const DEFAULT_VISUAL_DNA: VisualDNA = {
     lightingStyle: 'natural',
     cameraStyle: 'static',
     depthOfFieldDefault: false,
-    aspectRatio: 16 / 9,
+    aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
     forbiddenVisualElements: [],
     requiredVisualElements: [],
     compositionRules: [],
@@ -290,4 +293,55 @@ export interface Project {
   episodePlan?: EpisodePlan;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * Upgrades only the exact VisualDNA fingerprint emitted by the legacy assembler.
+ * Imported or explicitly supplied 16:9 VisualDNA values are left untouched.
+ */
+export function upgradeLegacyDefaultVisualAspectRatio(
+  project: Project,
+  migratedAt = Date.now(),
+): Project {
+  const visualDNA = project.visualDNA;
+  const generatedVisualDNAId = project.blueprint
+    ? `${project.blueprint.id}_visual_${project.createdAt}`
+    : undefined;
+  const legacyAspectRatio = 16 / 9;
+  const hasLegacyGeneratedDefault = !!generatedVisualDNAId &&
+    visualDNA.id === generatedVisualDNAId &&
+    visualDNA.camera.defaultConfig.aspectRatio === legacyAspectRatio &&
+    visualDNA.camera.cameraA.aspectRatio === legacyAspectRatio &&
+    visualDNA.camera.cameraB.aspectRatio === legacyAspectRatio &&
+    visualDNA.consistencyRules.aspectRatio === legacyAspectRatio;
+
+  if (!hasLegacyGeneratedDefault) return project;
+
+  return {
+    ...project,
+    visualDNA: {
+      ...visualDNA,
+      camera: {
+        ...visualDNA.camera,
+        defaultConfig: {
+          ...visualDNA.camera.defaultConfig,
+          aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
+        },
+        cameraA: {
+          ...visualDNA.camera.cameraA,
+          aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
+        },
+        cameraB: {
+          ...visualDNA.camera.cameraB,
+          aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
+        },
+      },
+      consistencyRules: {
+        ...visualDNA.consistencyRules,
+        aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
+      },
+      updatedAt: migratedAt,
+    },
+    updatedAt: migratedAt,
+  };
 }

@@ -1,4 +1,10 @@
-import type { Project, ProjectConfig, VisualDNA, CameraConfig } from '../../../types';
+import {
+  DEFAULT_VISUAL_ASPECT_RATIO,
+  type Project,
+  type ProjectConfig,
+  type VisualDNA,
+  type CameraConfig,
+} from '../../../types';
 import type { ConstructionBlueprint } from '../../project-orchestrator';
 import type { PipelineContext, StageResult } from '../types';
 import type { Camera } from '../../../types/camera';
@@ -44,7 +50,7 @@ function createDefaultVisualDNA(config: ProjectConfig, createdAt: number, bluepr
         target: { x: 0, y: 0 },
         up: { x: 0, y: -1 },
         fov: 60,
-        aspectRatio: 16 / 9,
+        aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
         near: 0.1,
         far: 1000,
         movement: 'FIXA',
@@ -76,7 +82,7 @@ function createDefaultVisualDNA(config: ProjectConfig, createdAt: number, bluepr
       lightingStyle: 'natural',
       cameraStyle: 'static',
       depthOfFieldDefault: false,
-      aspectRatio: 16 / 9,
+      aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
       forbiddenVisualElements: [],
       requiredVisualElements: [],
       compositionRules: [],
@@ -109,7 +115,7 @@ function cameraToCameraConfig(camera: Camera): CameraConfig {
     target: { x: 0, y: 0 },
     up: { x: 0, y: -1 },
     fov: camera.framing === 'close' ? 35 : camera.framing === 'wide' ? 70 : 60,
-    aspectRatio: 16 / 9,
+    aspectRatio: DEFAULT_VISUAL_ASPECT_RATIO,
     near: 0.1,
     far: 1000,
     movement: camera.allowedMovement,

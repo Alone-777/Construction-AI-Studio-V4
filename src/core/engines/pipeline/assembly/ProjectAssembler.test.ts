@@ -400,6 +400,25 @@ describe('ProjectAssemblerStage - Blueprint/Config Persistence', () => {
     assembler = new ProjectAssemblerStage();
   });
 
+  it('creates the default visual workflow in 9:16', () => {
+    const result = assembler.execute(createMinimalContext({ visualDNA: undefined }));
+
+    expect(result.success).toBe(true);
+    expect(result.data?.visualDNA.camera.defaultConfig.aspectRatio).toBe(9 / 16);
+    expect(result.data?.visualDNA.camera.cameraA.aspectRatio).toBe(9 / 16);
+    expect(result.data?.visualDNA.camera.cameraB.aspectRatio).toBe(9 / 16);
+    expect(result.data?.visualDNA.consistencyRules.aspectRatio).toBe(9 / 16);
+  });
+
+  it('preserves an explicitly supplied 16:9 VisualDNA', () => {
+    const context = createMinimalContext();
+    const result = assembler.execute(context);
+
+    expect(result.success).toBe(true);
+    expect(result.data?.visualDNA).toEqual(context.visualDNA);
+    expect(result.data?.visualDNA.consistencyRules.aspectRatio).toBe(16 / 9);
+  });
+
   it('preserves blueprint in assembled Project', () => {
     const context = createMinimalContext();
     const result = assembler.execute(context);

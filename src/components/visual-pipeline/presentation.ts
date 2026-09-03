@@ -1,6 +1,6 @@
 import { compilePhysicalActionIR } from '../../core/actions/physical-action-ir';
 import type { ImageAssetRef } from '../../core/image-generation';
-import type { Project, Scene, Stage } from '../../core/types';
+import { DEFAULT_VISUAL_ASPECT_RATIO, type Project, type Scene, type Stage } from '../../core/types';
 import type { VideoAssetRef } from '../../core/video-generation';
 import type {
   StartVisualPipelineInput,
@@ -17,6 +17,12 @@ export const UI_IMAGE_PROVIDER_ID = 'ui-manual-image';
 export const UI_VIDEO_PROVIDER_ID = 'ui-manual-video';
 export const UI_IMAGE_OBSERVER_ID = 'ui-manual-image-observer';
 export const UI_VIDEO_OBSERVER_ID = 'ui-manual-video-observer';
+
+export function formatAspectRatio(aspectRatio?: number): string {
+  if (aspectRatio === undefined) return 'padrão';
+  if (aspectRatio === DEFAULT_VISUAL_ASPECT_RATIO) return '9:16 / 0.5625';
+  return aspectRatio.toFixed(3);
+}
 
 export type ReviewAnswer = 'MATCH' | 'MINOR_DIVERGENCE' | 'MAJOR_DIVERGENCE';
 

@@ -5,6 +5,7 @@ import { useVisualPipelineStore } from '../../store/useVisualPipelineStore';
 import type { VisualPipelineRun } from '../../core/visual-pipeline';
 import {
   createVisualPipelineStartDraft,
+  formatAspectRatio,
   imageAssetFromFile,
   isLocalPreviewUri,
   pipelineSteps,
@@ -351,7 +352,7 @@ function GenerationPanel({
         <div className="space-y-2 text-xs">
           <AssetPreview uri={referenceUri} kind="image" label="Referência oficial" />
           <div className="rounded border border-studio-border bg-studio-bg p-2 text-studio-muted">
-            <div>Aspecto: {aspectRatio ? aspectRatio.toFixed(3) : 'padrão'}</div>
+            <div>Aspecto: {formatAspectRatio(aspectRatio)}</div>
             <div>Resolução: {resolution ? `${resolution.width} × ${resolution.height}` : 'não definida'}</div>
             {duration !== undefined && <div>Duração: {duration}s</div>}
           </div>

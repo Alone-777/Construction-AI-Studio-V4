@@ -1,5 +1,11 @@
 import { db, type ProjectRecord, type LibraryRecord, type PatternRecord, type FeedbackRecord, type SnapshotRecord } from './schema';
-import type { Project, ApprovedPattern, SceneFeedback, WorldState } from '../core/types';
+import {
+  upgradeLegacyDefaultVisualAspectRatio,
+  type Project,
+  type ApprovedPattern,
+  type SceneFeedback,
+  type WorldState,
+} from '../core/types';
 import { parseProjectArchive } from './project-archive';
 
 /* ─── ID Generation ─── */
@@ -53,7 +59,16 @@ export async function saveProject(project: Project): Promise<void> {
 
 export async function loadProject(id: string): Promise<Project | undefined> {
   const record = await db.projects.get(id);
-  return record?.data;
+  if (!record) return undefined;
+
+  const project = upgradeLegacyDefaultVisualAspectRatio(record.data);
+  if (project !== record.data) {
+    await db.projects.update(id, {
+      data: project,
+      updatedAt: project.updatedAt,
+    });
+  }
+  return project;
 }
 
 export async function listProjects(): Promise<ProjectRecord[]> {

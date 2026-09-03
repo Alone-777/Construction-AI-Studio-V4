@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createCabanaDoRiachoProject } from '../../core/demo/cabana-do-riacho';
 import type { ImageAssetRef } from '../../core/image-generation';
+import { DEFAULT_VISUAL_ASPECT_RATIO } from '../../core/types';
 import type { VideoAssetRef } from '../../core/video-generation';
 import { useVisualPipelineStore } from '../../store/useVisualPipelineStore';
 import {
   createVisualPipelineStartDraft,
+  formatAspectRatio,
   imageObservationFromAnswers,
   pipelineSteps,
   requiredActionLabel,
@@ -40,6 +42,29 @@ beforeEach(() => {
 });
 
 describe('operational visual pipeline presentation', () => {
+  it('keeps the default 9:16 aspect from VisualDNA through image and video', async () => {
+    const { project, key } = await videoManualReady();
+    const run = useVisualPipelineStore.getState().runs[key];
+    const aspectRatios = [
+      project.visualDNA.camera.defaultConfig.aspectRatio,
+      project.visualDNA.camera.cameraA.aspectRatio,
+      project.visualDNA.camera.cameraB.aspectRatio,
+      project.visualDNA.consistencyRules.aspectRatio,
+      run.snapshot.camera.viewpoint.aspectRatio,
+      run.canonicalImageSpec.camera.viewpoint.aspectRatio,
+      run.imageState.request.aspectRatio,
+      run.videoState?.canonicalSpec.output.aspectRatio,
+      run.videoState?.request.aspectRatio,
+    ];
+
+    expect(aspectRatios).toEqual(Array(aspectRatios.length).fill(DEFAULT_VISUAL_ASPECT_RATIO));
+    expect(aspectRatios).not.toContain(16 / 9);
+    expect(run.imageState.request.prompt).toContain('aspect ratio: 0.5625');
+    expect(run.videoState?.request.renderedPrompt).toContain('Aspect ratio: 0.5625.');
+    expect(formatAspectRatio(run.imageState.request.aspectRatio)).toBe('9:16 / 0.5625');
+    expect(formatAspectRatio(run.videoState?.request.aspectRatio)).toBe('9:16 / 0.5625');
+  });
+
   it('maps run status to the eight human visual steps', () => {
     const { key, run } = startRun();
     expect(key).toBeTruthy();
