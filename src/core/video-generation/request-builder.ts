@@ -61,6 +61,31 @@ export function cloneVideoGenerationRequest(
   return deepFreeze(clone(request));
 }
 
+/** Rebuilds semantic request identity for an explicit derived prompt layer. */
+export function withVideoGenerationPrompt(
+  request: VideoGenerationRequest,
+  renderedPrompt: string,
+  metadata?: Readonly<Record<string, ImageMetadataValue>>,
+): VideoGenerationRequest {
+  if (!renderedPrompt.trim()) throw new Error('Derived video generation prompt is required.');
+  const candidate = { ...clone(request), renderedPrompt };
+  const identity = videoRequestIdentity(candidate);
+  const mergedMetadata = { ...(request.metadata ?? {}), ...(metadata ?? {}) };
+  return deepFreeze({
+    ...identity,
+    requestId: createDeterministicVideoRequestId(identity),
+    metadata: Object.keys(mergedMetadata).length > 0 ? clone(mergedMetadata) : undefined,
+  });
+}
+
+export function hasValidVideoGenerationPrompt(request: VideoGenerationRequest): boolean {
+  const canonicalPrompt = renderCanonicalAnimationPrompt(request.canonicalAnimationSpec);
+  if (request.renderedPrompt === canonicalPrompt) return true;
+  const correction = request.metadata?.videoCorrection;
+  if (!isCorrectionMetadata(correction)) return false;
+  return request.renderedPrompt.startsWith(`${canonicalPrompt}\n\nVIDEO CORRECTION LAYER\n`);
+}
+
 export function createDeterministicVideoRequestId(
   identity: Omit<VideoGenerationRequest, 'requestId' | 'metadata'>,
 ): string {
@@ -91,6 +116,17 @@ export function videoRequestIdentity(
     resolution: request.resolution,
     temporalIdentity: request.temporalIdentity,
   };
+}
+
+function isCorrectionMetadata(value: ImageMetadataValue | undefined): boolean {
+  if (!value || Array.isArray(value) || typeof value !== 'object') return false;
+  const record = value as Readonly<Record<string, ImageMetadataValue>>;
+  return typeof record.correctionPlanId === 'string' && !!record.correctionPlanId.trim() &&
+    typeof record.sourceVideoRequestId === 'string' && !!record.sourceVideoRequestId.trim() &&
+    typeof record.sourceVideoAssetId === 'string' && !!record.sourceVideoAssetId.trim() &&
+    typeof record.sourceValidationId === 'string' && !!record.sourceValidationId.trim() &&
+    typeof record.attemptNumber === 'number' &&
+    Number.isInteger(record.attemptNumber) && record.attemptNumber >= 2;
 }
 
 function stableSerialize(value: unknown): string {

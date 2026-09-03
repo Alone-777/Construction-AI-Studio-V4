@@ -1,7 +1,7 @@
-import { renderCanonicalAnimationPrompt } from './animation-prompt';
 import {
   cloneVideoGenerationRequest,
   createDeterministicVideoRequestId,
+  hasValidVideoGenerationPrompt,
   videoRequestIdentity,
 } from './request-builder';
 import type {
@@ -128,7 +128,7 @@ function validateRequest(request: VideoGenerationRequest): VideoGenerationFailur
   if (!sameResolution(request.resolution, spec.output.resolution)) {
     return failure(request, 'INVALID_REQUEST', 'Video resolution does not match the canonical spec.');
   }
-  if (request.renderedPrompt !== renderCanonicalAnimationPrompt(spec)) {
+  if (!hasValidVideoGenerationPrompt(request)) {
     return failure(request, 'INVALID_REQUEST', 'Rendered animation prompt does not match its canonical spec.');
   }
   if (request.requestId !== createDeterministicVideoRequestId(videoRequestIdentity(request))) {
