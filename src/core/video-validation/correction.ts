@@ -90,6 +90,7 @@ export function createVideoCorrectionPlan(
       `preserve character ${request.canonicalAnimationSpec.continuity.preserveCharacter.characterId}`,
       `preserve clothing: ${request.canonicalAnimationSpec.continuity.preserveClothing}`,
       `preserve environment: ${request.canonicalAnimationSpec.continuity.preserveEnvironment.preset}`,
+      `preserve materials: ${request.canonicalAnimationSpec.continuity.preserveMaterials.join(', ') || 'none specified'}`,
       'preserve the current construction state outside the approved physical action',
       `preserve official source image asset ${request.sourceImage.id}`,
       `preserve physical action ${request.canonicalAnimationSpec.identity.physicalActionIRId}`,
