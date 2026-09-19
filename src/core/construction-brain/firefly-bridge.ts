@@ -105,7 +105,6 @@ function segmentContinuityLocks(
 }
 
 function segmentChecklist(
-  scene: ConstructionBrainSceneArtifact,
   segment: ConstructionBrainGenerationSegment,
   isLast: boolean,
 ): string[] {
@@ -174,7 +173,7 @@ export function buildFireflyExecutionPlan(
         prompt: segmentPrompt(bundle, scene, segment, segment.provider),
         negativeConstraints: negativeConstraints(segment),
         continuityLocks: segmentContinuityLocks(scene, segment),
-        acceptanceChecklist: segmentChecklist(scene, segment, isLast),
+        acceptanceChecklist: segmentChecklist(segment, isLast),
         output: {
           videoSlot: `outputs/${scenePart}/${segmentPart}.mp4`,
           lastFrameSlot: `outputs/${scenePart}/${segmentPart}.last-frame.png`,
