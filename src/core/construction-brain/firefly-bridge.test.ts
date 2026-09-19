@@ -25,6 +25,11 @@ describe('Construction Brain Firefly bridge', () => {
     expect(plan.jobs.every(job => job.resolution.width === 1920)).toBe(true);
     expect(plan.jobs.every(job => job.resolution.height === 1080)).toBe(true);
     expect(plan.jobs.every(job => job.prompt.trim().length > 0)).toBe(true);
+    expect(plan.jobs.filter(job => job.model === 'KLING').every(job => job.prompt.length <= 1400)).toBe(true);
+    expect(plan.jobs.slice(1).every((job, index) =>
+      job.source.kind === 'PREVIOUS_JOB_LAST_FRAME' &&
+      job.source.previousJobId === plan.jobs[index].id
+    )).toBe(true);
 
     const validation = validateFireflyExecutionPlan(bundle, plan);
     expect(validation.issues.filter(issue => issue.severity === 'ERROR')).toEqual([]);
@@ -65,20 +70,20 @@ describe('Construction Brain Firefly bridge', () => {
     expect(jobs[0].terminalRequirement).toBe('INTERMEDIATE_CONTINUATION');
     expect(jobs[0].startStagePercentage).toBe(0);
     expect(jobs[0].targetStagePercentage).toBe(50);
-    expect(jobs[0].prompt).toContain('canonical 0%');
-    expect(jobs[0].prompt).toContain('canonical 50%');
+    expect(jobs[0].prompt).toContain('exact 0% state');
+    expect(jobs[0].prompt).toContain('until 50%');
 
     expect(jobs[1].model).toBe('VEO_FAST');
     expect(jobs[1].durationSeconds).toBe(8);
     expect(jobs[1].source).toEqual({
-      kind: 'PREVIOUS_SEGMENT_LAST_FRAME',
+      kind: 'PREVIOUS_JOB_LAST_FRAME',
       previousJobId: jobs[0].id,
     });
     expect(jobs[1].terminalRequirement).toBe('SCENE_EXIT');
     expect(jobs[1].startStagePercentage).toBe(50);
     expect(jobs[1].targetStagePercentage).toBe(100);
-    expect(jobs[1].prompt).toContain('canonical 50%');
-    expect(jobs[1].prompt).toContain('canonical 100%');
+    expect(jobs[1].prompt).toContain('exact 50% state');
+    expect(jobs[1].prompt).toContain('until 100%');
     expect(jobs[1].exitKeyframeId).toBe(firstScene.keyframes.exit.id);
     expect(jobs[1].acceptanceChecklist).toContain(
       'The terminal frame matches the scene EXIT state.',
@@ -114,9 +119,9 @@ describe('Construction Brain Firefly bridge', () => {
     expect(door50).toBeTruthy();
     expect(walls50).toBeTruthy();
 
-    expect(first!.prompt).toContain('canonical 0%');
+    expect(first!.prompt).toContain('exact 0% state');
     expect(first!.prompt).not.toContain('Start from the exact prior state at 3%');
-    expect(second!.prompt).toContain('canonical 50%');
+    expect(second!.prompt).toContain('exact 50% state');
     expect(second!.prompt).not.toContain('Start from the exact prior state at 9%');
 
     expect(door50!.prompt).not.toContain('no premature porta_principal');
@@ -134,7 +139,7 @@ describe('Construction Brain Firefly bridge', () => {
     expect(jobs).toHaveLength(2);
 
     const second = jobs[1];
-    if (second.source.kind !== 'PREVIOUS_SEGMENT_LAST_FRAME') {
+    if (second.source.kind !== 'PREVIOUS_JOB_LAST_FRAME') {
       throw new Error('Expected chained Firefly job.');
     }
 
@@ -144,10 +149,29 @@ describe('Construction Brain Firefly bridge', () => {
     expect(validation.valid).toBe(false);
     expect(
       validation.issues.some(issue =>
-        issue.code === 'FIREFLY_BROKEN_SEGMENT_CHAIN' ||
+        issue.code === 'FIREFLY_BROKEN_GLOBAL_CHAIN' ||
         issue.code === 'FIREFLY_UNKNOWN_PREVIOUS_JOB'
       ),
     ).toBe(true);
+  });
+
+  it('continues the first job of a new macro scene from the previous scene terminal frame', () => {
+    const project = createCabanaDoRiachoProject();
+    const bundle = compileConstructionBrain(project, { targetDurationSeconds: 240 });
+    const plan = buildFireflyExecutionPlan(bundle);
+
+    const cleanupLast = plan.jobs.find(job =>
+      job.sceneId === 'scene_op_limpeza' && job.segmentIndex === 2
+    );
+    const footingsFirst = plan.jobs.find(job =>
+      job.sceneId === 'scene_op_sapatas' && job.segmentIndex === 1
+    );
+
+    expect(cleanupLast).toBeTruthy();
+    expect(footingsFirst?.source).toEqual({
+      kind: 'PREVIOUS_JOB_LAST_FRAME',
+      previousJobId: cleanupLast!.id,
+    });
   });
 
   it('serializes a portable Firefly execution manifest', () => {
