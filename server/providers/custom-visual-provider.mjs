@@ -1,5 +1,6 @@
 import {
   fetchWithTimeout,
+  normalizeFiscalProviderObject,
   normalizeProviderObject,
   parseImageRequest,
   providerTimeoutFromEnv,
@@ -53,6 +54,8 @@ export class CustomVisualProvider {
     } catch {
       throw new ProviderResponseError(this.id, response.status);
     }
-    return normalizeProviderObject(payload, this.id);
+    return request?.contract === 'construction-fiscal-v1'
+      ? normalizeFiscalProviderObject(payload, this.id)
+      : normalizeProviderObject(payload, this.id);
   }
 }
