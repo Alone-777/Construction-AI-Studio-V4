@@ -4,7 +4,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const EXPECTED_SCHEMA_VERSION = '0.1.1';
+const EXPECTED_SCHEMA_VERSION = '0.1.2';
 const ALLOWED_STAGE_PERCENTAGES = new Set([25, 50, 75, 100]);
 
 const MODEL_LIMITS = Object.freeze({
@@ -48,9 +48,19 @@ function assertPlan(plan) {
     if (ids.has(job.id)) throw new Error(`Duplicate Firefly job id '${job.id}'.`);
     ids.add(job.id);
 
+    if (![0, 25, 50, 75].includes(job.startStagePercentage)) {
+      throw new Error(
+        `Job '${job.id}' requires startStagePercentage 0, 25, 50 or 75.`,
+      );
+    }
     if (!ALLOWED_STAGE_PERCENTAGES.has(job.targetStagePercentage)) {
       throw new Error(
         `Job '${job.id}' requires targetStagePercentage 25, 50, 75 or 100.`,
+      );
+    }
+    if (job.targetStagePercentage <= job.startStagePercentage) {
+      throw new Error(
+        `Job '${job.id}' targetStagePercentage must be greater than startStagePercentage.`,
       );
     }
     if (!(job.model in MODEL_LIMITS)) {
@@ -95,9 +105,10 @@ function assertPlan(plan) {
   for (const [sceneId, jobs] of byScene) {
     jobs.sort((a, b) => a.segmentIndex - b.segmentIndex);
     for (let index = 1; index < jobs.length; index += 1) {
-      if (jobs[index].targetStagePercentage <= jobs[index - 1].targetStagePercentage) {
+      if (jobs[index].startStagePercentage !== jobs[index - 1].targetStagePercentage ||
+          jobs[index].targetStagePercentage <= jobs[index - 1].targetStagePercentage) {
         throw new Error(
-          `Scene '${sceneId}' has non-increasing target stages between '${jobs[index - 1].id}' and '${jobs[index].id}'.`,
+          `Scene '${sceneId}' has a broken stage chain between '${jobs[index - 1].id}' and '${jobs[index].id}'.`,
         );
       }
     }
@@ -203,6 +214,7 @@ export async function prepareFireflyWorkspace(plan, workspaceRoot = '.firefly') 
       jobId: job.id,
       sceneId: job.sceneId,
       model: job.model,
+      startStagePercentage: job.startStagePercentage,
       targetStagePercentage: job.targetStagePercentage,
       durationSeconds: job.durationSeconds,
       jobDirectory: path.relative(workspace, jobDir),
@@ -309,7 +321,7 @@ function printStatus(inspection) {
       '',
       ...inspection.jobs.map(job => {
         const readiness = job.runnable ? 'READY' : job.status;
-        return `${String(job.sequence).padStart(3, '0')}  ${readiness.padEnd(8)}  ${job.model.padEnd(8)}  ${String(job.targetStagePercentage).padStart(3, ' ')}%  ${job.durationSeconds}s  ${job.jobId}`;
+        return `${String(job.sequence).padStart(3, '0')}  ${readiness.padEnd(8)}  ${job.model.padEnd(8)}  ${String(job.startStagePercentage).padStart(3, ' ')}->${String(job.targetStagePercentage).padStart(3, ' ')}%  ${job.durationSeconds}s  ${job.jobId}`;
       }),
       '',
     ].join('\n'),
