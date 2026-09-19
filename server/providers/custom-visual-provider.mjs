@@ -44,7 +44,7 @@ export class CustomVisualProvider {
         imageData: image.dataUrl,
         mimeType: image.mimeType,
         userContext: image.userContext,
-        contract: 'construction-ai-studio-visual-v1',
+        contract: request?.contract || 'construction-ai-studio-visual-v1',
       }),
     }, this.timeoutMs, this.id);
     if (!response.ok) throw new ProviderResponseError(this.id, response.status);
