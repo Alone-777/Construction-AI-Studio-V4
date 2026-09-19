@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const EXPECTED_SCHEMA_VERSION = '0.1.1';
+const ALLOWED_STAGE_PERCENTAGES = new Set([25, 50, 75, 100]);
 
 const MODEL_LIMITS = Object.freeze({
   KLING: 15,
@@ -26,6 +29,11 @@ function assertPlan(plan) {
   if (!plan || typeof plan !== 'object') {
     throw new Error('Firefly plan must be a JSON object.');
   }
+  if (plan.schemaVersion !== EXPECTED_SCHEMA_VERSION) {
+    throw new Error(
+      `Firefly plan schema '${plan.schemaVersion ?? 'missing'}' is not supported; expected '${EXPECTED_SCHEMA_VERSION}'. Export a new plan from the current Studio.`,
+    );
+  }
   if (typeof plan.projectId !== 'string' || !plan.projectId.trim()) {
     throw new Error('Firefly plan requires a non-empty projectId.');
   }
@@ -40,6 +48,11 @@ function assertPlan(plan) {
     if (ids.has(job.id)) throw new Error(`Duplicate Firefly job id '${job.id}'.`);
     ids.add(job.id);
 
+    if (!ALLOWED_STAGE_PERCENTAGES.has(job.targetStagePercentage)) {
+      throw new Error(
+        `Job '${job.id}' requires targetStagePercentage 25, 50, 75 or 100.`,
+      );
+    }
     if (!(job.model in MODEL_LIMITS)) {
       throw new Error(`Unknown Firefly model '${job.model}' in job '${job.id}'.`);
     }
@@ -69,6 +82,27 @@ function assertPlan(plan) {
       throw new Error(
         `Job '${job.id}' references missing previous job '${job.source.previousJobId}'.`,
       );
+    }
+  }
+
+  const byScene = new Map();
+  for (const job of plan.jobs) {
+    const list = byScene.get(job.sceneId) ?? [];
+    list.push(job);
+    byScene.set(job.sceneId, list);
+  }
+
+  for (const [sceneId, jobs] of byScene) {
+    jobs.sort((a, b) => a.segmentIndex - b.segmentIndex);
+    for (let index = 1; index < jobs.length; index += 1) {
+      if (jobs[index].targetStagePercentage <= jobs[index - 1].targetStagePercentage) {
+        throw new Error(
+          `Scene '${sceneId}' has non-increasing target stages between '${jobs[index - 1].id}' and '${jobs[index].id}'.`,
+        );
+      }
+    }
+    if (jobs[jobs.length - 1].targetStagePercentage !== 100) {
+      throw new Error(`Scene '${sceneId}' must finish at targetStagePercentage 100.`);
     }
   }
 }
@@ -169,6 +203,7 @@ export async function prepareFireflyWorkspace(plan, workspaceRoot = '.firefly') 
       jobId: job.id,
       sceneId: job.sceneId,
       model: job.model,
+      targetStagePercentage: job.targetStagePercentage,
       durationSeconds: job.durationSeconds,
       jobDirectory: path.relative(workspace, jobDir),
       sourcePath: path.relative(workspace, sourcePath),
@@ -274,7 +309,7 @@ function printStatus(inspection) {
       '',
       ...inspection.jobs.map(job => {
         const readiness = job.runnable ? 'READY' : job.status;
-        return `${String(job.sequence).padStart(3, '0')}  ${readiness.padEnd(8)}  ${job.model.padEnd(8)}  ${job.durationSeconds}s  ${job.jobId}`;
+        return `${String(job.sequence).padStart(3, '0')}  ${readiness.padEnd(8)}  ${job.model.padEnd(8)}  ${String(job.targetStagePercentage).padStart(3, ' ')}%  ${job.durationSeconds}s  ${job.jobId}`;
       }),
       '',
     ].join('\n'),
