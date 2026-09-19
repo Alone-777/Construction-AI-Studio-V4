@@ -10,7 +10,7 @@ import {
 
 function fixturePlan() {
   return {
-    schemaVersion: '0.1.2',
+    schemaVersion: '0.1.3',
     projectId: 'runner-test-project',
     jobs: [
       {
@@ -61,7 +61,7 @@ function fixturePlan() {
         aspectRatio: '16:9',
         resolution: { width: 1920, height: 1080 },
         source: {
-          kind: 'PREVIOUS_SEGMENT_LAST_FRAME',
+          kind: 'PREVIOUS_JOB_LAST_FRAME',
           previousJobId: 'firefly:scene-1:segment-1',
         },
         terminalRequirement: 'SCENE_EXIT',
@@ -154,13 +154,13 @@ describe('Firefly local runner', () => {
 
   it('rejects stale pre-stage-aware plans', async () => {
     const plan = fixturePlan();
-    plan.schemaVersion = '0.1.1';
+    plan.schemaVersion = '0.1.2';
 
     const root = await mkdtemp(path.join(os.tmpdir(), 'firefly-runner-'));
 
     await expect(
       prepareFireflyWorkspace(plan, root),
-    ).rejects.toThrow(/expected '0.1.2'/);
+    ).rejects.toThrow(/expected '0.1.3'/);
   });
 
   it('rejects non-increasing target stages', async () => {
