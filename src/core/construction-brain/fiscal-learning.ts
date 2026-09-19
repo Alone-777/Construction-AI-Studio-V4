@@ -243,3 +243,20 @@ export function learnedCorrections(
       .map(record => record.correction),
   );
 }
+
+export function applyLearnedCorrectionsToPrompt(
+  prompt: string,
+  memory: ConstructionLearningMemory | undefined,
+  operationType: string,
+  provider: FireflyExecutionJob['model'],
+): string {
+  const corrections = learnedCorrections(memory, operationType, provider);
+  if (corrections.length === 0) return prompt;
+
+  return [
+    prompt.trim(),
+    '',
+    'LEARNED PRODUCTION RULES:',
+    ...corrections.map((correction, index) => (index + 1) + '. ' + correction),
+  ].join('\n');
+}
