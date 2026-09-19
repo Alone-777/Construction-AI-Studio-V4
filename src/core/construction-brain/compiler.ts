@@ -326,7 +326,13 @@ function compileScene(
   const evidence = unique(stages.flatMap(stageEvidence));
   const entryState = stateAtSceneEntry(scene, project);
   const exitState = stateAtSceneExit(scene, project);
+  const firstStage = stages[0];
   const finalStage = stages[stages.length - 1];
+  const entryForbiddenFutureElements = unique([
+    ...entryState.futureComponents,
+    ...(firstStage?.physicalActionIR?.constraints.forbiddenFutureComponents ?? []),
+    ...(firstStage?.physicalActionIR?.constraints.preventPrematureElements ?? []),
+  ]);
   const forbiddenFutureElements = finalStage
     ? forbiddenAfterStage(finalStage, exitState)
     : [...exitState.futureComponents];
@@ -349,9 +355,9 @@ function compileScene(
         scenes,
         entryState,
         stages,
-        forbiddenFutureElements,
+        entryForbiddenFutureElements,
         preservedZones,
-        evidence,
+        [],
         options,
       ),
       exit: buildKeyframeSpec(
