@@ -33,6 +33,10 @@ describe('Construction Brain MVP v0.1', () => {
           segment.durationSeconds <= segment.maxProviderSeconds
         ),
       ).toBe(true);
+      expect(
+        scene.generationSegments[scene.generationSegments.length - 1]
+          .targetStagePercentage,
+      ).toBe(100);
 
       expect(scene.keyframes.entry.kind).toBe('ENTRY');
       expect(scene.keyframes.exit.kind).toBe('EXIT');
@@ -85,6 +89,34 @@ describe('Construction Brain MVP v0.1', () => {
     const validation = validateConstructionBrain(bundle);
     expect(validation.issues.filter(issue => issue.severity === 'ERROR')).toEqual([]);
     expect(validation.valid).toBe(true);
+  });
+
+  it('compiles a two-segment scene as 50% then 100% with stage-specific prompts', () => {
+    const project = createCabanaDoRiachoProject();
+    const bundle = compileConstructionBrain(project, { targetDurationSeconds: 240 });
+    const first = bundle.scenes.scenes[0];
+
+    expect(first.generationSegments).toHaveLength(2);
+    expect(first.generationSegments.map(segment => segment.targetStagePercentage))
+      .toEqual([50, 100]);
+    expect(first.generationSegments[0].prompt.kling).toContain('marco 50%');
+    expect(first.generationSegments[1].prompt.kling).toContain('marco 100%');
+  });
+
+  it('keeps current-operation results out of EXIT forbidden elements', () => {
+    const project = createCabanaDoRiachoProject();
+    const bundle = compileConstructionBrain(project, { targetDurationSeconds: 240 });
+    const door = bundle.scenes.scenes.find(scene => scene.id === 'scene_op_porta');
+
+    expect(door).toBeTruthy();
+    expect(door!.keyframes.entry.continuityLocks.forbiddenFutureElements)
+      .toContain('porta_principal');
+    expect(door!.keyframes.exit.continuityLocks.forbiddenFutureElements)
+      .not.toContain('porta_principal');
+    expect(
+      door!.generationSegments[door!.generationSegments.length - 1]
+        .forbiddenFutureElements,
+    ).not.toContain('porta_principal');
   });
 
   it('uses Veo Fast only when a generation segment fits its 8 second limit', () => {
