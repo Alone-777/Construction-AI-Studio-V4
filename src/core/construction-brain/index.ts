@@ -3,3 +3,4 @@ export * from './compiler';
 export * from './validator';
 export * from './serializer';
 export * from './firefly-bridge';
+export * from './export-package';
