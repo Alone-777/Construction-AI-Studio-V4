@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:accept": "vitest run --reporter=verbose src/core/__tests__/acceptance"
+    "test:accept": "vitest run --reporter=verbose src/core/__tests__/acceptance",
+    "firefly:prepare": "node tools/firefly-local-runner.mjs prepare",
+    "firefly:status": "node tools/firefly-local-runner.mjs status",
+    "firefly:complete": "node tools/firefly-local-runner.mjs complete"
   },
   "dependencies": {
     "dexie": "^4.0.11",
