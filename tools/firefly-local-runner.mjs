@@ -3,6 +3,11 @@
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  effectivePromptForFireflyJob,
+  ingestAndReviewFireflyJob,
+  reviewFireflyJob,
+} from './firefly-review.mjs';
 
 const EXPECTED_SCHEMA_VERSION = '0.1.3';
 const ALLOWED_STAGE_PERCENTAGES = new Set([25, 50, 75, 100]);
@@ -280,7 +285,7 @@ export async function inspectFireflyWorkspace(workspacePath) {
       sourceReady,
       videoReady,
       lastFrameReady,
-      runnable: state.status === 'PENDING' && sourceReady,
+      runnable: ['PENDING', 'RETRY_REQUIRED'].includes(state.status) && sourceReady,
     });
   }
 
@@ -288,8 +293,10 @@ export async function inspectFireflyWorkspace(workspacePath) {
     projectId: queue.projectId,
     workspace,
     totalJobs: rows.length,
-    pending: rows.filter(row => row.status === 'PENDING').length,
+    pending: rows.filter(row => row.status !== 'COMPLETE').length,
     completed: rows.filter(row => row.status === 'COMPLETE').length,
+    reviewRequired: rows.filter(row => row.status === 'REVIEW_REQUIRED').length,
+    retryRequired: rows.filter(row => row.status === 'RETRY_REQUIRED').length,
     runnable: rows.filter(row => row.runnable).length,
     jobs: rows,
   };
@@ -328,9 +335,17 @@ function printStatus(inspection) {
       `Pending: ${inspection.pending}`,
       `Runnable now: ${inspection.runnable}`,
       `Complete: ${inspection.completed}`,
+      `Review required: ${inspection.reviewRequired}`,
+      `Retry required: ${inspection.retryRequired}`,
       '',
       ...inspection.jobs.map(job => {
-        const readiness = job.runnable ? 'READY' : job.status;
+        const readiness = job.status === 'COMPLETE'
+          ? 'COMPLETE'
+          : job.status === 'RETRY_REQUIRED'
+            ? 'RETRY'
+            : job.status === 'REVIEW_REQUIRED'
+              ? 'REVIEW'
+              : job.runnable ? 'READY' : job.status;
         return `${String(job.sequence).padStart(3, '0')}  ${readiness.padEnd(8)}  ${job.model.padEnd(8)}  ${String(job.startStagePercentage).padStart(3, ' ')}->${String(job.targetStagePercentage).padStart(3, ' ')}%  ${job.durationSeconds}s  ${job.jobId}`;
       }),
       '',
@@ -345,12 +360,18 @@ function usage() {
     'Commands:',
     '  prepare <firefly_plan.json> [workspace-root]',
     '  status <project-workspace>',
-    '  complete <project-workspace> <job-id>',
+    '  complete <project-workspace> <job-id>  # manual compatibility path',
+    '  review <project-workspace> <job-id> [provider-id]',
+    '  ingest <project-workspace> <job-id> <video-path> [provider-id]',
+    '  prompt <project-workspace> <job-id>'
     '',
     'Examples:',
     '  npm run firefly:prepare -- ./firefly_plan.json',
     '  npm run firefly:status -- ./.firefly/my-project',
     '  npm run firefly:complete -- ./.firefly/my-project firefly:scene-1:segment-1',
+    '  npm run firefly:review -- ./.firefly/my-project firefly:scene-1:segment-1 gemini',
+    '  npm run firefly:ingest -- ./.firefly/my-project firefly:scene-1:segment-1 ./download.mp4 gemini',
+    '  npm run firefly:prompt -- ./.firefly/my-project firefly:scene-1:segment-1'
     '',
   ].join('\n');
 }
@@ -377,6 +398,38 @@ async function main(argv) {
     const [workspace] = args;
     if (!workspace) throw new Error('status requires <project-workspace>.');
     printStatus(await inspectFireflyWorkspace(workspace));
+    return;
+  }
+
+
+  if (command === 'review') {
+    const [workspace, jobId, providerId] = args;
+    if (!workspace || !jobId) {
+      throw new Error('review requires <project-workspace> <job-id> [provider-id].');
+    }
+    const result = await reviewFireflyJob(workspace, jobId, providerId);
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    printStatus(await inspectFireflyWorkspace(workspace));
+    return;
+  }
+
+  if (command === 'ingest') {
+    const [workspace, jobId, videoPath, providerId] = args;
+    if (!workspace || !jobId || !videoPath) {
+      throw new Error('ingest requires <project-workspace> <job-id> <video-path> [provider-id].');
+    }
+    const result = await ingestAndReviewFireflyJob(workspace, jobId, videoPath, providerId);
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    printStatus(await inspectFireflyWorkspace(workspace));
+    return;
+  }
+
+  if (command === 'prompt') {
+    const [workspace, jobId] = args;
+    if (!workspace || !jobId) {
+      throw new Error('prompt requires <project-workspace> <job-id>.');
+    }
+    process.stdout.write(await effectivePromptForFireflyJob(workspace, jobId));
     return;
   }
 
