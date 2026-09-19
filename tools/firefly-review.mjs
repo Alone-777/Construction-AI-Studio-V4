@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -9,6 +9,7 @@ import { CustomVisualProvider } from '../server/providers/custom-visual-provider
 const execFileAsync = promisify(execFile);
 const DEFAULT_PROGRESS_TOLERANCE = 12;
 const MIN_PROGRESS_CONFIDENCE = 0.55;
+const MIN_AUTOPASS_CONFIDENCE = 0.85;
 
 async function exists(filePath) {
   try { await access(filePath); return true; } catch { return false; }
@@ -59,12 +60,14 @@ export function buildFireflyReviewContext(job, operationType = resolveOperationT
   const forbidden = job.continuityLocks?.forbiddenFutureElements ?? [];
   return [
     'CONSTRUCTION FISCAL MODE.',
-    'The supplied image is a chronological contact sheet from ONE generated video clip: LEFT = source/start, CENTER = midpoint, RIGHT = terminal/end.',
+    'The supplied image is a chronological 2x2 contact sheet from ONE generated video clip: TOP LEFT = start, TOP RIGHT = one-third, BOTTOM LEFT = two-thirds, BOTTOM RIGHT = terminal/end.',
     'Judge progress only for the CURRENT OPERATION, never for the whole building.',
     'Current operation type: ' + operationType + '.',
     'Stage starts at ' + job.startStagePercentage + '% and must end at ' + job.targetStagePercentage + '%.',
-    'For apparentCompletion, estimate the RIGHT panel completion percentage of this current operation only.',
-    'Use LEFT and CENTER only as evidence of progression and continuity.',
+    'For apparentCompletion, estimate the BOTTOM RIGHT terminal panel completion percentage of this current operation only.',
+    'Use the other three panels only as evidence of progression and continuity.',
+    'Estimate how much of the FINAL VISIBLE RESULT of this operation is already complete, not how much worker activity occurred.',
+    'At a 50% target, approximately half of the visible operation result must still remain clearly unfinished. If nearly the whole floor, wall, roof or other current element is visibly finished, report a high completion percentage even if the worker is still moving.',
     'If exact progress is not visually supportable, classify apparentCompletion as UNKNOWN instead of guessing.',
     'If any canonical forbidden element is visible, include its exact canonical ID in visibleCanonicalFutureElements: ' +
       (forbidden.length ? forbidden.join(', ') : 'none') + '.',
@@ -202,6 +205,14 @@ export function assessNormalizedVisualAnalysis(job, analysis, options = {}) {
     };
   }
 
+  if (
+    failures.length === 0 &&
+    typeof completion?.confidence === 'number' &&
+    completion.confidence < MIN_AUTOPASS_CONFIDENCE
+  ) {
+    blockers.push('AUTOPASS_CONFIDENCE_TOO_LOW');
+  }
+
   if (blockers.length) {
     return {
       verdict: 'REOBSERVE',
@@ -267,20 +278,30 @@ export async function buildVideoContactSheet(videoPath, reviewDir, durationSecon
   if (!(await exists(videoPath))) throw new Error('Video not found: ' + videoPath);
   await mkdir(reviewDir, { recursive: true });
   const duration = Math.max(0.5, Number(durationSeconds) || 1);
-  const timestamps = [0.05, Math.max(0.1, duration / 2), Math.max(0.1, duration - 0.12)];
-  const frames = ['start.png', 'middle.png', 'end.png'].map(name => path.join(reviewDir, name));
+  const timestamps = [
+    0.05,
+    Math.max(0.1, duration / 3),
+    Math.max(0.1, (duration * 2) / 3),
+    Math.max(0.1, duration - 0.12),
+  ];
+  const frames = ['start.png', 'third.png', 'two-thirds.png', 'end.png']
+    .map(name => path.join(reviewDir, name));
 
   for (let index = 0; index < frames.length; index += 1) {
     await runFfmpeg([
       '-y', '-ss', timestamps[index].toFixed(3), '-i', videoPath,
-      '-frames:v', '1', '-vf', 'scale=640:-2:flags=lanczos', frames[index],
+      '-frames:v', '1',
+      '-vf', 'scale=960:540:force_original_aspect_ratio=decrease,pad=960:540:(ow-iw)/2:(oh-ih)/2',
+      frames[index],
     ]);
   }
 
   const contactSheet = path.join(reviewDir, 'contact-sheet.png');
   await runFfmpeg([
-    '-y', '-i', frames[0], '-i', frames[1], '-i', frames[2],
-    '-filter_complex', '[0:v][1:v][2:v]hstack=inputs=3[v]',
+    '-y',
+    '-i', frames[0], '-i', frames[1], '-i', frames[2], '-i', frames[3],
+    '-filter_complex',
+    '[0:v][1:v]hstack=inputs=2[top];[2:v][3:v]hstack=inputs=2[bottom];[top][bottom]vstack=inputs=2[v]',
     '-map', '[v]', '-frames:v', '1', contactSheet,
   ]);
   return { frames, contactSheet };
@@ -304,6 +325,35 @@ async function loadWorkspaceJob(workspacePath, jobId) {
   const statePath = path.join(jobDir, 'state.json');
   const state = await readJson(statePath);
   return { workspace, item, jobDir, job, statePath, state };
+}
+
+async function invalidateDownstream(workspace, queue, jobId) {
+  const index = queue.jobs.findIndex(item => item.jobId === jobId);
+  if (index < 0) return;
+
+  for (let cursor = index; cursor < queue.jobs.length; cursor += 1) {
+    const item = queue.jobs[cursor];
+    const jobDir = path.join(workspace, item.jobDirectory);
+    const statePath = path.join(jobDir, 'state.json');
+
+    if (cursor === index) {
+      await rm(path.join(workspace, item.lastFrameOutput), { force: true });
+      continue;
+    }
+
+    await rm(path.join(workspace, item.videoOutput), { force: true });
+    await rm(path.join(workspace, item.lastFrameOutput), { force: true });
+
+    const state = await readJson(statePath);
+    await writeJson(statePath, {
+      ...state,
+      status: 'PENDING',
+      completedAt: null,
+      lastReview: null,
+      pendingLearning: null,
+      notes: unique([...(state.notes ?? []), 'Invalidated because an upstream job requires another review or retry.']),
+    });
+  }
 }
 
 async function loadLearningMemory(workspace) {
@@ -428,6 +478,8 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   await writeJson(path.join(reviewDir, 'assessment.json'), assessmentWithProvider);
 
   if (assessment.verdict === 'REOBSERVE') {
+    const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
+    await invalidateDownstream(loaded.workspace, queue, jobId);
     await writeJson(loaded.statePath, {
       ...loaded.state,
       status: 'REVIEW_REQUIRED',
@@ -438,6 +490,8 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   }
 
   if (assessment.verdict === 'RETRY') {
+    const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
+    await invalidateDownstream(loaded.workspace, queue, jobId);
     const memory = await loadLearningMemory(loaded.workspace);
     const retryPrompt = composeRetryPrompt(loaded.job, assessment, memory);
     await writeFile(path.join(loaded.jobDir, 'retry-prompt.txt'), retryPrompt + '\n', 'utf8');
@@ -482,6 +536,7 @@ export async function ingestAndReviewFireflyJob(workspacePath, jobId, sourceVide
   const archiveDir = path.join(loaded.jobDir, 'review', 'attempt-' + String(attempt).padStart(3, '0'));
   await mkdir(archiveDir, { recursive: true });
   await copyFile(source, path.join(archiveDir, 'candidate.mp4'));
+  await rm(path.join(loaded.workspace, loaded.item.lastFrameOutput), { force: true });
   await writeJson(loaded.statePath, {
     ...loaded.state,
     status: 'REVIEW_REQUIRED',
