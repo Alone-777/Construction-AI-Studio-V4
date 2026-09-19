@@ -118,3 +118,61 @@ Select approved ranges, assemble the long-form master and later derive vertical 
 - road-repair / renovation / restoration domain packs
 - paid cloud infrastructure
 - binding the project to one generation model
+
+
+## Local Firefly runner
+
+The repository now includes `tools/firefly-local-runner.mjs`.
+
+It intentionally does not automate the browser yet. Its job is to materialize a deterministic local queue from `firefly_plan.json` so browser automation remains a replaceable execution adapter.
+
+### Prepare a workspace
+
+```bash
+npm run firefly:prepare -- ./firefly_plan.json
+```
+
+This creates:
+
+```text
+.firefly/<project-id>/
+  manifest.json
+  queue.json
+  inputs/
+    keyframes/
+  jobs/
+    001__.../
+      job.json
+      prompt.txt
+      negative.txt
+      checklist.txt
+      source.json
+      state.json
+  outputs/
+```
+
+For the first segment of a scene, `source.json` points to the approved ENTRY keyframe.
+
+For every later segment in the same scene, `source.json` points to the previous job's terminal frame.
+
+### Inspect the queue
+
+```bash
+npm run firefly:status -- ./.firefly/<project-id>
+```
+
+A job becomes runnable only when its required source image exists.
+
+### Complete a job
+
+After the generated video and terminal frame have been placed in the expected output slots:
+
+```bash
+npm run firefly:complete -- ./.firefly/<project-id> "<job-id>"
+```
+
+The runner refuses to mark a job complete if either the video file or terminal frame is missing. This prevents a broken chain from silently advancing.
+
+### Safety boundary
+
+The local runner never decides construction logic and never marks visual quality as approved. It only coordinates files and execution state. Construction logic remains in the Construction Brain; visual approval remains the future Fiscal's responsibility.
