@@ -4,6 +4,7 @@ import type { ExecutionProof, StagePercentage } from '../types';
 export const CONSTRUCTION_BRAIN_SCHEMA_VERSION = '0.1.0' as const;
 
 export type ConstructionBrainProviderId = 'KLING' | 'VEO_FAST';
+export type ConstructionBrainReferenceRole = 'INITIAL' | 'FINAL' | 'PREVIOUS_ACCEPTED';
 
 export interface ConstructionBrainProjectArtifact {
   schemaVersion: typeof CONSTRUCTION_BRAIN_SCHEMA_VERSION;
@@ -74,6 +75,73 @@ export interface ConstructionBrainGenerationSegment {
   sourceSceneId: string;
 }
 
+export interface ConstructionBrainReferenceSlot {
+  role: ConstructionBrainReferenceRole;
+  uri?: string;
+  sourceSceneId?: string;
+  required: boolean;
+}
+
+export interface ConstructionBrainStateDigest {
+  constructionProgress: number;
+  constructionStatus: string;
+  activeZone: string;
+  existingComponents: string[];
+  partialComponents: string[];
+  futureComponents: string[];
+  visibleMaterials: Array<{
+    materialId: string;
+    quantity: number;
+    status: string;
+    location: string;
+  }>;
+  residues: Array<{
+    id: string;
+    materialId: string;
+    quantity: number;
+    status: string;
+    location: string;
+  }>;
+  tools: Array<{
+    toolId: string;
+    status: string;
+    location: string;
+    inUse: boolean;
+  }>;
+  worker: {
+    characterId: string;
+    zone: string;
+    orientation: string;
+    currentAction?: string;
+    currentTool?: string;
+    carriedObjects: string[];
+  };
+  permanentObjects: string[];
+  temporaryObjects: string[];
+  terrain: WorldState['terrain'];
+  climate: string;
+  light: string;
+  camera: string;
+}
+
+export interface ConstructionBrainKeyframeSpec {
+  id: string;
+  sceneId: string;
+  kind: 'ENTRY' | 'EXIT';
+  expectedState: ConstructionBrainStateDigest;
+  referencePlan: ConstructionBrainReferenceSlot[];
+  continuityLocks: {
+    preserveWorkerIdentity: string;
+    preserveExistingComponents: string[];
+    preservePermanentObjects: string[];
+    preserveZones: string[];
+    preserveTerrain: boolean;
+    forbiddenFutureElements: string[];
+  };
+  requiredVisibleEvidence: string[];
+  approvalChecklist: string[];
+}
+
 export interface ConstructionBrainSceneArtifact {
   id: string;
   number: number;
@@ -84,6 +152,10 @@ export interface ConstructionBrainSceneArtifact {
   executionEvidence: string[];
   forbiddenFutureElements: string[];
   preservedZones: string[];
+  keyframes: {
+    entry: ConstructionBrainKeyframeSpec;
+    exit: ConstructionBrainKeyframeSpec;
+  };
   prompts: {
     kling?: string;
     image?: string;
