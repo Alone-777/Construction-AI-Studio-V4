@@ -4,7 +4,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const EXPECTED_SCHEMA_VERSION = '0.1.2';
+const EXPECTED_SCHEMA_VERSION = '0.1.3';
 const ALLOWED_STAGE_PERCENTAGES = new Set([25, 50, 75, 100]);
 
 const MODEL_LIMITS = Object.freeze({
@@ -81,13 +81,13 @@ function assertPlan(plan) {
     if (typeof job.prompt !== 'string' || !job.prompt.trim()) {
       throw new Error(`Job '${job.id}' requires a non-empty prompt.`);
     }
-    if (!job.source || !['KEYFRAME', 'PREVIOUS_SEGMENT_LAST_FRAME'].includes(job.source.kind)) {
+    if (!job.source || !['KEYFRAME', 'PREVIOUS_JOB_LAST_FRAME'].includes(job.source.kind)) {
       throw new Error(`Job '${job.id}' has an invalid source.`);
     }
   }
 
   for (const job of plan.jobs) {
-    if (job.source.kind === 'PREVIOUS_SEGMENT_LAST_FRAME' &&
+    if (job.source.kind === 'PREVIOUS_JOB_LAST_FRAME' &&
         !ids.has(job.source.previousJobId)) {
       throw new Error(
         `Job '${job.id}' references missing previous job '${job.source.previousJobId}'.`,
@@ -102,6 +102,16 @@ function assertPlan(plan) {
     byScene.set(job.sceneId, list);
   }
 
+  for (let index = 1; index < plan.jobs.length; index += 1) {
+    const current = plan.jobs[index];
+    const previous = plan.jobs[index - 1];
+    if (current.source.kind !== 'PREVIOUS_JOB_LAST_FRAME' ||
+        current.source.previousJobId !== previous.id) {
+      throw new Error(
+        `Job '${current.id}' must use the terminal frame from '${previous.id}'.`,
+      );
+    }
+  }
   for (const [sceneId, jobs] of byScene) {
     jobs.sort((a, b) => a.segmentIndex - b.segmentIndex);
     for (let index = 1; index < jobs.length; index += 1) {
