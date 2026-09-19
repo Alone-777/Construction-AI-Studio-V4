@@ -1,10 +1,13 @@
-import type { Project, Scene, Stage } from '../types';
+import type { Project, Scene, Stage, WorldState } from '../types';
 import {
   CONSTRUCTION_BRAIN_SCHEMA_VERSION,
   type ConstructionBrainBundle,
   type ConstructionBrainGenerationSegment,
+  type ConstructionBrainKeyframeSpec,
   type ConstructionBrainProviderId,
+  type ConstructionBrainReferenceSlot,
   type ConstructionBrainSceneArtifact,
+  type ConstructionBrainStateDigest,
 } from './types';
 
 const PROVIDER_LIMITS: Record<ConstructionBrainProviderId, number> = {
@@ -80,8 +83,171 @@ function stageEvidence(stage: Stage): string[] {
   ];
 }
 
-function compileScene(scene: Scene): ConstructionBrainSceneArtifact {
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function digestWorldState(state: WorldState): ConstructionBrainStateDigest {
+  return {
+    constructionProgress: state.construction.progress,
+    constructionStatus: state.construction.status,
+    activeZone: state.activeZone,
+    existingComponents: [...state.existingComponents],
+    partialComponents: [...state.partialComponents],
+    futureComponents: [...state.futureComponents],
+    visibleMaterials: state.materials.map(material => ({
+      materialId: material.materialId,
+      quantity: material.quantity,
+      status: material.status,
+      location: material.location,
+    })),
+    residues: state.residues.map(residue => ({
+      id: residue.id,
+      materialId: residue.materialId,
+      quantity: residue.quantity,
+      status: residue.status,
+      location: residue.location,
+    })),
+    tools: state.tools.map(tool => ({
+      toolId: tool.toolId,
+      status: tool.status,
+      location: tool.location,
+      inUse: tool.inUse,
+    })),
+    worker: {
+      characterId: state.character.characterId,
+      zone: state.character.currentZone,
+      orientation: state.character.orientation,
+      currentAction: state.character.currentAction,
+      currentTool: state.character.currentTool,
+      carriedObjects: [...state.character.carriedObjects],
+    },
+    permanentObjects: [...state.permanentObjects],
+    temporaryObjects: [...state.temporaryObjects],
+    terrain: { ...state.terrain },
+    climate: state.climate,
+    light: state.light,
+    camera: state.camera,
+  };
+}
+
+function stateAtSceneEntry(scene: Scene, project: Project): WorldState {
   const activeStages = scene.stages.filter(stage => stage.status !== 'rejected');
+  return activeStages.find(stage => stage.worldStateBefore)?.worldStateBefore ?? project.worldState;
+}
+
+function stateAtSceneExit(scene: Scene, project: Project): WorldState {
+  const activeStages = scene.stages.filter(stage => stage.status !== 'rejected');
+  return [...activeStages].reverse().find(stage => stage.worldStateAfter)?.worldStateAfter ??
+    stateAtSceneEntry(scene, project);
+}
+
+function buildReferencePlan(
+  sceneIndex: number,
+  scenes: Scene[],
+  options: CompileConstructionBrainOptions,
+): ConstructionBrainReferenceSlot[] {
+  const slots: ConstructionBrainReferenceSlot[] = [
+    {
+      role: 'INITIAL',
+      uri: options.initialReferenceUri,
+      required: true,
+    },
+    {
+      role: 'FINAL',
+      uri: options.finalReferenceUri,
+      required: true,
+    },
+  ];
+
+  if (sceneIndex > 0) {
+    slots.push({
+      role: 'PREVIOUS_ACCEPTED',
+      sourceSceneId: scenes[sceneIndex - 1].id,
+      required: true,
+    });
+  }
+
+  return slots;
+}
+
+function buildApprovalChecklist(
+  kind: 'ENTRY' | 'EXIT',
+  expectedState: ConstructionBrainStateDigest,
+  forbiddenFutureElements: string[],
+  evidence: string[],
+): string[] {
+  return unique([
+    `Worker identity remains ${expectedState.worker.characterId}.`,
+    'Terrain geometry and permanent objects remain unchanged unless explicitly authorized.',
+    'Every previously completed construction component remains visible.',
+    'Materials, tools and residues remain physically accounted for.',
+    'No forbidden future component appears before its causal operation.',
+    kind === 'ENTRY'
+      ? 'The image matches the official state before the scene action starts.'
+      : 'The image visibly contains the physical result expected after the scene action.',
+    ...forbiddenFutureElements.map(element => `Forbidden future element is absent: ${element}.`),
+    ...evidence.map(item => `Visible evidence is present: ${item}`),
+  ]);
+}
+
+function buildKeyframeSpec(
+  kind: 'ENTRY' | 'EXIT',
+  scene: Scene,
+  sceneIndex: number,
+  scenes: Scene[],
+  expectedState: WorldState,
+  activeStages: Stage[],
+  forbiddenFutureElements: string[],
+  preservedZones: string[],
+  evidence: string[],
+  options: CompileConstructionBrainOptions,
+): ConstructionBrainKeyframeSpec {
+  const digest = digestWorldState(expectedState);
+
+  return {
+    id: `${scene.id}:keyframe:${kind.toLowerCase()}`,
+    sceneId: scene.id,
+    kind,
+    expectedState: digest,
+    referencePlan: buildReferencePlan(sceneIndex, scenes, options),
+    continuityLocks: {
+      preserveWorkerIdentity: digest.worker.characterId,
+      preserveExistingComponents: [...digest.existingComponents],
+      preservePermanentObjects: [...digest.permanentObjects],
+      preserveZones: [...preservedZones],
+      preserveTerrain: true,
+      forbiddenFutureElements: [...forbiddenFutureElements],
+    },
+    requiredVisibleEvidence: kind === 'EXIT'
+      ? [...evidence]
+      : unique(activeStages.flatMap(stage => stage.physicalActionIR?.preconditions ?? [])),
+    approvalChecklist: buildApprovalChecklist(
+      kind,
+      digest,
+      forbiddenFutureElements,
+      kind === 'EXIT' ? evidence : [],
+    ),
+  };
+}
+
+function compileScene(
+  scene: Scene,
+  sceneIndex: number,
+  scenes: Scene[],
+  project: Project,
+  options: CompileConstructionBrainOptions,
+): ConstructionBrainSceneArtifact {
+  const activeStages = scene.stages.filter(stage => stage.status !== 'rejected');
+  const forbiddenFutureElements = unique(activeStages.flatMap(stage => [
+    ...stage.futureElements,
+    ...(stage.physicalActionIR?.constraints.forbiddenFutureComponents ?? []),
+    ...(stage.physicalActionIR?.constraints.preventPrematureElements ?? []),
+  ]));
+  const preservedZones = unique(activeStages.flatMap(stage => stage.preservedZones));
+  const evidence = unique(activeStages.flatMap(stageEvidence));
+  const entryState = stateAtSceneEntry(scene, project);
+  const exitState = stateAtSceneExit(scene, project);
 
   return {
     id: scene.id,
@@ -89,14 +255,36 @@ function compileScene(scene: Scene): ConstructionBrainSceneArtifact {
     operationId: scene.operationId,
     durationSeconds: scene.duration,
     generationSegments: splitSceneForGeneration(scene),
-    actionRequirements: [...new Set(activeStages.flatMap(stageAction))],
-    executionEvidence: [...new Set(activeStages.flatMap(stageEvidence))],
-    forbiddenFutureElements: [...new Set(activeStages.flatMap(stage => [
-      ...stage.futureElements,
-      ...(stage.physicalActionIR?.constraints.forbiddenFutureComponents ?? []),
-      ...(stage.physicalActionIR?.constraints.preventPrematureElements ?? []),
-    ]))],
-    preservedZones: [...new Set(activeStages.flatMap(stage => stage.preservedZones))],
+    actionRequirements: unique(activeStages.flatMap(stageAction)),
+    executionEvidence: evidence,
+    forbiddenFutureElements,
+    preservedZones,
+    keyframes: {
+      entry: buildKeyframeSpec(
+        'ENTRY',
+        scene,
+        sceneIndex,
+        scenes,
+        entryState,
+        activeStages,
+        forbiddenFutureElements,
+        preservedZones,
+        evidence,
+        options,
+      ),
+      exit: buildKeyframeSpec(
+        'EXIT',
+        scene,
+        sceneIndex,
+        scenes,
+        exitState,
+        activeStages,
+        forbiddenFutureElements,
+        preservedZones,
+        evidence,
+        options,
+      ),
+    },
     prompts: {
       kling: [...activeStages]
         .reverse()
@@ -112,6 +300,8 @@ function compileScene(scene: Scene): ConstructionBrainSceneArtifact {
 
 export interface CompileConstructionBrainOptions {
   targetDurationSeconds?: number;
+  initialReferenceUri?: string;
+  finalReferenceUri?: string;
 }
 
 export function compileConstructionBrain(
@@ -196,7 +386,9 @@ export function compileConstructionBrain(
     scenes: {
       schemaVersion: CONSTRUCTION_BRAIN_SCHEMA_VERSION,
       projectId: project.id,
-      scenes: project.scenes.map(compileScene),
+      scenes: project.scenes.map((scene, index) =>
+        compileScene(scene, index, project.scenes, project, options)
+      ),
     },
   };
 }
