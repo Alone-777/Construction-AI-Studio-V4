@@ -31,6 +31,11 @@ function hasDependencyCycle(bundle: ConstructionBrainBundle): boolean {
   return visited !== nodes.length;
 }
 
+function containsAll(haystack: string[], needles: string[]): boolean {
+  const values = new Set(haystack);
+  return needles.every(value => values.has(value));
+}
+
 export function validateConstructionBrain(
   bundle: ConstructionBrainBundle,
 ): ConstructionBrainValidationResult {
@@ -66,7 +71,9 @@ export function validateConstructionBrain(
     });
   }
 
-  for (const scene of bundle.scenes.scenes) {
+  for (let sceneIndex = 0; sceneIndex < bundle.scenes.scenes.length; sceneIndex += 1) {
+    const scene = bundle.scenes.scenes[sceneIndex];
+
     if (scene.durationSeconds <= 0) {
       issues.push({
         severity: 'ERROR',
@@ -117,6 +124,131 @@ export function validateConstructionBrain(
         message: `Scene ${scene.id} has no execution evidence requirement.`,
         sceneId: scene.id,
       });
+    }
+
+    const entry = scene.keyframes.entry;
+    const exit = scene.keyframes.exit;
+
+    if (entry.sceneId !== scene.id || exit.sceneId !== scene.id) {
+      issues.push({
+        severity: 'ERROR',
+        code: 'KEYFRAME_SCENE_MISMATCH',
+        message: `Scene ${scene.id} contains a keyframe linked to another scene.`,
+        sceneId: scene.id,
+      });
+    }
+
+    if (entry.kind !== 'ENTRY' || exit.kind !== 'EXIT') {
+      issues.push({
+        severity: 'ERROR',
+        code: 'KEYFRAME_KIND_MISMATCH',
+        message: `Scene ${scene.id} must have one ENTRY and one EXIT keyframe.`,
+        sceneId: scene.id,
+      });
+    }
+
+    if (entry.expectedState.worker.characterId !== exit.expectedState.worker.characterId) {
+      issues.push({
+        severity: 'ERROR',
+        code: 'WORKER_IDENTITY_DRIFT',
+        message: `Worker identity changes inside scene ${scene.id}.`,
+        sceneId: scene.id,
+      });
+    }
+
+    if (exit.expectedState.constructionProgress < entry.expectedState.constructionProgress) {
+      issues.push({
+        severity: 'ERROR',
+        code: 'CONSTRUCTION_PROGRESS_REGRESSION',
+        message: `Construction progress regresses inside scene ${scene.id}.`,
+        sceneId: scene.id,
+      });
+    }
+
+    if (!containsAll(
+      exit.continuityLocks.preserveExistingComponents,
+      entry.expectedState.existingComponents,
+    )) {
+      issues.push({
+        severity: 'ERROR',
+        code: 'KEYFRAME_PERSISTENCE_LOCK_MISSING',
+        message: `Exit keyframe for ${scene.id} does not lock every component that existed at scene entry.`,
+        sceneId: scene.id,
+      });
+    }
+
+    if (entry.approvalChecklist.length === 0 || exit.approvalChecklist.length === 0) {
+      issues.push({
+        severity: 'ERROR',
+        code: 'EMPTY_KEYFRAME_CHECKLIST',
+        message: `Scene ${scene.id} has an empty keyframe approval checklist.`,
+        sceneId: scene.id,
+      });
+    }
+
+    const referenceRoles = new Set(entry.referencePlan.map(reference => reference.role));
+    if (!referenceRoles.has('INITIAL') || !referenceRoles.has('FINAL')) {
+      issues.push({
+        severity: 'ERROR',
+        code: 'MISSING_GLOBAL_REFERENCE_SLOT',
+        message: `Scene ${scene.id} must reserve INITIAL and FINAL reference slots.`,
+        sceneId: scene.id,
+      });
+    }
+
+    if (sceneIndex > 0) {
+      const previousScene = bundle.scenes.scenes[sceneIndex - 1];
+      const previousReference = entry.referencePlan.find(
+        reference => reference.role === 'PREVIOUS_ACCEPTED',
+      );
+
+      if (!previousReference || previousReference.sourceSceneId !== previousScene.id) {
+        issues.push({
+          severity: 'ERROR',
+          code: 'MISSING_PREVIOUS_ACCEPTED_REFERENCE',
+          message: `Scene ${scene.id} must reference the accepted result from ${previousScene.id}.`,
+          sceneId: scene.id,
+        });
+      }
+
+      const previousExit = previousScene.keyframes.exit.expectedState;
+      const currentEntry = entry.expectedState;
+
+      if (previousExit.worker.characterId !== currentEntry.worker.characterId) {
+        issues.push({
+          severity: 'ERROR',
+          code: 'CROSS_SCENE_WORKER_DRIFT',
+          message: `Worker identity changes between ${previousScene.id} and ${scene.id}.`,
+          sceneId: scene.id,
+        });
+      }
+
+      if (currentEntry.constructionProgress < previousExit.constructionProgress) {
+        issues.push({
+          severity: 'ERROR',
+          code: 'CROSS_SCENE_PROGRESS_REGRESSION',
+          message: `Construction progress regresses between ${previousScene.id} and ${scene.id}.`,
+          sceneId: scene.id,
+        });
+      }
+
+      if (!containsAll(currentEntry.existingComponents, previousExit.existingComponents)) {
+        issues.push({
+          severity: 'ERROR',
+          code: 'CROSS_SCENE_COMPONENT_DISAPPEARANCE',
+          message: `A completed component disappears between ${previousScene.id} and ${scene.id}.`,
+          sceneId: scene.id,
+        });
+      }
+
+      if (!containsAll(currentEntry.permanentObjects, previousExit.permanentObjects)) {
+        issues.push({
+          severity: 'ERROR',
+          code: 'CROSS_SCENE_PERMANENT_OBJECT_DISAPPEARANCE',
+          message: `A permanent object disappears between ${previousScene.id} and ${scene.id}.`,
+          sceneId: scene.id,
+        });
+      }
     }
   }
 
