@@ -65,10 +65,27 @@ This decision is based on duration compatibility only. Future versions can add q
 Implemented in `src/core/construction-brain`.
 
 ### M1 — Keyframe specification
-Add initial/final references, per-scene keyframe constraints and continuity locks.
+Implemented.
+
+Each scene now carries deterministic ENTRY and EXIT keyframe specifications with:
+
+- expected construction/world-state digest
+- INITIAL and FINAL global reference slots
+- PREVIOUS_ACCEPTED reference from the second scene onward
+- worker identity lock
+- completed-component persistence locks
+- permanent-object and terrain locks
+- preserved-zone constraints
+- forbidden future elements
+- required visible evidence
+- an approval checklist designed for the future Fiscal
+
+The validator also checks continuity across scene boundaries so completed components, permanent objects, worker identity and construction progress cannot silently regress.
 
 ### M2 — Firefly execution bridge
-Translate provider-safe generation segments into manual/automated Firefly jobs for Kling and Veo Fast.
+Next milestone.
+
+Translate provider-safe generation segments and keyframe specs into manual/automated Firefly jobs for Kling and Veo Fast.
 
 ### M3 — Fiscal
 Compare expected state against generated image/video results and emit PASS / RETRY / REJECT.
