@@ -333,6 +333,70 @@ async function buildTerminalComparisonSheet(videoPath, reviewDir, durationSecond
   return comparison;
 }
 
+async function analyzeFiscalImageWithFallback(
+  provider,
+  imagePath,
+  userContext,
+  options = {},
+) {
+  const analyzePath = async candidatePath => {
+    const bytes = await readFile(candidatePath);
+    return provider.analyze({
+      imageData: 'data:image/png;base64,' + bytes.toString('base64'),
+      mimeType: 'image/png',
+      userContext,
+      contract: 'construction-fiscal-v1',
+    });
+  };
+
+  try {
+    return {
+      analysis: await analyzePath(imagePath),
+      imagePath,
+      usedCompactRetry: false,
+    };
+  } catch (error) {
+    if (error?.code !== 'PROVIDER_TIMEOUT') throw error;
+
+    const compactPath = options.compactPath ??
+      imagePath.replace(/\.png$/i, '-compact.png');
+
+    await runFfmpeg([
+      '-y', '-i', imagePath,
+      '-vf', 'scale=1280:-2:flags=lanczos',
+      '-frames:v', '1',
+      compactPath,
+    ]);
+
+    const originalTimeout = provider.timeoutMs;
+    if (typeof provider.timeoutMs === 'number') {
+      provider.timeoutMs = Math.max(provider.timeoutMs, 150_000);
+    }
+
+    try {
+      return {
+        analysis: await analyzePath(compactPath),
+        imagePath: compactPath,
+        usedCompactRetry: true,
+      };
+    } finally {
+      if (typeof originalTimeout === 'number') provider.timeoutMs = originalTimeout;
+    }
+  }
+}
+
+function providerReviewBlocker(error) {
+  const code = String(error?.code || '');
+  if (code === 'PROVIDER_TIMEOUT') return 'PROVIDER_TIMEOUT';
+  if (code === 'RATE_OR_QUOTA_LIMIT') return 'PROVIDER_RATE_OR_QUOTA_LIMIT';
+  if (code === 'QUOTA_EXCEEDED') return 'PROVIDER_QUOTA_EXCEEDED';
+  if (code === 'PROVIDER_UNAVAILABLE') return 'PROVIDER_UNAVAILABLE';
+  if (code === 'MODEL_NOT_AVAILABLE') return 'MODEL_NOT_AVAILABLE';
+  if (code === 'INVALID_API_KEY') return 'INVALID_API_KEY';
+  if (code === 'INVALID_PROVIDER_RESPONSE') return 'INVALID_PROVIDER_RESPONSE';
+  return null;
+}
+
 async function extractLastFrame(videoPath, outputPath) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   await runFfmpeg([
@@ -473,7 +537,8 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
       verdict: 'REOBSERVE',
       jobId,
       blockers: ['VISUAL_PROVIDER_UNAVAILABLE'],
-      contactSheet: path.relative(loaded.workspace, contact.contactSheet),
+      contactSheet: path.relative(loaded.workspace, firstReview.imagePath),
+    compactRetryUsed: firstReview.usedCompactRetry,
     };
     await writeJson(path.join(reviewDir, 'assessment.json'), result);
     await writeJson(loaded.statePath, {
@@ -486,13 +551,39 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     return result;
   }
 
-  const bytes = await readFile(contact.contactSheet);
-  const analysis = await provider.analyze({
-    imageData: 'data:image/png;base64,' + bytes.toString('base64'),
-    mimeType: 'image/png',
-    userContext: buildFireflyReviewContext(loaded.job),
-    contract: 'construction-fiscal-v1',
-  });
+  let firstReview;
+  try {
+    firstReview = await analyzeFiscalImageWithFallback(
+      provider,
+      contact.contactSheet,
+      buildFireflyReviewContext(loaded.job),
+      { compactPath: path.join(reviewDir, 'contact-sheet-compact.png') },
+    );
+  } catch (error) {
+    const blocker = providerReviewBlocker(error);
+    if (!blocker) throw error;
+
+    const result = {
+      verdict: 'REOBSERVE',
+      jobId,
+      providerId: provider.id,
+      blockers: [blocker],
+      contactSheet: path.relative(loaded.workspace, contact.contactSheet),
+    };
+    await writeJson(path.join(reviewDir, 'assessment.json'), result);
+    const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
+    await invalidateDownstream(loaded.workspace, queue, jobId);
+    await writeJson(loaded.statePath, {
+      ...loaded.state,
+      status: 'REVIEW_REQUIRED',
+      attempts: attempt,
+      completedAt: null,
+      lastReview: result,
+    });
+    return result;
+  }
+
+  const analysis = firstReview.analysis;
   await writeJson(path.join(reviewDir, 'analysis.json'), analysis);
 
   const assessment = assessNormalizedVisualAnalysis(loaded.job, analysis);
@@ -541,16 +632,43 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     reviewDir,
     loaded.item.durationSeconds,
   );
-  const verificationBytes = await readFile(verificationSheet);
-  const verificationAnalysis = await provider.analyze({
-    imageData: 'data:image/png;base64,' + verificationBytes.toString('base64'),
-    mimeType: 'image/png',
-    userContext: buildFireflyReviewContext(loaded.job) +
-      ' SECOND INDEPENDENT VERIFICATION. The image now contains only START on the LEFT and END on the RIGHT. ' +
-      'Re-estimate completion from scratch. Focus on how much of the final visible operation result remains unfinished. ' +
-      'Do not assume the previous review was correct.',
-    contract: 'construction-fiscal-v1',
-  });
+  let verificationReview;
+  try {
+    verificationReview = await analyzeFiscalImageWithFallback(
+      provider,
+      verificationSheet,
+      buildFireflyReviewContext(loaded.job) +
+        ' SECOND INDEPENDENT VERIFICATION. The image now contains only START on the LEFT and END on the RIGHT. ' +
+        'Re-estimate completion from scratch. Focus on how much of the final visible operation result remains unfinished. ' +
+        'Do not assume the previous review was correct.',
+      { compactPath: path.join(reviewDir, 'terminal-verification-compact.png') },
+    );
+  } catch (error) {
+    const blocker = providerReviewBlocker(error);
+    if (!blocker) throw error;
+
+    const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
+    await invalidateDownstream(loaded.workspace, queue, jobId);
+    const result = {
+      verdict: 'REOBSERVE',
+      jobId,
+      providerId: provider.id,
+      blockers: [blocker, 'SECOND_VERIFICATION_UNAVAILABLE'],
+      firstObservedStagePercentage: assessment.observedStagePercentage,
+      verification: true,
+    };
+    await writeJson(path.join(reviewDir, 'verification-assessment.json'), result);
+    await writeJson(loaded.statePath, {
+      ...loaded.state,
+      status: 'REVIEW_REQUIRED',
+      attempts: attempt,
+      completedAt: null,
+      lastReview: result,
+    });
+    return result;
+  }
+
+  const verificationAnalysis = verificationReview.analysis;
   await writeJson(path.join(reviewDir, 'verification-analysis.json'), verificationAnalysis);
   const verification = assessNormalizedVisualAnalysis(loaded.job, verificationAnalysis);
 
