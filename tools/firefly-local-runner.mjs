@@ -363,7 +363,7 @@ function usage() {
     '  complete <project-workspace> <job-id>  # manual compatibility path',
     '  review <project-workspace> <job-id> [provider-id]',
     '  ingest <project-workspace> <job-id> <video-path> [provider-id]',
-    '  prompt <project-workspace> <job-id>'
+    '  prompt <project-workspace> <job-id>',
     '',
     'Examples:',
     '  npm run firefly:prepare -- ./firefly_plan.json',
@@ -371,7 +371,7 @@ function usage() {
     '  npm run firefly:complete -- ./.firefly/my-project firefly:scene-1:segment-1',
     '  npm run firefly:review -- ./.firefly/my-project firefly:scene-1:segment-1 gemini',
     '  npm run firefly:ingest -- ./.firefly/my-project firefly:scene-1:segment-1 ./download.mp4 gemini',
-    '  npm run firefly:prompt -- ./.firefly/my-project firefly:scene-1:segment-1'
+    '  npm run firefly:prompt -- ./.firefly/my-project firefly:scene-1:segment-1',
     '',
   ].join('\n');
 }
