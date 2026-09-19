@@ -131,7 +131,7 @@ export function providerTimeoutFromEnv(env = process.env) {
   const configured = Number(env.VISUAL_PROVIDER_TIMEOUT_MS);
   return Number.isFinite(configured) && configured >= 1_000 && configured <= 180_000
     ? configured
-    : 60_000;
+    : 120_000;
 }
 
 export async function fetchWithTimeout(url, options, timeoutMs = 60_000, providerId = 'visual') {
