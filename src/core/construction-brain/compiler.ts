@@ -201,9 +201,21 @@ function buildGenerationSegments(
   const fallbackExit = stateAtSceneExit(scene, project);
   const durations = splitDurations(plannedDurationSeconds);
 
+  let previousTargetStage: Stage | undefined;
+
   return durations.map((duration, index) => {
     const targetStage = selectTargetStage(stages, index + 1, durations.length);
+    const startStagePercentage = previousTargetStage?.percentage ?? 0;
+    const startState = previousTargetStage
+      ? stageStateAfter(previousTargetStage, fallbackExit)
+      : stateAtSceneEntry(scene, project);
     const targetState = stageStateAfter(targetStage, fallbackExit);
+    const rangeStages = stages.filter(stage =>
+      stage.percentage > startStagePercentage &&
+      stage.percentage <= targetStage.percentage
+    );
+
+    previousTargetStage = targetStage;
 
     return {
       id: `${scene.id}:segment:${index + 1}`,
@@ -211,13 +223,14 @@ function buildGenerationSegments(
       durationSeconds: duration.durationSeconds,
       maxProviderSeconds: duration.maxProviderSeconds,
       sourceSceneId: scene.id,
+      startStagePercentage,
       targetStagePercentage: targetStage.percentage,
+      startState: digestWorldState(startState),
       targetState: digestWorldState(targetState),
-      actionRequirements: unique(stageAction(targetStage)),
-      executionEvidence: unique(stageEvidence(targetStage)),
+      actionRequirements: unique(rangeStages.flatMap(stageAction)),
+      executionEvidence: unique(rangeStages.flatMap(stageEvidence)),
       forbiddenFutureElements: forbiddenAfterStage(targetStage, targetState),
       prompt: {
-        kling: targetStage.prompts?.kling,
         image: targetStage.prompts?.nanoBanana,
       },
     };
