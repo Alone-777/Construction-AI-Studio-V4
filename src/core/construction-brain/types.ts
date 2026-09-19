@@ -1,7 +1,7 @@
 import type { WorldState } from '../types/world-state';
 import type { ExecutionProof, StagePercentage } from '../types';
 
-export const CONSTRUCTION_BRAIN_SCHEMA_VERSION = '0.1.1' as const;
+export const CONSTRUCTION_BRAIN_SCHEMA_VERSION = '0.1.2' as const;
 
 export type ConstructionBrainProviderId = 'KLING' | 'VEO_FAST';
 export type ConstructionBrainReferenceRole = 'INITIAL' | 'FINAL' | 'PREVIOUS_ACCEPTED';
@@ -73,7 +73,9 @@ export interface ConstructionBrainGenerationSegment {
   durationSeconds: number;
   maxProviderSeconds: number;
   sourceSceneId: string;
+  startStagePercentage: StagePercentage;
   targetStagePercentage: StagePercentage;
+  startState: ConstructionBrainStateDigest;
   targetState: ConstructionBrainStateDigest;
   actionRequirements: string[];
   executionEvidence: string[];
@@ -217,6 +219,7 @@ export interface FireflyExecutionJob {
   sceneNumber: number;
   segmentId: string;
   segmentIndex: number;
+  startStagePercentage: StagePercentage;
   targetStagePercentage: StagePercentage;
   model: FireflyBridgeModelId;
   durationSeconds: number;
