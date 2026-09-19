@@ -1,7 +1,7 @@
 import type { WorldState } from '../types/world-state';
 import type { ExecutionProof, StagePercentage } from '../types';
 
-export const CONSTRUCTION_BRAIN_SCHEMA_VERSION = '0.1.2' as const;
+export const CONSTRUCTION_BRAIN_SCHEMA_VERSION = '0.1.3' as const;
 
 export type ConstructionBrainProviderId = 'KLING' | 'VEO_FAST';
 export type ConstructionBrainReferenceRole = 'INITIAL' | 'FINAL' | 'PREVIOUS_ACCEPTED';
@@ -208,7 +208,7 @@ export type FireflyJobSource =
       keyframeId: string;
     }
   | {
-      kind: 'PREVIOUS_SEGMENT_LAST_FRAME';
+      kind: 'PREVIOUS_JOB_LAST_FRAME';
       previousJobId: string;
     };
 
