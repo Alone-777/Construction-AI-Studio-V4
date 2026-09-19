@@ -16,7 +16,8 @@
     "firefly:complete": "node tools/firefly-local-runner.mjs complete",
     "firefly:review": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs review",
     "firefly:ingest": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs ingest",
-    "firefly:prompt": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs prompt"
+    "firefly:prompt": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs prompt",
+    "firefly:providers": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs providers"
   },
   "dependencies": {
     "dexie": "^4.0.11",
