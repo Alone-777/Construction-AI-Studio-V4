@@ -66,9 +66,13 @@ export function buildFireflyReviewContext(job, operationType = resolveOperationT
     'For claims.apparentCompletion, estimate the RIGHT panel completion percentage of this current operation only.',
     'Use LEFT and CENTER only as evidence of progression and continuity.',
     'If exact progress is not visually supportable, classify apparentCompletion as UNKNOWN instead of guessing.',
-    'If any canonical forbidden element is visible, include its exact canonical ID in claims.visibleComponents: ' +
+    'If any canonical forbidden element is visible, include its exact canonical ID in visibleCanonicalFutureElements: ' +
       (forbidden.length ? forbidden.join(', ') : 'none') + '.',
-    'Do not infer hidden work. Preserve worker, terrain, environment, camera composition and previously completed construction when comparing panels.',
+    'Required visible evidence/checklist: ' + ((job.acceptanceChecklist ?? []).join(' | ') || 'none') + '.',
+    'Preserve worker identity: ' + (job.continuityLocks?.preserveWorkerIdentity ?? 'unknown') + '.',
+    'Preserve existing components: ' + ((job.continuityLocks?.preserveExistingComponents ?? []).join(', ') || 'none') + '.',
+    'Preserve permanent objects: ' + ((job.continuityLocks?.preservePermanentObjects ?? []).join(', ') || 'none') + '.',
+    'Do not infer hidden work. Evaluate worker, environment, geometry and source continuity across the three panels.',
   ].join(' ');
 }
 
@@ -80,45 +84,56 @@ function matchesCanonicalElement(observed, canonical) {
 
 export function assessNormalizedVisualAnalysis(job, analysis, options = {}) {
   const tolerance = options.progressTolerance ?? DEFAULT_PROGRESS_TOLERANCE;
-  const completion = analysis?.claims?.apparentCompletion;
   const operationType = options.operationType ?? resolveOperationType(job);
+  const isFiscal = analysis?.contract === 'construction-fiscal-v1';
+  const completion = isFiscal
+    ? analysis?.apparentCompletion
+    : analysis?.claims?.apparentCompletion;
+  const blockers = [];
 
   if (!completion || completion.classification === 'UNKNOWN' ||
       typeof completion.value !== 'number' || !Number.isFinite(completion.value) ||
       Number(completion.confidence) < MIN_PROGRESS_CONFIDENCE) {
-    return {
-      verdict: 'REOBSERVE',
-      jobId: job.id,
-      operationType,
-      blockers: ['APPARENT_COMPLETION_UNCERTAIN'],
-      failures: [],
-    };
+    blockers.push('APPARENT_COMPLETION_UNCERTAIN');
   }
 
   const failures = [];
-  const observed = completion.value;
+  const warnings = [];
+  const observed = typeof completion?.value === 'number' ? completion.value : undefined;
   const target = job.targetStagePercentage;
 
-  if (observed > target + tolerance) {
-    failures.push({
-      code: 'PROGRESS_OVERSHOOT',
-      message: 'Observed progress ' + observed + '% exceeds target ' + target + '%.',
-      correction: 'Stop clearly at ' + target + '% completion. Leave a visibly unfinished portion for the next segment; do not complete the current operation.',
-    });
-  }
-  if (observed < target - tolerance) {
-    failures.push({
-      code: 'PROGRESS_UNDERSHOOT',
-      message: 'Observed progress ' + observed + '% is below target ' + target + '%.',
-      correction: 'Advance the operation visibly to approximately ' + target + '% before the clip ends. Show the missing physical work on screen.',
-    });
+  if (typeof observed === 'number') {
+    if (observed > target + tolerance) {
+      failures.push({
+        code: 'PROGRESS_OVERSHOOT',
+        message: 'Observed progress ' + observed + '% exceeds target ' + target + '%.',
+        correction: 'Stop clearly at ' + target + '% completion. Leave a visibly unfinished portion for the next segment; do not complete the current operation.',
+      });
+    }
+    if (observed < target - tolerance) {
+      failures.push({
+        code: 'PROGRESS_UNDERSHOOT',
+        message: 'Observed progress ' + observed + '% is below target ' + target + '%.',
+        correction: 'Advance the operation visibly to approximately ' + target + '% before the clip ends. Show the missing physical work on screen.',
+      });
+    }
   }
 
-  const visibleClaim = analysis?.claims?.visibleComponents;
-  const visible = visibleClaim?.classification === 'UNKNOWN' || !Array.isArray(visibleClaim?.value)
-    ? [] : visibleClaim.value.map(String);
-  const forbidden = job.continuityLocks?.forbiddenFutureElements ?? [];
-  const leaked = forbidden.filter(canonical => visible.some(item => matchesCanonicalElement(item, canonical)));
+  let leaked = [];
+  if (isFiscal) {
+    const claim = analysis?.visibleCanonicalFutureElements;
+    leaked = claim?.classification === 'UNKNOWN' || !Array.isArray(claim?.value)
+      ? [] : claim.value.map(String);
+  } else {
+    const visibleClaim = analysis?.claims?.visibleComponents;
+    const visible = visibleClaim?.classification === 'UNKNOWN' || !Array.isArray(visibleClaim?.value)
+      ? [] : visibleClaim.value.map(String);
+    const forbidden = job.continuityLocks?.forbiddenFutureElements ?? [];
+    leaked = forbidden.filter(canonical => visible.some(item => matchesCanonicalElement(item, canonical)));
+  }
+
+  const forbiddenSet = new Set(job.continuityLocks?.forbiddenFutureElements ?? []);
+  leaked = unique(leaked.filter(element => forbiddenSet.has(element)));
   if (leaked.length) {
     failures.push({
       code: 'FUTURE_ELEMENT_LEAK',
@@ -127,14 +142,88 @@ export function assessNormalizedVisualAnalysis(job, analysis, options = {}) {
     });
   }
 
+  if (isFiscal) {
+    const missingClaim = analysis?.missingVisibleEvidence;
+    const missing = missingClaim?.classification === 'UNKNOWN' || !Array.isArray(missingClaim?.value)
+      ? [] : unique(missingClaim.value.map(String));
+    if (missing.length) {
+      failures.push({
+        code: 'MISSING_EVIDENCE',
+        message: 'Required visible evidence is missing: ' + missing.join('; ') + '.',
+        correction: 'Make these results visibly undeniable before the clip ends: ' + missing.join('; ') + '.',
+      });
+    }
+
+    const continuityChecks = [
+      ['workerContinuity', 'CHARACTER_DRIFT', 'Worker identity or clothing continuity'],
+      ['environmentContinuity', 'ENVIRONMENT_DRIFT', 'Environment continuity'],
+      ['geometryContinuity', 'GEOMETRY_DRIFT', 'Geometry continuity'],
+      ['sourceContinuity', 'SOURCE_CONTINUITY_DRIFT', 'Source-frame continuity'],
+    ];
+
+    for (const [field, code, label] of continuityChecks) {
+      const claim = analysis?.[field];
+      if (!claim || claim.classification === 'UNKNOWN' || claim.value == null ||
+          Number(claim.confidence) < MIN_PROGRESS_CONFIDENCE) {
+        blockers.push(String(field).toUpperCase() + '_UNCERTAIN');
+        continue;
+      }
+      if (claim.value === 'MAJOR_DIVERGENCE') {
+        failures.push({
+          code,
+          message: label + ' has a major divergence.',
+          correction: code === 'CHARACTER_DRIFT'
+            ? 'Preserve the exact same worker identity, clothing, body proportions and protective equipment from the source frame.'
+            : code === 'ENVIRONMENT_DRIFT'
+              ? 'Preserve the exact terrain, vegetation, creek/background, weather and lighting from the source frame.'
+              : code === 'GEOMETRY_DRIFT'
+                ? 'Preserve all existing geometry exactly; alter only the current operation area through visible physical work.'
+                : 'Start from the supplied source frame exactly. Do not reset, redesign or reinterpret the scene.',
+        });
+      } else if (claim.value === 'MINOR_DIVERGENCE') {
+        warnings.push({ code: String(code).replace('_DRIFT', '_MINOR'), message: label + ' has a minor divergence.' });
+      }
+    }
+  } else if (failures.length === 0) {
+    blockers.push('FISCAL_CONTINUITY_UNAVAILABLE');
+  }
+
+  if (failures.length) {
+    return {
+      verdict: 'RETRY',
+      jobId: job.id,
+      operationType,
+      observedStagePercentage: observed,
+      targetStagePercentage: target,
+      confidence: completion?.confidence ?? 0,
+      failures,
+      warnings,
+      blockers,
+    };
+  }
+
+  if (blockers.length) {
+    return {
+      verdict: 'REOBSERVE',
+      jobId: job.id,
+      operationType,
+      observedStagePercentage: observed,
+      targetStagePercentage: target,
+      blockers: unique(blockers),
+      failures: [],
+      warnings,
+    };
+  }
+
   return {
-    verdict: failures.length ? 'RETRY' : 'PASS',
+    verdict: 'PASS',
     jobId: job.id,
     operationType,
     observedStagePercentage: observed,
     targetStagePercentage: target,
     confidence: completion.confidence,
-    failures,
+    failures: [],
+    warnings,
   };
 }
 
@@ -317,6 +406,7 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     imageData: 'data:image/png;base64,' + bytes.toString('base64'),
     mimeType: 'image/png',
     userContext: buildFireflyReviewContext(loaded.job),
+    contract: 'construction-fiscal-v1',
   });
   await writeJson(path.join(reviewDir, 'analysis.json'), analysis);
 
