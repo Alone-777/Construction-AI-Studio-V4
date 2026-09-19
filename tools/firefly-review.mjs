@@ -537,8 +537,7 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
       verdict: 'REOBSERVE',
       jobId,
       blockers: ['VISUAL_PROVIDER_UNAVAILABLE'],
-      contactSheet: path.relative(loaded.workspace, firstReview.imagePath),
-    compactRetryUsed: firstReview.usedCompactRetry,
+      contactSheet: path.relative(loaded.workspace, contact.contactSheet),
     };
     await writeJson(path.join(reviewDir, 'assessment.json'), result);
     await writeJson(loaded.statePath, {
@@ -590,7 +589,8 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   const assessmentWithProvider = {
     ...assessment,
     providerId: provider.id,
-    contactSheet: path.relative(loaded.workspace, contact.contactSheet),
+    contactSheet: path.relative(loaded.workspace, firstReview.imagePath),
+    compactRetryUsed: firstReview.usedCompactRetry,
   };
   await writeJson(path.join(reviewDir, 'assessment.json'), assessmentWithProvider);
 
