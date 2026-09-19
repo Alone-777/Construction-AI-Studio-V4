@@ -97,10 +97,15 @@ describe('Construction Brain MVP v0.1', () => {
     const first = bundle.scenes.scenes[0];
 
     expect(first.generationSegments).toHaveLength(2);
-    expect(first.generationSegments.map(segment => segment.targetStagePercentage))
-      .toEqual([50, 100]);
-    expect(first.generationSegments[0].prompt.kling).toContain('marco 50%');
-    expect(first.generationSegments[1].prompt.kling).toContain('marco 100%');
+    expect(first.generationSegments.map(segment => [
+      segment.startStagePercentage,
+      segment.targetStagePercentage,
+    ])).toEqual([[0, 50], [50, 100]]);
+    expect(first.generationSegments[0].startState.constructionProgress).toBe(0);
+    expect(first.generationSegments[0].executionEvidence.join(' ')).toContain('25%');
+    expect(first.generationSegments[0].executionEvidence.join(' ')).toContain('50%');
+    expect(first.generationSegments[1].executionEvidence.join(' ')).toContain('75%');
+    expect(first.generationSegments[1].executionEvidence.join(' ')).toContain('100%');
   });
 
   it('keeps current-operation results out of EXIT forbidden elements', () => {
