@@ -175,6 +175,7 @@ export function buildFireflyExecutionPlan(
         projectId: bundle.project.projectId,
         sceneId: scene.id,
         sceneNumber: scene.number,
+        operationType,
         segmentId: segment.id,
         segmentIndex: index + 1,
         startStagePercentage: segment.startStagePercentage,
