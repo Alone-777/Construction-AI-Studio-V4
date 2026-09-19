@@ -73,6 +73,15 @@ export interface ConstructionBrainGenerationSegment {
   durationSeconds: number;
   maxProviderSeconds: number;
   sourceSceneId: string;
+  targetStagePercentage: StagePercentage;
+  targetState: ConstructionBrainStateDigest;
+  actionRequirements: string[];
+  executionEvidence: string[];
+  forbiddenFutureElements: string[];
+  prompt: {
+    kling?: string;
+    image?: string;
+  };
 }
 
 export interface ConstructionBrainReferenceSlot {
@@ -208,6 +217,7 @@ export interface FireflyExecutionJob {
   sceneNumber: number;
   segmentId: string;
   segmentIndex: number;
+  targetStagePercentage: StagePercentage;
   model: FireflyBridgeModelId;
   durationSeconds: number;
   aspectRatio: '16:9';
