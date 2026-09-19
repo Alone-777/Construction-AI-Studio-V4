@@ -1,7 +1,7 @@
 import type { WorldState } from '../types/world-state';
 import type { ExecutionProof, StagePercentage } from '../types';
 
-export const CONSTRUCTION_BRAIN_SCHEMA_VERSION = '0.1.0' as const;
+export const CONSTRUCTION_BRAIN_SCHEMA_VERSION = '0.1.1' as const;
 
 export type ConstructionBrainProviderId = 'KLING' | 'VEO_FAST';
 export type ConstructionBrainReferenceRole = 'INITIAL' | 'FINAL' | 'PREVIOUS_ACCEPTED';
