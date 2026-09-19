@@ -307,6 +307,32 @@ export async function buildVideoContactSheet(videoPath, reviewDir, durationSecon
   return { frames, contactSheet };
 }
 
+async function buildTerminalComparisonSheet(videoPath, reviewDir, durationSeconds) {
+  const duration = Math.max(0.5, Number(durationSeconds) || 1);
+  const start = path.join(reviewDir, 'verify-start.png');
+  const end = path.join(reviewDir, 'verify-end.png');
+
+  for (const [timestamp, output] of [
+    [0.05, start],
+    [Math.max(0.1, duration - 0.12), end],
+  ]) {
+    await runFfmpeg([
+      '-y', '-ss', Number(timestamp).toFixed(3), '-i', videoPath,
+      '-frames:v', '1',
+      '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2',
+      output,
+    ]);
+  }
+
+  const comparison = path.join(reviewDir, 'terminal-verification.png');
+  await runFfmpeg([
+    '-y', '-i', start, '-i', end,
+    '-filter_complex', '[0:v][1:v]hstack=inputs=2[v]',
+    '-map', '[v]', '-frames:v', '1', comparison,
+  ]);
+  return comparison;
+}
+
 async function extractLastFrame(videoPath, outputPath) {
   await mkdir(path.dirname(outputPath), { recursive: true });
   await runFfmpeg([
@@ -510,18 +536,108 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     return { ...assessmentWithProvider, retryPrompt };
   }
 
+  const verificationSheet = await buildTerminalComparisonSheet(
+    videoPath,
+    reviewDir,
+    loaded.item.durationSeconds,
+  );
+  const verificationBytes = await readFile(verificationSheet);
+  const verificationAnalysis = await provider.analyze({
+    imageData: 'data:image/png;base64,' + verificationBytes.toString('base64'),
+    mimeType: 'image/png',
+    userContext: buildFireflyReviewContext(loaded.job) +
+      ' SECOND INDEPENDENT VERIFICATION. The image now contains only START on the LEFT and END on the RIGHT. ' +
+      'Re-estimate completion from scratch. Focus on how much of the final visible operation result remains unfinished. ' +
+      'Do not assume the previous review was correct.',
+    contract: 'construction-fiscal-v1',
+  });
+  await writeJson(path.join(reviewDir, 'verification-analysis.json'), verificationAnalysis);
+  const verification = assessNormalizedVisualAnalysis(loaded.job, verificationAnalysis);
+
+  const firstObserved = assessment.observedStagePercentage;
+  const secondObserved = verification.observedStagePercentage;
+  const disagreement = typeof firstObserved === 'number' && typeof secondObserved === 'number'
+    ? Math.abs(firstObserved - secondObserved)
+    : Number.POSITIVE_INFINITY;
+
+  if (verification.verdict !== 'PASS' || disagreement > 12) {
+    const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
+    await invalidateDownstream(loaded.workspace, queue, jobId);
+
+    if (verification.verdict === 'RETRY') {
+      const memory = await loadLearningMemory(loaded.workspace);
+      const retryPrompt = composeRetryPrompt(loaded.job, verification, memory);
+      await writeFile(path.join(loaded.jobDir, 'retry-prompt.txt'), retryPrompt + '\n', 'utf8');
+      const result = {
+        ...verification,
+        providerId: provider.id,
+        verification: true,
+        firstObservedStagePercentage: firstObserved,
+        disagreement,
+        retryPrompt,
+      };
+      await writeJson(path.join(reviewDir, 'verification-assessment.json'), result);
+      await writeJson(loaded.statePath, {
+        ...loaded.state,
+        status: 'RETRY_REQUIRED',
+        attempts: attempt,
+        completedAt: null,
+        lastReview: result,
+        pendingLearning: {
+          operationType: verification.operationType,
+          provider: loaded.job.model,
+          failures: verification.failures,
+        },
+      });
+      return result;
+    }
+
+    const result = {
+      verdict: 'REOBSERVE',
+      jobId,
+      providerId: provider.id,
+      blockers: unique([
+        ...(verification.blockers ?? []),
+        ...(disagreement > 12 ? ['PROGRESS_ESTIMATES_DISAGREE'] : []),
+      ]),
+      firstObservedStagePercentage: firstObserved,
+      secondObservedStagePercentage: secondObserved,
+      disagreement,
+      verification: true,
+    };
+    await writeJson(path.join(reviewDir, 'verification-assessment.json'), result);
+    await writeJson(loaded.statePath, {
+      ...loaded.state,
+      status: 'REVIEW_REQUIRED',
+      attempts: attempt,
+      completedAt: null,
+      lastReview: result,
+    });
+    return result;
+  }
+
   const lastFramePath = path.join(loaded.workspace, loaded.item.lastFrameOutput);
   await extractLastFrame(videoPath, lastFramePath);
   await persistSuccessfulLearning(loaded.workspace, loaded.state.pendingLearning);
+  const confirmed = {
+    ...assessmentWithProvider,
+    verification: {
+      verdict: verification.verdict,
+      observedStagePercentage: verification.observedStagePercentage,
+      confidence: verification.confidence,
+      disagreement,
+    },
+  };
+  await writeJson(path.join(reviewDir, 'verification-assessment.json'), confirmed.verification);
   await writeJson(loaded.statePath, {
     ...loaded.state,
     status: 'COMPLETE',
     attempts: attempt,
     completedAt: new Date().toISOString(),
-    lastReview: assessmentWithProvider,
+    lastReview: confirmed,
     pendingLearning: null,
   });
-  return assessmentWithProvider;
+  return confirmed;
 }
 
 export async function ingestAndReviewFireflyJob(workspacePath, jobId, sourceVideoPath, providerId) {
