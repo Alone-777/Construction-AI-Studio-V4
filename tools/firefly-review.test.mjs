@@ -39,6 +39,21 @@ function analysis(completion, options = {}) {
   };
 }
 
+function fiscalAnalysis(completion, overrides = {}) {
+  return {
+    contract: 'construction-fiscal-v1',
+    summary: 'fiscal contact sheet',
+    apparentCompletion: claim(completion, 'FACT', 0.9),
+    visibleCanonicalFutureElements: claim(overrides.future ?? [], 'FACT', 0.9),
+    missingVisibleEvidence: claim(overrides.missing ?? [], 'FACT', 0.9),
+    workerContinuity: claim(overrides.worker ?? 'MATCH', 'FACT', 0.9),
+    environmentContinuity: claim(overrides.environment ?? 'MATCH', 'FACT', 0.9),
+    geometryContinuity: claim(overrides.geometry ?? 'MATCH', 'FACT', 0.9),
+    sourceContinuity: claim(overrides.source ?? 'MATCH', 'FACT', 0.9),
+    uncertainties: [],
+  };
+}
+
 describe('Firefly review runtime', () => {
   it('keeps compatibility with the current cabana workspace scene ids', () => {
     expect(resolveOperationType(job())).toBe('piso');
@@ -70,6 +85,23 @@ describe('Firefly review runtime', () => {
     expect(result.verdict).toBe('RETRY');
     expect(result.failures).toContainEqual(expect.objectContaining({
       code: 'FUTURE_ELEMENT_LEAK',
+    }));
+  });
+
+  it('auto-passes only when fiscal continuity evidence is complete', () => {
+    const result = assessNormalizedVisualAnalysis(job(), fiscalAnalysis(50));
+    expect(result.verdict).toBe('PASS');
+    expect(result.failures).toEqual([]);
+  });
+
+  it('retries when fiscal continuity has a major worker divergence', () => {
+    const result = assessNormalizedVisualAnalysis(
+      job(),
+      fiscalAnalysis(50, { worker: 'MAJOR_DIVERGENCE' }),
+    );
+    expect(result.verdict).toBe('RETRY');
+    expect(result.failures).toContainEqual(expect.objectContaining({
+      code: 'CHARACTER_DRIFT',
     }));
   });
 
