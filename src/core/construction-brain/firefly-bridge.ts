@@ -108,12 +108,7 @@ function segmentChecklist(
       evidence => `Visible evidence is present: ${evidence}`,
     ),
     ...(isLast
-      ? [
-          'The terminal frame matches the scene EXIT state.',
-          ...scene.keyframes.exit.requiredVisibleEvidence.map(
-            evidence => `Scene EXIT evidence is present: ${evidence}`,
-          ),
-        ]
+      ? ['The terminal frame matches the scene EXIT state.']
       : ['The terminal frame is a valid continuation source for the next segment.']),
   ];
 }
