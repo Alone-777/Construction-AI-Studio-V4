@@ -1,7 +1,12 @@
 import { VISUAL_ANALYSIS_PROMPT, VISUAL_RESPONSE_SCHEMA } from '../visual-prompt.mjs';
 import {
+  FISCAL_VISUAL_ANALYSIS_PROMPT,
+  FISCAL_VISUAL_RESPONSE_SCHEMA,
+} from '../fiscal-visual-prompt.mjs';
+import {
   fetchWithTimeout,
   parseImageRequest,
+  parseFiscalJsonText,
   parseJsonText,
   providerTimeoutFromEnv,
   ProviderResponseError,
@@ -26,6 +31,9 @@ export class OpenAIVisualProvider {
   async analyze(request) {
     if (!this.configured) throw new ProviderUnavailableError(this.id);
     const image = parseImageRequest(request);
+    const fiscal = request?.contract === 'construction-fiscal-v1';
+    const prompt = fiscal ? FISCAL_VISUAL_ANALYSIS_PROMPT : VISUAL_ANALYSIS_PROMPT;
+    const schema = fiscal ? FISCAL_VISUAL_RESPONSE_SCHEMA : VISUAL_RESPONSE_SCHEMA;
     const response = await fetchWithTimeout('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -37,7 +45,7 @@ export class OpenAIVisualProvider {
         input: [{
           role: 'user',
           content: [
-            { type: 'input_text', text: `${VISUAL_ANALYSIS_PROMPT}${image.userContext ? `\n\nContexto adicional do usuário: ${image.userContext}` : ''}` },
+            { type: 'input_text', text: `${prompt}${image.userContext ? `\n\nContexto adicional do usuário: ${image.userContext}` : ''}` },
             { type: 'input_image', image_url: image.dataUrl, detail: 'high' },
           ],
         }],
@@ -46,7 +54,7 @@ export class OpenAIVisualProvider {
             type: 'json_schema',
             name: 'construction_visual_analysis',
             strict: true,
-            schema: VISUAL_RESPONSE_SCHEMA,
+            schema,
           },
         },
       }),
@@ -61,6 +69,6 @@ export class OpenAIVisualProvider {
     const text = payload?.output
       ?.flatMap(item => Array.isArray(item.content) ? item.content : [])
       .find(item => item.type === 'output_text')?.text;
-    return parseJsonText(text, this.id);
+    return fiscal ? parseFiscalJsonText(text, this.id) : parseJsonText(text, this.id);
   }
 }
