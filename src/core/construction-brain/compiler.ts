@@ -415,11 +415,15 @@ export function compileConstructionBrain(
   project: Project,
   options: CompileConstructionBrainOptions = {},
 ): ConstructionBrainBundle {
+  const sceneDurationTotal = project.scenes.reduce(
+    (sum, scene) => sum + Math.max(scene.duration, 0),
+    0,
+  );
   const targetDurationSeconds =
     options.targetDurationSeconds ??
-    project.config?.totalDuration ??
-    project.scenes.reduce((sum, scene) => sum + Math.max(scene.duration, 0), 0) ??
-    180;
+    (sceneDurationTotal > 0
+      ? sceneDurationTotal
+      : project.config?.totalDuration ?? 180);
   const sceneDurations = plannedSceneDurations(project.scenes, targetDurationSeconds);
 
   const snapshots = project.scenes.flatMap(scene =>
