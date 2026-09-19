@@ -52,6 +52,36 @@ describe('Adapters visuais do backend', () => {
     expect(() => parseJsonText('{"summary":"incompleto"}', 'gemini')).toThrow(/Análise visual inválida/);
   });
 
+  it('aceita o contrato fiscal dedicado no adapter Custom', async () => {
+    const fiscal = {
+      summary: 'Piso termina em metade e a continuidade foi preservada.',
+      apparentCompletion: { value: 50, classification: 'FACT', confidence: 0.9, evidence: 'Painel final.' },
+      visibleCanonicalFutureElements: { value: [], classification: 'FACT', confidence: 0.9, evidence: 'Nenhum elemento futuro.' },
+      missingVisibleEvidence: { value: [], classification: 'FACT', confidence: 0.9, evidence: 'Evidências presentes.' },
+      workerContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Mesmo trabalhador.' },
+      environmentContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Mesmo ambiente.' },
+      geometryContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Geometria preservada.' },
+      sourceContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Continua do frame inicial.' },
+      uncertainties: [],
+    };
+    const fetchMock = vi.fn(async (_url, options) => {
+      const body = JSON.parse(String(options?.body));
+      expect(body.contract).toBe('construction-fiscal-v1');
+      return new Response(JSON.stringify(fiscal), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new CustomVisualProvider({
+      CUSTOM_VISUAL_ENDPOINT: 'https://provider.example/analyze',
+    });
+    const result = await provider.analyze({
+      imageData: onePixelPng,
+      mimeType: 'image/png',
+      contract: 'construction-fiscal-v1',
+    });
+    expect(result.contract).toBe('construction-fiscal-v1');
+    expect(result.apparentCompletion.value).toBe(50);
+  });
+
   it('bloqueia resposta inválida recebida pelo adapter Custom', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ summary: 'sem claims' }), { status: 200 })));
     const provider = new CustomVisualProvider({ CUSTOM_VISUAL_ENDPOINT: 'https://provider.example/analyze' });
