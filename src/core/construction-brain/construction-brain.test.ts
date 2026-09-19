@@ -9,7 +9,11 @@ import {
 describe('Construction Brain MVP v0.1', () => {
   it('compiles the existing cabin project into the four canonical artifacts', () => {
     const project = createCabanaDoRiachoProject();
-    const bundle = compileConstructionBrain(project, { targetDurationSeconds: 180 });
+    const bundle = compileConstructionBrain(project, {
+      targetDurationSeconds: 180,
+      initialReferenceUri: 'memory://cabana/initial',
+      finalReferenceUri: 'memory://cabana/final',
+    });
 
     expect(bundle.project.master.aspectRatio).toBe('16:9');
     expect(bundle.project.master.targetDurationSeconds).toBe(180);
@@ -22,13 +26,47 @@ describe('Construction Brain MVP v0.1', () => {
     expect(bundle.worldState.initial).toBe(project.worldState);
     expect(bundle.scenes.scenes.length).toBe(project.scenes.length);
 
-    for (const scene of bundle.scenes.scenes) {
+    for (const [index, scene] of bundle.scenes.scenes.entries()) {
       expect(scene.generationSegments.length).toBeGreaterThan(0);
       expect(
         scene.generationSegments.every(segment =>
           segment.durationSeconds <= segment.maxProviderSeconds
         ),
       ).toBe(true);
+
+      expect(scene.keyframes.entry.kind).toBe('ENTRY');
+      expect(scene.keyframes.exit.kind).toBe('EXIT');
+      expect(scene.keyframes.entry.sceneId).toBe(scene.id);
+      expect(scene.keyframes.exit.sceneId).toBe(scene.id);
+      expect(scene.keyframes.entry.approvalChecklist.length).toBeGreaterThan(0);
+      expect(scene.keyframes.exit.approvalChecklist.length).toBeGreaterThan(0);
+
+      const entryRoles = scene.keyframes.entry.referencePlan.map(reference => reference.role);
+      expect(entryRoles).toContain('INITIAL');
+      expect(entryRoles).toContain('FINAL');
+
+      if (index === 0) {
+        expect(entryRoles).not.toContain('PREVIOUS_ACCEPTED');
+      } else {
+        expect(entryRoles).toContain('PREVIOUS_ACCEPTED');
+        expect(
+          scene.keyframes.entry.referencePlan.find(
+            reference => reference.role === 'PREVIOUS_ACCEPTED',
+          )?.sourceSceneId,
+        ).toBe(bundle.scenes.scenes[index - 1].id);
+      }
+
+      expect(
+        scene.keyframes.exit.expectedState.constructionProgress,
+      ).toBeGreaterThanOrEqual(
+        scene.keyframes.entry.expectedState.constructionProgress,
+      );
+
+      for (const completedAtEntry of scene.keyframes.entry.expectedState.existingComponents) {
+        expect(
+          scene.keyframes.exit.continuityLocks.preserveExistingComponents,
+        ).toContain(completedAtEntry);
+      }
     }
 
     const serialized = serializeConstructionBrain(bundle);
@@ -38,6 +76,11 @@ describe('Construction Brain MVP v0.1', () => {
       'scenes.json',
       'world_state.json',
     ]);
+
+    const scenesArtifact = JSON.parse(serialized['scenes.json']) as {
+      scenes: Array<{ keyframes?: unknown }>;
+    };
+    expect(scenesArtifact.scenes.every(scene => !!scene.keyframes)).toBe(true);
 
     const validation = validateConstructionBrain(bundle);
     expect(validation.issues.filter(issue => issue.severity === 'ERROR')).toEqual([]);
@@ -58,5 +101,55 @@ describe('Construction Brain MVP v0.1', () => {
         }
       }
     }
+  });
+
+  it('detects cross-scene disappearance instead of accepting visual magic', () => {
+    const project = createCabanaDoRiachoProject();
+    const bundle = compileConstructionBrain(project);
+
+    expect(bundle.scenes.scenes.length).toBeGreaterThan(1);
+
+    const previous = bundle.scenes.scenes[0].keyframes.exit.expectedState;
+    const current = bundle.scenes.scenes[1].keyframes.entry.expectedState;
+    const componentToRemove = previous.existingComponents[0];
+
+    expect(componentToRemove).toBeTruthy();
+    current.existingComponents = current.existingComponents.filter(
+      component => component !== componentToRemove,
+    );
+
+    const validation = validateConstructionBrain(bundle);
+    expect(validation.valid).toBe(false);
+    expect(
+      validation.issues.some(
+        issue => issue.code === 'CROSS_SCENE_COMPONENT_DISAPPEARANCE',
+      ),
+    ).toBe(true);
+  });
+
+  it('carries initial, final and previous accepted references without binding to one provider', () => {
+    const project = createCabanaDoRiachoProject();
+    const bundle = compileConstructionBrain(project, {
+      initialReferenceUri: 'file://initial.png',
+      finalReferenceUri: 'file://final.png',
+    });
+
+    const first = bundle.scenes.scenes[0];
+    const second = bundle.scenes.scenes[1];
+
+    expect(
+      first.keyframes.entry.referencePlan.find(reference => reference.role === 'INITIAL')?.uri,
+    ).toBe('file://initial.png');
+    expect(
+      first.keyframes.entry.referencePlan.find(reference => reference.role === 'FINAL')?.uri,
+    ).toBe('file://final.png');
+
+    expect(
+      second.keyframes.entry.referencePlan.find(
+        reference => reference.role === 'PREVIOUS_ACCEPTED',
+      )?.sourceSceneId,
+    ).toBe(first.id);
+
+    expect(second.keyframes.entry.referencePlan).toHaveLength(3);
   });
 });
