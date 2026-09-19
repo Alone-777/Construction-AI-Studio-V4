@@ -10,6 +10,7 @@ import {
   ProviderUnavailableError,
 } from './providers/provider-utils.mjs';
 import { VisualSchemaValidationError } from '../shared/visual-schema.mjs';
+import { FiscalVisualSchemaValidationError } from '../shared/fiscal-visual-schema.mjs';
 import { recordSafeVisualDiagnostic } from './visual-diagnostics.mjs';
 
 const PORT = Number(process.env.CONSTRUCTION_AI_PORT || 8787);
@@ -72,7 +73,7 @@ function providerErrorResponse(error) {
   if (error instanceof ProviderUnavailableError) {
     return { status: 503, body: { error: error.message, code: error.code } };
   }
-  if (error instanceof VisualSchemaValidationError) {
+  if (error instanceof VisualSchemaValidationError || error instanceof FiscalVisualSchemaValidationError) {
     return {
       status: 422,
       body: {
@@ -122,7 +123,7 @@ async function handleApi(request, response, pathname) {
         model: provider?.model,
         durationMs: Date.now() - startedAt,
         internalHttpStatus: result.status,
-        schemaValidation: error instanceof VisualSchemaValidationError ? 'invalid' : 'not-run',
+        schemaValidation: (error instanceof VisualSchemaValidationError || error instanceof FiscalVisualSchemaValidationError) ? 'invalid' : 'not-run',
         errorCode: result.body.code,
       });
       json(response, result.status, result.body);
