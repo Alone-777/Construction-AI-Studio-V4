@@ -5,3 +5,5 @@ export * from './serializer';
 export * from './firefly-bridge';
 export * from './export-package';
 export * from './fiscal-learning';
+export * from './visual-fiscal-observer';
+export * from './visual-fiscal-service';
