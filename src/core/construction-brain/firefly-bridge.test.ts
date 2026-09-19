@@ -42,10 +42,12 @@ describe('Construction Brain Firefly bridge', () => {
     expect(firstScene.generationSegments[0]).toMatchObject({
       provider: 'KLING',
       durationSeconds: 15,
+      targetStagePercentage: 50,
     });
     expect(firstScene.generationSegments[1]).toMatchObject({
       provider: 'VEO_FAST',
       durationSeconds: 8,
+      targetStagePercentage: 100,
     });
 
     const plan = buildFireflyExecutionPlan(bundle);
@@ -61,6 +63,8 @@ describe('Construction Brain Firefly bridge', () => {
       keyframeId: firstScene.keyframes.entry.id,
     });
     expect(jobs[0].terminalRequirement).toBe('INTERMEDIATE_CONTINUATION');
+    expect(jobs[0].targetStagePercentage).toBe(50);
+    expect(jobs[0].prompt).toContain('marco 50%');
 
     expect(jobs[1].model).toBe('VEO_FAST');
     expect(jobs[1].durationSeconds).toBe(8);
@@ -69,9 +73,11 @@ describe('Construction Brain Firefly bridge', () => {
       previousJobId: jobs[0].id,
     });
     expect(jobs[1].terminalRequirement).toBe('SCENE_EXIT');
+    expect(jobs[1].targetStagePercentage).toBe(100);
+    expect(jobs[1].prompt).toContain('marco 100%');
     expect(jobs[1].exitKeyframeId).toBe(firstScene.keyframes.exit.id);
-    expect(jobs[1].acceptanceChecklist).toEqual(
-      firstScene.keyframes.exit.approvalChecklist,
+    expect(jobs[1].acceptanceChecklist).toContain(
+      'The terminal frame matches the scene EXIT state.',
     );
 
     const validation = validateFireflyExecutionPlan(bundle, plan);
