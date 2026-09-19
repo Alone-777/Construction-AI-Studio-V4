@@ -43,7 +43,6 @@ export function buildConstructionBrainExportPackage(
   options: BuildConstructionBrainExportOptions = {},
 ): ConstructionBrainExportPackage {
   const resolvedOptions: CompileConstructionBrainOptions = {
-    targetDurationSeconds: options.targetDurationSeconds,
     initialReferenceUri: options.initialReferenceUri,
     finalReferenceUri: options.finalReferenceUri,
     targetDurationSeconds:
