@@ -373,3 +373,33 @@ This is operational learning, not model-weight training: the system accumulates 
 ### Next M3 integration
 
 The fiscal decision and learning core are implemented. The next integration is an automatic visual observation provider that produces structured observations from generated video/keyframes so the fiscal can run without a human estimating progress.
+
+
+## M3.1 — Automatic visual fiscal bridge
+
+The project already had secure visual provider adapters for Gemini, OpenAI and Custom endpoints. M3.1 connects those providers to the Construction Fiscal instead of creating another unrelated vision stack.
+
+For each generated video, the intended review input is a chronological three-panel contact sheet:
+
+```text
+LEFT = source/start
+CENTER = midpoint
+RIGHT = terminal/end
+```
+
+The visual provider is explicitly instructed to judge completion of the current operation only, never total building completion. Example:
+
+```text
+operation: piso
+start: 0%
+target: 50%
+terminal panel appears: 95%
+=> PROGRESS_OVERSHOOT
+=> RETRY
+```
+
+The bridge also asks the visual provider to report canonical forbidden element IDs when they are visible so the fiscal can detect premature future construction.
+
+If apparent completion is UNKNOWN, missing, or below the minimum confidence threshold, the system does not invent a percentage. It returns `REOBSERVE` and requires another visual observation before PASS/RETRY can be decided.
+
+The remaining operational integration is to make the local Firefly runner automatically extract the three video frames, build the contact sheet, send it through one configured visual provider, persist the assessment, and move the job to COMPLETE or RETRY_REQUIRED.
