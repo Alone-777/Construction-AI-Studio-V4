@@ -112,7 +112,7 @@ export function normalizeProviderObject(raw, providerId) {
 }
 export function parseFiscalJsonText(text, providerId) {
   if (typeof text !== 'string' || !text.trim()) throw new ProviderResponseError(providerId);
-  const cleaned = text.trim().replace(/^\`\`\`(?:json)?\\s*/i, '').replace(/\\s*\`\`\`$/i, '');
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   let raw;
   try {
     raw = JSON.parse(cleaned);
