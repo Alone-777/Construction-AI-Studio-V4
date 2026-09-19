@@ -5,6 +5,7 @@ import {
   compileConstructionBrain,
   serializeFireflyExecutionPlan,
   validateFireflyExecutionPlan,
+  createConstructionLearningMemory,
 } from './index';
 
 describe('Construction Brain Firefly bridge', () => {
@@ -172,6 +173,28 @@ describe('Construction Brain Firefly bridge', () => {
       kind: 'PREVIOUS_JOB_LAST_FRAME',
       previousJobId: cleanupLast!.id,
     });
+  });
+
+  it('injects successful piso lessons only into future piso jobs', () => {
+    const project = createCabanaDoRiachoProject();
+    const bundle = compileConstructionBrain(project, { targetDurationSeconds: 240 });
+    const memory = createConstructionLearningMemory([{
+      operationType: 'piso',
+      provider: 'KLING',
+      failureCode: 'PROGRESS_OVERSHOOT',
+      correction: 'Leave a clearly unfinished half of the floor for the next segment.',
+      successfulRetry: true,
+      uses: 3,
+    }]);
+
+    const plan = buildFireflyExecutionPlan(bundle, { learningMemory: memory });
+    const floorJobs = plan.jobs.filter(job => job.sceneId === 'scene_op_base');
+    const footingJobs = plan.jobs.filter(job => job.sceneId === 'scene_op_sapatas');
+
+    expect(floorJobs.length).toBeGreaterThan(0);
+    expect(floorJobs.every(job => job.prompt.includes('LEARNED PRODUCTION RULES'))).toBe(true);
+    expect(floorJobs.every(job => job.prompt.includes('unfinished half of the floor'))).toBe(true);
+    expect(footingJobs.every(job => !job.prompt.includes('LEARNED PRODUCTION RULES'))).toBe(true);
   });
 
   it('serializes a portable Firefly execution manifest', () => {
