@@ -3,6 +3,18 @@ import {
   FISCAL_VISUAL_ANALYSIS_PROMPT,
   FISCAL_VISUAL_RESPONSE_SCHEMA,
 } from '../fiscal-visual-prompt.mjs';
+function sanitizeSchemaForGemini(value) {
+  if (Array.isArray(value)) return value.map(sanitizeSchemaForGemini);
+  if (!value || typeof value !== 'object') return value;
+
+  const output = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'additionalProperties') continue;
+    output[key] = sanitizeSchemaForGemini(child);
+  }
+  return output;
+}
+
 import {
   fetchWithTimeout,
   parseImageRequest,
@@ -33,7 +45,9 @@ export class GeminiVisualProvider {
     const image = parseImageRequest(request);
     const fiscal = request?.contract === 'construction-fiscal-v1';
     const prompt = fiscal ? FISCAL_VISUAL_ANALYSIS_PROMPT : VISUAL_ANALYSIS_PROMPT;
-    const schema = fiscal ? FISCAL_VISUAL_RESPONSE_SCHEMA : VISUAL_RESPONSE_SCHEMA;
+    const schema = sanitizeSchemaForGemini(
+      fiscal ? FISCAL_VISUAL_RESPONSE_SCHEMA : VISUAL_RESPONSE_SCHEMA,
+    );
     const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`,
       {
@@ -57,7 +71,6 @@ export class GeminiVisualProvider {
                 schema,
               },
             },
-            temperature: 0.1,
           },
         }),
       },
