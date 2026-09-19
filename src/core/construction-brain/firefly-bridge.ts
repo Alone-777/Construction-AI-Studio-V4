@@ -27,12 +27,16 @@ function segmentFallbackPrompt(
 
   return [
     'Realistic construction timelapse, documentary smartphone realism, physically plausible motion.',
-    `Continue only until the construction reaches the canonical ${segment.targetStagePercentage}% stage for this operation.`,
-    `Scene action: ${actions}.`,
-    `Required visible result at the end of this clip: ${evidence}.`,
+    `Use the supplied source frame as the exact canonical ${segment.startStagePercentage}% state for this operation.`,
+    `The source frame represents global construction progress ${segment.startState.constructionProgress}%.`,
+    `Advance continuously from canonical ${segment.startStagePercentage}% to canonical ${segment.targetStagePercentage}% for this operation.`,
+    `Perform the required physical work during this clip: ${actions}.`,
+    `Milestones that must become visibly true by the end of this clip: ${evidence}.`,
     `Target global construction progress: ${segment.targetState.constructionProgress}%.`,
+    'Do not assume any skipped intermediate construction has already happened; perform all physical work needed between the source state and target state on screen.',
     'Keep the same worker identity, terrain geometry, camera orientation, materials, tools, residues and already-built components.',
-    'Show visible physical labor and material handling; no magical construction.',
+    'Show visible physical labor and material handling; no magical construction, teleportation, morphing or unexplained disappearance.',
+    ...segment.forbiddenFutureElements.map(element => `Do not show future element ${element} before its authorized stage.`),
   ].join(' ');
 }
 
@@ -41,10 +45,6 @@ function providerPrompt(
   segment: ConstructionBrainGenerationSegment,
   model: FireflyBridgeModelId,
 ): string {
-  if (model === 'KLING' && segment.prompt.kling?.trim()) {
-    return segment.prompt.kling.trim();
-  }
-
   const base = segmentFallbackPrompt(scene, segment);
   if (model === 'VEO_FAST') {
     return [
@@ -149,6 +149,7 @@ export function buildFireflyExecutionPlan(
         sceneNumber: scene.number,
         segmentId: segment.id,
         segmentIndex: index + 1,
+        startStagePercentage: segment.startStagePercentage,
         targetStagePercentage: segment.targetStagePercentage,
         model: segment.provider,
         durationSeconds: segment.durationSeconds,
@@ -227,6 +228,7 @@ export function validateFireflyExecutionPlan(
 
       if (job.segmentId !== segment.id ||
           job.model !== segment.provider ||
+          job.startStagePercentage !== segment.startStagePercentage ||
           job.targetStagePercentage !== segment.targetStagePercentage) {
         issues.push({
           severity: 'ERROR',
@@ -302,11 +304,12 @@ export function validateFireflyExecutionPlan(
           });
         }
 
-        if (job.targetStagePercentage <= previous.targetStagePercentage) {
+        if (job.startStagePercentage !== previous.targetStagePercentage ||
+            job.targetStagePercentage <= previous.targetStagePercentage) {
           issues.push({
             severity: 'ERROR',
             code: 'FIREFLY_STAGE_REGRESSION',
-            message: `Firefly job ${job.id} does not advance beyond the previous target stage.`,
+            message: `Firefly job ${job.id} does not continue exactly from the previous target stage.`,
             sceneId: scene.id,
           });
         }
