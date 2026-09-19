@@ -10,6 +10,7 @@ import {
 } from './firefly-bridge';
 import { serializeConstructionBrain } from './serializer';
 import { validateConstructionBrain } from './validator';
+import type { ConstructionLearningMemory } from './fiscal-learning';
 
 export interface ConstructionBrainExportFiles {
   'project.json': string;
@@ -33,12 +34,18 @@ export interface ConstructionBrainExportPackage {
 
 export const DEFAULT_LONG_FORM_TARGET_SECONDS = 240;
 
+export interface BuildConstructionBrainExportOptions extends CompileConstructionBrainOptions {
+  learningMemory?: ConstructionLearningMemory;
+}
+
 export function buildConstructionBrainExportPackage(
   project: Project,
-  options: CompileConstructionBrainOptions = {},
+  options: BuildConstructionBrainExportOptions = {},
 ): ConstructionBrainExportPackage {
   const resolvedOptions: CompileConstructionBrainOptions = {
-    ...options,
+    targetDurationSeconds: options.targetDurationSeconds,
+    initialReferenceUri: options.initialReferenceUri,
+    finalReferenceUri: options.finalReferenceUri,
     targetDurationSeconds:
       options.targetDurationSeconds ?? DEFAULT_LONG_FORM_TARGET_SECONDS,
   };
@@ -53,7 +60,9 @@ export function buildConstructionBrainExportPackage(
     throw new Error(`Construction Brain export blocked: ${errors}`);
   }
 
-  const fireflyPlan = buildFireflyExecutionPlan(bundle);
+  const fireflyPlan = buildFireflyExecutionPlan(bundle, {
+    learningMemory: options.learningMemory,
+  });
   const fireflyValidation = validateFireflyExecutionPlan(bundle, fireflyPlan);
 
   if (!fireflyValidation.valid) {
@@ -86,7 +95,7 @@ export function buildConstructionBrainExportPackage(
 
 export function buildFireflyPlanJson(
   project: Project,
-  options: CompileConstructionBrainOptions = {},
+  options: BuildConstructionBrainExportOptions = {},
 ): string {
   return buildConstructionBrainExportPackage(project, options).files['firefly_plan.json'];
 }
@@ -118,7 +127,7 @@ export function downloadTextFile(
 
 export function downloadFireflyPlanJson(
   project: Project,
-  options: CompileConstructionBrainOptions = {},
+  options: BuildConstructionBrainExportOptions = {},
 ): ConstructionBrainExportPackage['summary'] {
   const exported = buildConstructionBrainExportPackage(project, options);
   downloadTextFile('firefly_plan.json', exported.files['firefly_plan.json']);
