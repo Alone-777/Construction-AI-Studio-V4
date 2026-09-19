@@ -35,7 +35,9 @@ describe('Construction Brain export package', () => {
       jobs: Array<{
         model: string;
         durationSeconds: number;
+        targetStagePercentage: number;
         source: { kind: string };
+        continuityLocks: { forbiddenFutureElements: string[] };
       }>;
     };
 
@@ -48,6 +50,11 @@ describe('Construction Brain export package', () => {
           : job.model === 'VEO_FAST' && job.durationSeconds <= 8
       ),
     ).toBe(true);
+    expect(firefly.jobs).toHaveLength(project.scenes.length * 2);
+    for (let index = 0; index < firefly.jobs.length; index += 2) {
+      expect(firefly.jobs[index].targetStagePercentage).toBe(50);
+      expect(firefly.jobs[index + 1].targetStagePercentage).toBe(100);
+    }
   });
 
   it('buildFireflyPlanJson returns the exact exported plan file', () => {
@@ -57,6 +64,32 @@ describe('Construction Brain export package', () => {
     const direct = buildFireflyPlanJson(project);
 
     expect(direct).toBe(packageResult.files['firefly_plan.json']);
+  });
+
+  it('defaults the production export to a four minute 50-to-100 plan', () => {
+    const project = createCabanaDoRiachoProject();
+    const exported = buildConstructionBrainExportPackage(project);
+    const firefly = JSON.parse(exported.files['firefly_plan.json']) as {
+      jobs: Array<{
+        sceneId: string;
+        targetStagePercentage: number;
+        durationSeconds: number;
+        continuityLocks: { forbiddenFutureElements: string[] };
+      }>;
+    };
+
+    expect(exported.summary.targetDurationSeconds).toBe(240);
+    expect(exported.summary.fireflyJobCount).toBe(project.scenes.length * 2);
+    expect(
+      firefly.jobs.reduce((sum, job) => sum + job.durationSeconds, 0),
+    ).toBe(240);
+
+    const doorJobs = firefly.jobs.filter(job => job.sceneId === 'scene_op_porta');
+    expect(doorJobs).toHaveLength(2);
+    expect(doorJobs.map(job => job.targetStagePercentage)).toEqual([50, 100]);
+    expect(
+      doorJobs[1].continuityLocks.forbiddenFutureElements,
+    ).not.toContain('porta_principal');
   });
 
   it('blocks export when the Construction Brain state is invalid', () => {
