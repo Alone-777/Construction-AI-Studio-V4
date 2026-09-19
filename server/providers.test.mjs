@@ -8,6 +8,7 @@ import {
   ProviderResponseError,
   ProviderTimeoutError,
   ProviderUnavailableError,
+  providerTimeoutFromEnv,
 } from './providers/provider-utils.mjs';
 import { VISUAL_ANALYSIS_PROMPT } from './visual-prompt.mjs';
 import {
@@ -169,6 +170,11 @@ describe('Adapters visuais do backend', () => {
     await expect(provider.analyze({ imageData: onePixelPng, mimeType: 'image/png' })).rejects.toMatchObject({
       code: 'MODEL_NOT_AVAILABLE',
     });
+  });
+
+  it('usa 120s por padrão para análises visuais mais pesadas', () => {
+    expect(providerTimeoutFromEnv({})).toBe(120_000);
+    expect(providerTimeoutFromEnv({ VISUAL_PROVIDER_TIMEOUT_MS: '150000' })).toBe(150_000);
   });
 
   it('converte timeout em erro compreensível e seguro', async () => {
