@@ -74,7 +74,7 @@ describe('Construction Brain Firefly bridge', () => {
     });
     expect(jobs[1].terminalRequirement).toBe('SCENE_EXIT');
     expect(jobs[1].targetStagePercentage).toBe(100);
-    expect(jobs[1].prompt).toContain('marco 100%');
+    expect(jobs[1].prompt).toContain('canonical 100% stage');
     expect(jobs[1].exitKeyframeId).toBe(firstScene.keyframes.exit.id);
     expect(jobs[1].acceptanceChecklist).toContain(
       'The terminal frame matches the scene EXIT state.',
