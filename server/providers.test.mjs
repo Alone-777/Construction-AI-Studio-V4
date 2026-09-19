@@ -29,6 +29,44 @@ describe('Adapters visuais do backend', () => {
     expect(JSON.stringify({ id: on.id, name: on.name, kind: on.kind, configured: on.configured })).not.toContain('secret-only-on-server');
   });
 
+  it('Gemini 3.7 não envia parâmetros de amostragem removidos e sanitiza o schema', async () => {
+    const fiscal = {
+      summary: 'Piso em metade e continuidade preservada.',
+      apparentCompletion: { value: 50, classification: 'FACT', confidence: 0.9, evidence: 'Painel final.' },
+      visibleCanonicalFutureElements: { value: [], classification: 'FACT', confidence: 0.9, evidence: 'Nenhum.' },
+      missingVisibleEvidence: { value: [], classification: 'FACT', confidence: 0.9, evidence: 'Nenhuma.' },
+      workerContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Mesmo trabalhador.' },
+      environmentContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Mesmo ambiente.' },
+      geometryContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Mesma geometria.' },
+      sourceContinuity: { value: 'MATCH', classification: 'FACT', confidence: 0.9, evidence: 'Continuidade preservada.' },
+      uncertainties: [],
+    };
+
+    const fetchMock = vi.fn(async (_url, options) => {
+      const body = JSON.parse(String(options?.body));
+      expect(body.generationConfig.temperature).toBeUndefined();
+      const schemaText = JSON.stringify(body.generationConfig.responseFormat.text.schema);
+      expect(schemaText).not.toContain('additionalProperties');
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(fiscal) }] } }],
+      }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new GeminiVisualProvider({
+      GEMINI_API_KEY: 'server-only',
+      GEMINI_MODEL: 'gemini-3.7-flash',
+    });
+    const result = await provider.analyze({
+      imageData: onePixelPng,
+      mimeType: 'image/png',
+      contract: 'construction-fiscal-v1',
+    });
+
+    expect(result.contract).toBe('construction-fiscal-v1');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('mantém OpenAI e Custom como adapters separados e configuráveis', () => {
     expect(new OpenAIVisualProvider({}).configured).toBe(false);
     expect(new OpenAIVisualProvider({ OPENAI_API_KEY: 'server-only' }).configured).toBe(true);
