@@ -2,9 +2,12 @@ import { access, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promis
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { GeminiVisualProvider } from '../server/providers/gemini-visual-provider.mjs';
-import { OpenAIVisualProvider } from '../server/providers/openai-visual-provider.mjs';
-import { CustomVisualProvider } from '../server/providers/custom-visual-provider.mjs';
+import {
+  VisualProviderRouter,
+  createVisualProviders,
+  describeVisualProviders,
+  isTransientProviderCode,
+} from '../server/providers/provider-router.mjs';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_PROGRESS_TOLERANCE = 12;
@@ -239,31 +242,8 @@ export function assessNormalizedVisualAnalysis(job, analysis, options = {}) {
   };
 }
 
-function providersFromEnv(env = process.env) {
-  return [
-    new GeminiVisualProvider(env),
-    new OpenAIVisualProvider(env),
-    new CustomVisualProvider(env),
-  ];
-}
-
 export function visualProviderStatuses(env = process.env) {
-  return providersFromEnv(env).map(provider => ({
-    id: provider.id,
-    name: provider.name,
-    model: provider.model,
-    configured: provider.configured,
-  }));
-}
-
-export function selectConfiguredVisualProvider(providerId, env = process.env) {
-  const providers = providersFromEnv(env);
-  const selected = providerId
-    ? providers.find(provider => provider.id === providerId)
-    : providers.find(provider => provider.configured);
-  if (!selected) return null;
-  if (!selected.configured) return null;
-  return selected;
+  return describeVisualProviders(env);
 }
 
 async function runFfmpeg(args) {
@@ -335,11 +315,7 @@ async function buildTerminalComparisonSheet(videoPath, reviewDir, durationSecond
 }
 
 export function isRetryableProviderError(error) {
-  return [
-    'PROVIDER_TIMEOUT',
-    'PROVIDER_UNAVAILABLE',
-    'RATE_OR_QUOTA_LIMIT',
-  ].includes(String(error?.code || ''));
+  return isTransientProviderCode(error?.code);
 }
 
 async function sleep(ms) {
@@ -348,21 +324,11 @@ async function sleep(ms) {
 }
 
 async function analyzeFiscalImageWithFallback(
-  provider,
+  router,
   imagePath,
   userContext,
   options = {},
 ) {
-  const analyzePath = async candidatePath => {
-    const bytes = await readFile(candidatePath);
-    return provider.analyze({
-      imageData: 'data:image/png;base64,' + bytes.toString('base64'),
-      mimeType: 'image/png',
-      userContext,
-      contract: 'construction-fiscal-v1',
-    });
-  };
-
   const compactPath = options.compactPath ??
     imagePath.replace(/\.png$/i, '-compact.png');
   let compactReady = false;
@@ -386,24 +352,36 @@ async function analyzeFiscalImageWithFallback(
       await sleep(TRANSIENT_PROVIDER_RETRY_DELAYS_MS[attempt]);
     }
 
-    const originalTimeout = provider.timeoutMs;
-    if (typeof provider.timeoutMs === 'number' && useCompact) {
-      provider.timeoutMs = Math.max(provider.timeoutMs, 150_000);
-    }
-
     try {
+      const bytes = await readFile(candidatePath);
+      const routed = await router.analyze({
+        imageData: 'data:image/png;base64,' + bytes.toString('base64'),
+        mimeType: 'image/png',
+        userContext,
+        contract: 'construction-fiscal-v1',
+      }, {
+        preferredProviderId: options.preferredProviderId,
+        deprioritizeProviderIds: options.deprioritizeProviderIds ?? [],
+        useCache: options.useCache !== false,
+        minimumTimeoutMs: useCompact ? 150_000 : undefined,
+      });
       return {
-        analysis: await analyzePath(candidatePath),
+        ...routed,
         imagePath: candidatePath,
         usedCompactRetry: useCompact,
-        providerAttempts: attempt + 1,
+        providerAttempts: routed.routeTrace.filter(entry =>
+          ['FAILED', 'SUCCESS', 'CACHE_HIT'].includes(entry.status)
+        ).length,
+        providerRetryRound: attempt + 1,
       };
     } catch (error) {
       lastError = error;
-      if (!isRetryableProviderError(error)) throw error;
-      if (attempt === TRANSIENT_PROVIDER_RETRY_DELAYS_MS.length - 1) throw error;
-    } finally {
-      if (typeof originalTimeout === 'number') provider.timeoutMs = originalTimeout;
+      if (error?.code !== 'ALL_VISUAL_PROVIDERS_FAILED' || !error?.retryable) {
+        throw error;
+      }
+      if (attempt === TRANSIENT_PROVIDER_RETRY_DELAYS_MS.length - 1) {
+        throw error;
+      }
     }
   }
 
@@ -412,6 +390,7 @@ async function analyzeFiscalImageWithFallback(
 
 function providerReviewBlocker(error) {
   const code = String(error?.code || '');
+  if (code === 'ALL_VISUAL_PROVIDERS_FAILED') return 'VISUAL_PROVIDER_ROUTER_EXHAUSTED';
   if (code === 'PROVIDER_TIMEOUT') return 'PROVIDER_TIMEOUT';
   if (code === 'RATE_OR_QUOTA_LIMIT') return 'PROVIDER_RATE_OR_QUOTA_LIMIT';
   if (code === 'QUOTA_EXCEEDED') return 'PROVIDER_QUOTA_EXCEEDED';
@@ -420,6 +399,26 @@ function providerReviewBlocker(error) {
   if (code === 'INVALID_API_KEY') return 'INVALID_API_KEY';
   if (code === 'INVALID_PROVIDER_RESPONSE') return 'INVALID_PROVIDER_RESPONSE';
   return null;
+}
+
+function providerRouteBlockers(error) {
+  const blockers = [];
+  const primary = providerReviewBlocker(error);
+  if (primary) blockers.push(primary);
+  for (const entry of error?.routeTrace ?? []) {
+    if (entry.status !== 'FAILED' || !entry.errorCode) continue;
+    const mapped = providerReviewBlocker({ code: entry.errorCode });
+    if (mapped) blockers.push(mapped);
+  }
+  return unique(blockers);
+}
+
+function createReviewRouter(workspace) {
+  return new VisualProviderRouter({
+    providers: createVisualProviders(),
+    stateDir: path.join(workspace, '.provider-router'),
+    allowPaidFallback: false,
+  });
 }
 
 async function extractLastFrame(videoPath, outputPath) {
@@ -550,48 +549,44 @@ export async function effectivePromptForFireflyJob(workspacePath, jobId) {
 export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   const loaded = await loadWorkspaceJob(workspacePath, jobId);
   const videoPath = path.join(loaded.workspace, loaded.item.videoOutput);
-  if (!(await exists(videoPath))) throw new Error('Cannot review job: video output is missing at ' + loaded.item.videoOutput);
+  if (!(await exists(videoPath))) {
+    throw new Error('Cannot review job: video output is missing at ' + loaded.item.videoOutput);
+  }
 
   const attempt = Math.max(1, Number(loaded.state.attempts ?? 0) || 1);
-  const reviewDir = path.join(loaded.jobDir, 'review', 'attempt-' + String(attempt).padStart(3, '0'));
-  const contact = await buildVideoContactSheet(videoPath, reviewDir, loaded.item.durationSeconds);
-  const provider = selectConfiguredVisualProvider(providerId);
-
-  if (!provider) {
-    const result = {
-      verdict: 'REOBSERVE',
-      jobId,
-      blockers: ['VISUAL_PROVIDER_UNAVAILABLE'],
-      contactSheet: path.relative(loaded.workspace, contact.contactSheet),
-    };
-    await writeJson(path.join(reviewDir, 'assessment.json'), result);
-    await writeJson(loaded.statePath, {
-      ...loaded.state,
-      status: 'REVIEW_REQUIRED',
-      attempts: attempt,
-      lastReview: result,
-      notes: unique([...(loaded.state.notes ?? []), 'Visual provider is not configured.']),
-    });
-    return result;
-  }
+  const reviewDir = path.join(
+    loaded.jobDir,
+    'review',
+    'attempt-' + String(attempt).padStart(3, '0'),
+  );
+  const contact = await buildVideoContactSheet(
+    videoPath,
+    reviewDir,
+    loaded.item.durationSeconds,
+  );
+  const router = createReviewRouter(loaded.workspace);
 
   let firstReview;
   try {
     firstReview = await analyzeFiscalImageWithFallback(
-      provider,
+      router,
       contact.contactSheet,
       buildFireflyReviewContext(loaded.job),
-      { compactPath: path.join(reviewDir, 'contact-sheet-compact.png') },
+      {
+        compactPath: path.join(reviewDir, 'contact-sheet-compact.png'),
+        preferredProviderId: providerId,
+      },
     );
   } catch (error) {
-    const blocker = providerReviewBlocker(error);
-    if (!blocker) throw error;
+    const blockers = providerRouteBlockers(error);
+    if (!blockers.length) throw error;
 
     const result = {
       verdict: 'REOBSERVE',
       jobId,
-      providerId: provider.id,
-      blockers: [blocker],
+      providerId: providerId || null,
+      blockers,
+      providerRoute: error?.routeTrace ?? [],
       contactSheet: path.relative(loaded.workspace, contact.contactSheet),
     };
     await writeJson(path.join(reviewDir, 'assessment.json'), result);
@@ -613,10 +608,17 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   const assessment = assessNormalizedVisualAnalysis(loaded.job, analysis);
   const assessmentWithProvider = {
     ...assessment,
-    providerId: provider.id,
+    providerId: firstReview.providerId,
+    providerModel: firstReview.model,
+    providerBillingClass: firstReview.billingClass,
+    providerTrustedByDefault: firstReview.trustedByDefault,
+    providerHealthScore: firstReview.healthScore,
+    providerRoute: firstReview.routeTrace,
+    providerCacheHit: firstReview.cacheHit,
     contactSheet: path.relative(loaded.workspace, firstReview.imagePath),
     compactRetryUsed: firstReview.usedCompactRetry,
     providerAttempts: firstReview.providerAttempts,
+    providerRetryRound: firstReview.providerRetryRound,
   };
   await writeJson(path.join(reviewDir, 'assessment.json'), assessmentWithProvider);
 
@@ -627,6 +629,7 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
       ...loaded.state,
       status: 'REVIEW_REQUIRED',
       attempts: attempt,
+      completedAt: null,
       lastReview: assessmentWithProvider,
     });
     return assessmentWithProvider;
@@ -661,25 +664,32 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   let verificationReview;
   try {
     verificationReview = await analyzeFiscalImageWithFallback(
-      provider,
+      router,
       verificationSheet,
       buildFireflyReviewContext(loaded.job) +
         ' SECOND INDEPENDENT VERIFICATION. The image now contains only START on the LEFT and END on the RIGHT. ' +
         'Re-estimate completion from scratch. Focus on how much of the final visible operation result remains unfinished. ' +
         'Do not assume the previous review was correct.',
-      { compactPath: path.join(reviewDir, 'terminal-verification-compact.png') },
+      {
+        compactPath: path.join(reviewDir, 'terminal-verification-compact.png'),
+        preferredProviderId: providerId,
+        deprioritizeProviderIds: [firstReview.providerId],
+      },
     );
   } catch (error) {
-    const blocker = providerReviewBlocker(error);
-    if (!blocker) throw error;
+    const blockers = unique([
+      ...providerRouteBlockers(error),
+      'SECOND_VERIFICATION_UNAVAILABLE',
+    ]);
 
     const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
     await invalidateDownstream(loaded.workspace, queue, jobId);
     const result = {
       verdict: 'REOBSERVE',
       jobId,
-      providerId: provider.id,
-      blockers: [blocker, 'SECOND_VERIFICATION_UNAVAILABLE'],
+      providerId: firstReview.providerId,
+      blockers,
+      providerRoute: error?.routeTrace ?? [],
       firstObservedStagePercentage: assessment.observedStagePercentage,
       verification: true,
     };
@@ -695,14 +705,21 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   }
 
   const verificationAnalysis = verificationReview.analysis;
-  await writeJson(path.join(reviewDir, 'verification-analysis.json'), verificationAnalysis);
-  const verification = assessNormalizedVisualAnalysis(loaded.job, verificationAnalysis);
+  await writeJson(
+    path.join(reviewDir, 'verification-analysis.json'),
+    verificationAnalysis,
+  );
+  const verification = assessNormalizedVisualAnalysis(
+    loaded.job,
+    verificationAnalysis,
+  );
 
   const firstObserved = assessment.observedStagePercentage;
   const secondObserved = verification.observedStagePercentage;
-  const disagreement = typeof firstObserved === 'number' && typeof secondObserved === 'number'
-    ? Math.abs(firstObserved - secondObserved)
-    : Number.POSITIVE_INFINITY;
+  const disagreement =
+    typeof firstObserved === 'number' && typeof secondObserved === 'number'
+      ? Math.abs(firstObserved - secondObserved)
+      : Number.POSITIVE_INFINITY;
 
   if (verification.verdict !== 'PASS' || disagreement > 12) {
     const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
@@ -711,16 +728,28 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     if (verification.verdict === 'RETRY') {
       const memory = await loadLearningMemory(loaded.workspace);
       const retryPrompt = composeRetryPrompt(loaded.job, verification, memory);
-      await writeFile(path.join(loaded.jobDir, 'retry-prompt.txt'), retryPrompt + '\n', 'utf8');
+      await writeFile(
+        path.join(loaded.jobDir, 'retry-prompt.txt'),
+        retryPrompt + '\n',
+        'utf8',
+      );
       const result = {
         ...verification,
-        providerId: provider.id,
+        providerId: verificationReview.providerId,
+        providerModel: verificationReview.model,
+        providerHealthScore: verificationReview.healthScore,
+        providerRoute: verificationReview.routeTrace,
+        providerCacheHit: verificationReview.cacheHit,
         verification: true,
+        firstProviderId: firstReview.providerId,
         firstObservedStagePercentage: firstObserved,
         disagreement,
         retryPrompt,
       };
-      await writeJson(path.join(reviewDir, 'verification-assessment.json'), result);
+      await writeJson(
+        path.join(reviewDir, 'verification-assessment.json'),
+        result,
+      );
       await writeJson(loaded.statePath, {
         ...loaded.state,
         status: 'RETRY_REQUIRED',
@@ -739,17 +768,25 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     const result = {
       verdict: 'REOBSERVE',
       jobId,
-      providerId: provider.id,
+      providerId: verificationReview.providerId,
+      providerModel: verificationReview.model,
+      providerHealthScore: verificationReview.healthScore,
+      providerRoute: verificationReview.routeTrace,
+      providerCacheHit: verificationReview.cacheHit,
       blockers: unique([
         ...(verification.blockers ?? []),
         ...(disagreement > 12 ? ['PROGRESS_ESTIMATES_DISAGREE'] : []),
       ]),
+      firstProviderId: firstReview.providerId,
       firstObservedStagePercentage: firstObserved,
       secondObservedStagePercentage: secondObserved,
       disagreement,
       verification: true,
     };
-    await writeJson(path.join(reviewDir, 'verification-assessment.json'), result);
+    await writeJson(
+      path.join(reviewDir, 'verification-assessment.json'),
+      result,
+    );
     await writeJson(loaded.statePath, {
       ...loaded.state,
       status: 'REVIEW_REQUIRED',
@@ -760,19 +797,34 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     return result;
   }
 
-  const lastFramePath = path.join(loaded.workspace, loaded.item.lastFrameOutput);
+  const lastFramePath = path.join(
+    loaded.workspace,
+    loaded.item.lastFrameOutput,
+  );
   await extractLastFrame(videoPath, lastFramePath);
-  await persistSuccessfulLearning(loaded.workspace, loaded.state.pendingLearning);
+  await persistSuccessfulLearning(
+    loaded.workspace,
+    loaded.state.pendingLearning,
+  );
   const confirmed = {
     ...assessmentWithProvider,
     verification: {
       verdict: verification.verdict,
+      providerId: verificationReview.providerId,
+      providerModel: verificationReview.model,
+      providerHealthScore: verificationReview.healthScore,
+      providerTrustedByDefault: verificationReview.trustedByDefault,
+      providerCacheHit: verificationReview.cacheHit,
+      providerRoute: verificationReview.routeTrace,
       observedStagePercentage: verification.observedStagePercentage,
       confidence: verification.confidence,
       disagreement,
     },
   };
-  await writeJson(path.join(reviewDir, 'verification-assessment.json'), confirmed.verification);
+  await writeJson(
+    path.join(reviewDir, 'verification-assessment.json'),
+    confirmed.verification,
+  );
   await writeJson(loaded.statePath, {
     ...loaded.state,
     status: 'COMPLETE',

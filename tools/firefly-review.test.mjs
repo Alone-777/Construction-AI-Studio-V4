@@ -4,6 +4,7 @@ import {
   buildFireflyReviewContext,
   isRetryableProviderError,
   resolveOperationType,
+  visualProviderStatuses,
 } from './firefly-review.mjs';
 
 function job(overrides = {}) {
@@ -60,9 +61,33 @@ describe('Firefly review transient provider policy', () => {
     expect(isRetryableProviderError({ code: 'PROVIDER_TIMEOUT' })).toBe(true);
     expect(isRetryableProviderError({ code: 'PROVIDER_UNAVAILABLE' })).toBe(true);
     expect(isRetryableProviderError({ code: 'RATE_OR_QUOTA_LIMIT' })).toBe(true);
+    expect(isRetryableProviderError({ code: 'QUOTA_EXCEEDED' })).toBe(true);
     expect(isRetryableProviderError({ code: 'INVALID_API_KEY' })).toBe(false);
     expect(isRetryableProviderError({ code: 'MODEL_NOT_AVAILABLE' })).toBe(false);
     expect(isRetryableProviderError({ code: 'INVALID_PROVIDER_RESPONSE' })).toBe(false);
+  });
+
+  it('never marks Gemini as trusted by default and keeps paid fallback opt-in', () => {
+    const statuses = visualProviderStatuses({
+      GEMINI_API_KEY: 'configured-without-printing',
+      OPENAI_API_KEY: 'configured-without-printing',
+    });
+    const gemini = statuses.find(item => item.id === 'gemini');
+    const openai = statuses.find(item => item.id === 'openai');
+
+    expect(gemini).toMatchObject({
+      configured: true,
+      billingClass: 'free_or_quota',
+      trustedByDefault: false,
+      automaticFallback: true,
+    });
+    expect(openai).toMatchObject({
+      configured: true,
+      billingClass: 'paid',
+      trustedByDefault: false,
+      automaticFallback: false,
+    });
+    expect(JSON.stringify(statuses)).not.toContain('configured-without-printing');
   });
 });
 
