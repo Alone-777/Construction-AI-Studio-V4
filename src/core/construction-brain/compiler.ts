@@ -1,4 +1,4 @@
-import type { Project, Scene, Stage, WorldState } from '../types';
+import type { Project, Scene, Stage, StagePercentage, WorldState } from '../types';
 import {
   CONSTRUCTION_BRAIN_SCHEMA_VERSION,
   type ConstructionBrainBundle,
@@ -44,31 +44,6 @@ function topologicalComponentOrder(project: Project): string[] {
 
 function chooseProvider(durationSeconds: number): ConstructionBrainProviderId {
   return durationSeconds <= PROVIDER_LIMITS.VEO_FAST ? 'VEO_FAST' : 'KLING';
-}
-
-function splitSceneForGeneration(scene: Scene): ConstructionBrainGenerationSegment[] {
-  const segments: ConstructionBrainGenerationSegment[] = [];
-  let remaining = scene.duration;
-  let index = 1;
-
-  while (remaining > 0) {
-    const provider = chooseProvider(remaining);
-    const maxProviderSeconds = PROVIDER_LIMITS[provider];
-    const durationSeconds = Math.min(remaining, maxProviderSeconds);
-
-    segments.push({
-      id: `${scene.id}:segment:${index}`,
-      provider,
-      durationSeconds,
-      maxProviderSeconds,
-      sourceSceneId: scene.id,
-    });
-
-    remaining = Number((remaining - durationSeconds).toFixed(3));
-    index += 1;
-  }
-
-  return segments;
 }
 
 function stageAction(stage: Stage): string[] {
@@ -131,15 +106,122 @@ function digestWorldState(state: WorldState): ConstructionBrainStateDigest {
   };
 }
 
+function activeStages(scene: Scene): Stage[] {
+  return scene.stages
+    .filter(stage => stage.status !== 'rejected')
+    .sort((a, b) => a.percentage - b.percentage);
+}
+
 function stateAtSceneEntry(scene: Scene, project: Project): WorldState {
-  const activeStages = scene.stages.filter(stage => stage.status !== 'rejected');
-  return activeStages.find(stage => stage.worldStateBefore)?.worldStateBefore ?? project.worldState;
+  return activeStages(scene).find(stage => stage.worldStateBefore)?.worldStateBefore ?? project.worldState;
 }
 
 function stateAtSceneExit(scene: Scene, project: Project): WorldState {
-  const activeStages = scene.stages.filter(stage => stage.status !== 'rejected');
-  return [...activeStages].reverse().find(stage => stage.worldStateAfter)?.worldStateAfter ??
+  return [...activeStages(scene)].reverse().find(stage => stage.worldStateAfter)?.worldStateAfter ??
     stateAtSceneEntry(scene, project);
+}
+
+function stageStateAfter(stage: Stage, fallback: WorldState): WorldState {
+  return stage.worldStateAfter ?? stage.worldStateBefore ?? fallback;
+}
+
+function selectTargetStage(stages: Stage[], segmentIndex: number, segmentCount: number): Stage {
+  if (stages.length === 0) {
+    throw new Error('Cannot compile a generation segment without active stages.');
+  }
+
+  const positiveStages = stages.filter(stage => stage.percentage > 0);
+  const candidates = positiveStages.length > 0 ? positiveStages : stages;
+  const desired = (segmentIndex / segmentCount) * 100;
+
+  return candidates.reduce((best, stage) => {
+    const bestDistance = Math.abs(best.percentage - desired);
+    const stageDistance = Math.abs(stage.percentage - desired);
+    if (stageDistance < bestDistance) return stage;
+    if (stageDistance === bestDistance && stage.percentage > best.percentage) return stage;
+    return best;
+  }, candidates[0]);
+}
+
+function forbiddenAfterStage(stage: Stage, targetState: WorldState): string[] {
+  const completedOrPartialElements = new Set([
+    ...(stage.physicalState?.completedElements ?? []),
+    ...(stage.physicalState?.partialElements ?? []),
+  ]);
+  const visibleComponents = new Set([
+    ...targetState.existingComponents,
+    ...targetState.partialComponents,
+  ]);
+
+  return unique([
+    ...targetState.futureComponents,
+    ...(stage.physicalActionIR?.constraints.forbiddenFutureComponents ?? []),
+    ...(stage.physicalActionIR?.constraints.preventPrematureElements ?? []),
+  ]).filter(item =>
+    !completedOrPartialElements.has(item) &&
+    !visibleComponents.has(item)
+  );
+}
+
+function splitDurations(totalSeconds: number): Array<{
+  provider: ConstructionBrainProviderId;
+  durationSeconds: number;
+  maxProviderSeconds: number;
+}> {
+  const segments: Array<{
+    provider: ConstructionBrainProviderId;
+    durationSeconds: number;
+    maxProviderSeconds: number;
+  }> = [];
+  let remaining = totalSeconds;
+
+  while (remaining > 0.0001) {
+    const provider = chooseProvider(remaining);
+    const maxProviderSeconds = PROVIDER_LIMITS[provider];
+    const durationSeconds = Math.min(remaining, maxProviderSeconds);
+
+    segments.push({
+      provider,
+      durationSeconds: Number(durationSeconds.toFixed(3)),
+      maxProviderSeconds,
+    });
+
+    remaining = Number((remaining - durationSeconds).toFixed(3));
+  }
+
+  return segments;
+}
+
+function buildGenerationSegments(
+  scene: Scene,
+  plannedDurationSeconds: number,
+  project: Project,
+): ConstructionBrainGenerationSegment[] {
+  const stages = activeStages(scene);
+  const fallbackExit = stateAtSceneExit(scene, project);
+  const durations = splitDurations(plannedDurationSeconds);
+
+  return durations.map((duration, index) => {
+    const targetStage = selectTargetStage(stages, index + 1, durations.length);
+    const targetState = stageStateAfter(targetStage, fallbackExit);
+
+    return {
+      id: `${scene.id}:segment:${index + 1}`,
+      provider: duration.provider,
+      durationSeconds: duration.durationSeconds,
+      maxProviderSeconds: duration.maxProviderSeconds,
+      sourceSceneId: scene.id,
+      targetStagePercentage: targetStage.percentage,
+      targetState: digestWorldState(targetState),
+      actionRequirements: unique(stageAction(targetStage)),
+      executionEvidence: unique(stageEvidence(targetStage)),
+      forbiddenFutureElements: forbiddenAfterStage(targetStage, targetState),
+      prompt: {
+        kling: targetStage.prompts?.kling,
+        image: targetStage.prompts?.nanoBanana,
+      },
+    };
+  });
 }
 
 function buildReferencePlan(
@@ -197,7 +279,7 @@ function buildKeyframeSpec(
   sceneIndex: number,
   scenes: Scene[],
   expectedState: WorldState,
-  activeStages: Stage[],
+  activeSceneStages: Stage[],
   forbiddenFutureElements: string[],
   preservedZones: string[],
   evidence: string[],
@@ -221,7 +303,7 @@ function buildKeyframeSpec(
     },
     requiredVisibleEvidence: kind === 'EXIT'
       ? [...evidence]
-      : unique(activeStages.flatMap(stage => stage.physicalActionIR?.preconditions ?? [])),
+      : unique(activeSceneStages.flatMap(stage => stage.physicalActionIR?.preconditions ?? [])),
     approvalChecklist: buildApprovalChecklist(
       kind,
       digest,
@@ -237,25 +319,25 @@ function compileScene(
   scenes: Scene[],
   project: Project,
   options: CompileConstructionBrainOptions,
+  plannedDurationSeconds: number,
 ): ConstructionBrainSceneArtifact {
-  const activeStages = scene.stages.filter(stage => stage.status !== 'rejected');
-  const forbiddenFutureElements = unique(activeStages.flatMap(stage => [
-    ...stage.futureElements,
-    ...(stage.physicalActionIR?.constraints.forbiddenFutureComponents ?? []),
-    ...(stage.physicalActionIR?.constraints.preventPrematureElements ?? []),
-  ]));
-  const preservedZones = unique(activeStages.flatMap(stage => stage.preservedZones));
-  const evidence = unique(activeStages.flatMap(stageEvidence));
+  const stages = activeStages(scene);
+  const preservedZones = unique(stages.flatMap(stage => stage.preservedZones));
+  const evidence = unique(stages.flatMap(stageEvidence));
   const entryState = stateAtSceneEntry(scene, project);
   const exitState = stateAtSceneExit(scene, project);
+  const finalStage = stages[stages.length - 1];
+  const forbiddenFutureElements = finalStage
+    ? forbiddenAfterStage(finalStage, exitState)
+    : [...exitState.futureComponents];
 
   return {
     id: scene.id,
     number: scene.number,
     operationId: scene.operationId,
-    durationSeconds: scene.duration,
-    generationSegments: splitSceneForGeneration(scene),
-    actionRequirements: unique(activeStages.flatMap(stageAction)),
+    durationSeconds: plannedDurationSeconds,
+    generationSegments: buildGenerationSegments(scene, plannedDurationSeconds, project),
+    actionRequirements: unique(stages.flatMap(stageAction)),
     executionEvidence: evidence,
     forbiddenFutureElements,
     preservedZones,
@@ -266,7 +348,7 @@ function compileScene(
         sceneIndex,
         scenes,
         entryState,
-        activeStages,
+        stages,
         forbiddenFutureElements,
         preservedZones,
         evidence,
@@ -278,7 +360,7 @@ function compileScene(
         sceneIndex,
         scenes,
         exitState,
-        activeStages,
+        stages,
         forbiddenFutureElements,
         preservedZones,
         evidence,
@@ -286,16 +368,41 @@ function compileScene(
       ),
     },
     prompts: {
-      kling: [...activeStages]
-        .reverse()
-        .find(stage => !!stage.prompts?.kling)
-        ?.prompts?.kling,
-      image: [...activeStages]
-        .reverse()
-        .find(stage => !!stage.prompts?.nanoBanana)
-        ?.prompts?.nanoBanana,
+      kling: finalStage?.prompts?.kling,
+      image: finalStage?.prompts?.nanoBanana,
     },
   };
+}
+
+function plannedSceneDurations(scenes: Scene[], targetDurationSeconds: number): number[] {
+  if (scenes.length === 0) return [];
+
+  const baseTotal = scenes.reduce((sum, scene) => sum + Math.max(scene.duration, 0), 0);
+  if (baseTotal <= 0) {
+    return scenes.map((_, index) =>
+      index === scenes.length - 1
+        ? Number((targetDurationSeconds - (scenes.length - 1) * (targetDurationSeconds / scenes.length)).toFixed(3))
+        : Number((targetDurationSeconds / scenes.length).toFixed(3))
+    );
+  }
+
+  const result: number[] = [];
+  let allocated = 0;
+
+  scenes.forEach((scene, index) => {
+    if (index === scenes.length - 1) {
+      result.push(Number((targetDurationSeconds - allocated).toFixed(3)));
+      return;
+    }
+
+    const duration = Number(
+      ((Math.max(scene.duration, 0) / baseTotal) * targetDurationSeconds).toFixed(3),
+    );
+    result.push(duration);
+    allocated += duration;
+  });
+
+  return result;
 }
 
 export interface CompileConstructionBrainOptions {
@@ -308,6 +415,13 @@ export function compileConstructionBrain(
   project: Project,
   options: CompileConstructionBrainOptions = {},
 ): ConstructionBrainBundle {
+  const targetDurationSeconds =
+    options.targetDurationSeconds ??
+    project.config?.totalDuration ??
+    project.scenes.reduce((sum, scene) => sum + Math.max(scene.duration, 0), 0) ??
+    180;
+  const sceneDurations = plannedSceneDurations(project.scenes, targetDurationSeconds);
+
   const snapshots = project.scenes.flatMap(scene =>
     scene.stages
       .filter(stage => stage.worldStateBefore || stage.worldStateAfter)
@@ -331,7 +445,7 @@ export function compileConstructionBrain(
         aspectRatio: '16:9',
         width: 1920,
         height: 1080,
-        targetDurationSeconds: options.targetDurationSeconds ?? project.config?.totalDuration ?? 180,
+        targetDurationSeconds,
       },
       providers: {
         KLING: {
@@ -387,7 +501,14 @@ export function compileConstructionBrain(
       schemaVersion: CONSTRUCTION_BRAIN_SCHEMA_VERSION,
       projectId: project.id,
       scenes: project.scenes.map((scene, index) =>
-        compileScene(scene, index, project.scenes, project, options)
+        compileScene(
+          scene,
+          index,
+          project.scenes,
+          project,
+          options,
+          sceneDurations[index] ?? scene.duration,
+        )
       ),
     },
   };
