@@ -31,11 +31,18 @@ export interface ConstructionBrainExportPackage {
   };
 }
 
+export const DEFAULT_LONG_FORM_TARGET_SECONDS = 240;
+
 export function buildConstructionBrainExportPackage(
   project: Project,
   options: CompileConstructionBrainOptions = {},
 ): ConstructionBrainExportPackage {
-  const bundle = compileConstructionBrain(project, options);
+  const resolvedOptions: CompileConstructionBrainOptions = {
+    ...options,
+    targetDurationSeconds:
+      options.targetDurationSeconds ?? DEFAULT_LONG_FORM_TARGET_SECONDS,
+  };
+  const bundle = compileConstructionBrain(project, resolvedOptions);
   const brainValidation = validateConstructionBrain(bundle);
 
   if (!brainValidation.valid) {
