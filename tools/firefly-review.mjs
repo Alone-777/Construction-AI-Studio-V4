@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_PROGRESS_TOLERANCE = 12;
 const MIN_PROGRESS_CONFIDENCE = 0.55;
 const MIN_AUTOPASS_CONFIDENCE = 0.85;
+const TRANSIENT_PROVIDER_RETRY_DELAYS_MS = [0, 3000, 8000];
 
 async function exists(filePath) {
   try { await access(filePath); return true; } catch { return false; }
@@ -333,6 +334,19 @@ async function buildTerminalComparisonSheet(videoPath, reviewDir, durationSecond
   return comparison;
 }
 
+export function isRetryableProviderError(error) {
+  return [
+    'PROVIDER_TIMEOUT',
+    'PROVIDER_UNAVAILABLE',
+    'RATE_OR_QUOTA_LIMIT',
+  ].includes(String(error?.code || ''));
+}
+
+async function sleep(ms) {
+  if (ms <= 0) return;
+  await new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function analyzeFiscalImageWithFallback(
   provider,
   imagePath,
@@ -349,40 +363,51 @@ async function analyzeFiscalImageWithFallback(
     });
   };
 
-  try {
-    return {
-      analysis: await analyzePath(imagePath),
-      imagePath,
-      usedCompactRetry: false,
-    };
-  } catch (error) {
-    if (error?.code !== 'PROVIDER_TIMEOUT') throw error;
+  const compactPath = options.compactPath ??
+    imagePath.replace(/\.png$/i, '-compact.png');
+  let compactReady = false;
+  let lastError;
 
-    const compactPath = options.compactPath ??
-      imagePath.replace(/\.png$/i, '-compact.png');
+  for (let attempt = 0; attempt < TRANSIENT_PROVIDER_RETRY_DELAYS_MS.length; attempt += 1) {
+    const useCompact = attempt > 0;
+    const candidatePath = useCompact ? compactPath : imagePath;
 
-    await runFfmpeg([
-      '-y', '-i', imagePath,
-      '-vf', 'scale=1280:-2:flags=lanczos',
-      '-frames:v', '1',
-      compactPath,
-    ]);
+    if (useCompact && !compactReady) {
+      await runFfmpeg([
+        '-y', '-i', imagePath,
+        '-vf', 'scale=1280:-2:flags=lanczos',
+        '-frames:v', '1',
+        compactPath,
+      ]);
+      compactReady = true;
+    }
+
+    if (attempt > 0) {
+      await sleep(TRANSIENT_PROVIDER_RETRY_DELAYS_MS[attempt]);
+    }
 
     const originalTimeout = provider.timeoutMs;
-    if (typeof provider.timeoutMs === 'number') {
+    if (typeof provider.timeoutMs === 'number' && useCompact) {
       provider.timeoutMs = Math.max(provider.timeoutMs, 150_000);
     }
 
     try {
       return {
-        analysis: await analyzePath(compactPath),
-        imagePath: compactPath,
-        usedCompactRetry: true,
+        analysis: await analyzePath(candidatePath),
+        imagePath: candidatePath,
+        usedCompactRetry: useCompact,
+        providerAttempts: attempt + 1,
       };
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableProviderError(error)) throw error;
+      if (attempt === TRANSIENT_PROVIDER_RETRY_DELAYS_MS.length - 1) throw error;
     } finally {
       if (typeof originalTimeout === 'number') provider.timeoutMs = originalTimeout;
     }
   }
+
+  throw lastError;
 }
 
 function providerReviewBlocker(error) {
@@ -591,6 +616,7 @@ export async function reviewFireflyJob(workspacePath, jobId, providerId) {
     providerId: provider.id,
     contactSheet: path.relative(loaded.workspace, firstReview.imagePath),
     compactRetryUsed: firstReview.usedCompactRetry,
+    providerAttempts: firstReview.providerAttempts,
   };
   await writeJson(path.join(reviewDir, 'assessment.json'), assessmentWithProvider);
 
