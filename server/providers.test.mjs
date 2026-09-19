@@ -45,7 +45,9 @@ describe('Adapters visuais do backend', () => {
     const fetchMock = vi.fn(async (_url, options) => {
       const body = JSON.parse(String(options?.body));
       expect(body.generationConfig.temperature).toBeUndefined();
-      const schemaText = JSON.stringify(body.generationConfig.responseFormat.text.schema);
+      expect(body.generationConfig.responseFormat).toBeUndefined();
+      expect(body.generationConfig.responseMimeType).toBe('application/json');
+      const schemaText = JSON.stringify(body.generationConfig.responseJsonSchema);
       expect(schemaText).not.toContain('additionalProperties');
       return new Response(JSON.stringify({
         candidates: [{ content: { parts: [{ text: JSON.stringify(fiscal) }] } }],
