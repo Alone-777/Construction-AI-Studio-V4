@@ -132,17 +132,16 @@ export function buildFireflyExecutionPlan(
   bundle: ConstructionBrainBundle,
 ): FireflyExecutionPlan {
   const jobs: FireflyExecutionJob[] = [];
+  let previousGlobalJobId: string | undefined;
 
   for (const scene of bundle.scenes.scenes) {
-    let previousJobId: string | undefined;
-
     scene.generationSegments.forEach((segment, index) => {
       const isLast = index === scene.generationSegments.length - 1;
       const jobId = `firefly:${scene.id}:${segment.id}`;
-      const source = previousJobId
+      const source = previousGlobalJobId
         ? {
-            kind: 'PREVIOUS_SEGMENT_LAST_FRAME' as const,
-            previousJobId,
+            kind: 'PREVIOUS_JOB_LAST_FRAME' as const,
+            previousJobId: previousGlobalJobId,
           }
         : {
             kind: 'KEYFRAME' as const,
@@ -172,7 +171,7 @@ export function buildFireflyExecutionPlan(
         terminalRequirement: isLast ? 'SCENE_EXIT' : 'INTERMEDIATE_CONTINUATION',
         entryKeyframeId: scene.keyframes.entry.id,
         exitKeyframeId: scene.keyframes.exit.id,
-        prompt: providerPrompt(scene, segment, segment.provider),
+        prompt: segmentPrompt(bundle, scene, segment, segment.provider),
         negativeConstraints: negativeConstraints(segment),
         continuityLocks: segmentContinuityLocks(scene, segment),
         acceptanceChecklist: segmentChecklist(scene, segment, isLast),
@@ -183,7 +182,7 @@ export function buildFireflyExecutionPlan(
         status: 'READY',
       });
 
-      previousJobId = jobId;
+      previousGlobalJobId = jobId;
     });
   }
 
