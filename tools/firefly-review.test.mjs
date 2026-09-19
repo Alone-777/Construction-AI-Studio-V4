@@ -105,6 +105,17 @@ describe('Firefly review runtime', () => {
     }));
   });
 
+  it('does not auto-pass a moderate-confidence result near the target', () => {
+    const result = assessNormalizedVisualAnalysis(job(), fiscalAnalysis(52));
+    result.confidence = 0.72;
+    const lowConfidence = assessNormalizedVisualAnalysis(job(), {
+      ...fiscalAnalysis(52),
+      apparentCompletion: claim(52, 'FACT', 0.72),
+    });
+    expect(lowConfidence.verdict).toBe('REOBSERVE');
+    expect(lowConfidence.blockers).toContain('AUTOPASS_CONFIDENCE_TOO_LOW');
+  });
+
   it('builds provider context around the current operation rather than global completion', () => {
     const context = buildFireflyReviewContext(job());
     expect(context).toContain('Current operation type: piso');
