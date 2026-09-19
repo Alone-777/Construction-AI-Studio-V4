@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assessNormalizedVisualAnalysis,
   buildFireflyReviewContext,
+  isRetryableProviderError,
   resolveOperationType,
 } from './firefly-review.mjs';
 
@@ -53,6 +54,17 @@ function fiscalAnalysis(completion, overrides = {}) {
     uncertainties: [],
   };
 }
+
+describe('Firefly review transient provider policy', () => {
+  it('retries only transient provider failures', () => {
+    expect(isRetryableProviderError({ code: 'PROVIDER_TIMEOUT' })).toBe(true);
+    expect(isRetryableProviderError({ code: 'PROVIDER_UNAVAILABLE' })).toBe(true);
+    expect(isRetryableProviderError({ code: 'RATE_OR_QUOTA_LIMIT' })).toBe(true);
+    expect(isRetryableProviderError({ code: 'INVALID_API_KEY' })).toBe(false);
+    expect(isRetryableProviderError({ code: 'MODEL_NOT_AVAILABLE' })).toBe(false);
+    expect(isRetryableProviderError({ code: 'INVALID_PROVIDER_RESPONSE' })).toBe(false);
+  });
+});
 
 describe('Firefly review runtime', () => {
   it('keeps compatibility with the current cabana workspace scene ids', () => {
