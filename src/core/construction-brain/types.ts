@@ -217,6 +217,7 @@ export interface FireflyExecutionJob {
   projectId: string;
   sceneId: string;
   sceneNumber: number;
+  operationType?: string;
   segmentId: string;
   segmentIndex: number;
   startStagePercentage: StagePercentage;
