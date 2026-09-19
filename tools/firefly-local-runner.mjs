@@ -1,0 +1,346 @@
+#!/usr/bin/env node
+
+import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const MODEL_LIMITS = Object.freeze({
+  KLING: 15,
+  VEO_FAST: 8,
+});
+
+function sanitize(value) {
+  return String(value).replace(/[^a-zA-Z0-9._-]+/g, '_');
+}
+
+async function exists(filePath) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function assertPlan(plan) {
+  if (!plan || typeof plan !== 'object') {
+    throw new Error('Firefly plan must be a JSON object.');
+  }
+  if (typeof plan.projectId !== 'string' || !plan.projectId.trim()) {
+    throw new Error('Firefly plan requires a non-empty projectId.');
+  }
+  if (!Array.isArray(plan.jobs) || plan.jobs.length === 0) {
+    throw new Error('Firefly plan requires at least one job.');
+  }
+
+  const ids = new Set();
+  for (const job of plan.jobs) {
+    if (!job || typeof job !== 'object') throw new Error('Every Firefly job must be an object.');
+    if (typeof job.id !== 'string' || !job.id.trim()) throw new Error('Every Firefly job requires an id.');
+    if (ids.has(job.id)) throw new Error(`Duplicate Firefly job id '${job.id}'.`);
+    ids.add(job.id);
+
+    if (!(job.model in MODEL_LIMITS)) {
+      throw new Error(`Unknown Firefly model '${job.model}' in job '${job.id}'.`);
+    }
+    if (!Number.isFinite(job.durationSeconds) || job.durationSeconds <= 0 ||
+        job.durationSeconds > MODEL_LIMITS[job.model]) {
+      throw new Error(
+        `Job '${job.id}' duration ${job.durationSeconds} exceeds ${job.model} limit ${MODEL_LIMITS[job.model]}s.`,
+      );
+    }
+    if (job.aspectRatio !== '16:9') {
+      throw new Error(`Job '${job.id}' must use 16:9 aspect ratio.`);
+    }
+    if (!job.resolution || job.resolution.width !== 1920 || job.resolution.height !== 1080) {
+      throw new Error(`Job '${job.id}' must use 1920x1080 resolution.`);
+    }
+    if (typeof job.prompt !== 'string' || !job.prompt.trim()) {
+      throw new Error(`Job '${job.id}' requires a non-empty prompt.`);
+    }
+    if (!job.source || !['KEYFRAME', 'PREVIOUS_SEGMENT_LAST_FRAME'].includes(job.source.kind)) {
+      throw new Error(`Job '${job.id}' has an invalid source.`);
+    }
+  }
+
+  for (const job of plan.jobs) {
+    if (job.source.kind === 'PREVIOUS_SEGMENT_LAST_FRAME' &&
+        !ids.has(job.source.previousJobId)) {
+      throw new Error(
+        `Job '${job.id}' references missing previous job '${job.source.previousJobId}'.`,
+      );
+    }
+  }
+}
+
+function resolveJobSource(job, plan, workspace) {
+  if (job.source.kind === 'KEYFRAME') {
+    return path.join(
+      workspace,
+      'inputs',
+      'keyframes',
+      `${sanitize(job.source.keyframeId)}.png`,
+    );
+  }
+
+  const previous = plan.jobs.find(candidate => candidate.id === job.source.previousJobId);
+  if (!previous) {
+    throw new Error(
+      `Previous job '${job.source.previousJobId}' was not found for '${job.id}'.`,
+    );
+  }
+  return path.join(workspace, previous.output.lastFrameSlot);
+}
+
+function jobDirectoryName(index, jobId) {
+  return `${String(index + 1).padStart(3, '0')}__${sanitize(jobId)}`;
+}
+
+async function writeJson(filePath, value) {
+  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+export async function loadFireflyPlan(planPath) {
+  const resolved = path.resolve(planPath);
+  const raw = await readFile(resolved, 'utf8');
+  const plan = JSON.parse(raw);
+  assertPlan(plan);
+  return plan;
+}
+
+export async function prepareFireflyWorkspace(plan, workspaceRoot = '.firefly') {
+  assertPlan(plan);
+
+  const root = path.resolve(workspaceRoot);
+  const workspace = path.join(root, sanitize(plan.projectId));
+  const jobsRoot = path.join(workspace, 'jobs');
+  const keyframesRoot = path.join(workspace, 'inputs', 'keyframes');
+
+  await mkdir(jobsRoot, { recursive: true });
+  await mkdir(keyframesRoot, { recursive: true });
+  await mkdir(path.join(workspace, 'outputs'), { recursive: true });
+
+  await writeJson(path.join(workspace, 'manifest.json'), plan);
+
+  const queue = [];
+
+  for (const [index, job] of plan.jobs.entries()) {
+    const jobDir = path.join(jobsRoot, jobDirectoryName(index, job.id));
+    const sourcePath = resolveJobSource(job, plan, workspace);
+    const videoOutput = path.join(workspace, job.output.videoSlot);
+    const lastFrameOutput = path.join(workspace, job.output.lastFrameSlot);
+
+    await mkdir(jobDir, { recursive: true });
+    await mkdir(path.dirname(videoOutput), { recursive: true });
+    await mkdir(path.dirname(lastFrameOutput), { recursive: true });
+
+    const sourceDescriptor = {
+      ...job.source,
+      resolvedPath: path.relative(workspace, sourcePath),
+      absolutePath: sourcePath,
+    };
+
+    const statePath = path.join(jobDir, 'state.json');
+    if (!(await exists(statePath))) {
+      await writeJson(statePath, {
+        jobId: job.id,
+        status: 'PENDING',
+        completedAt: null,
+        notes: [],
+      });
+    }
+
+    await writeJson(path.join(jobDir, 'job.json'), job);
+    await writeFile(path.join(jobDir, 'prompt.txt'), `${job.prompt.trim()}\n`, 'utf8');
+    await writeFile(
+      path.join(jobDir, 'negative.txt'),
+      `${(job.negativeConstraints ?? []).join('\n')}\n`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(jobDir, 'checklist.txt'),
+      `${(job.acceptanceChecklist ?? []).map(item => `- [ ] ${item}`).join('\n')}\n`,
+      'utf8',
+    );
+    await writeJson(path.join(jobDir, 'source.json'), sourceDescriptor);
+
+    queue.push({
+      sequence: index + 1,
+      jobId: job.id,
+      sceneId: job.sceneId,
+      model: job.model,
+      durationSeconds: job.durationSeconds,
+      jobDirectory: path.relative(workspace, jobDir),
+      sourcePath: path.relative(workspace, sourcePath),
+      videoOutput: path.relative(workspace, videoOutput),
+      lastFrameOutput: path.relative(workspace, lastFrameOutput),
+    });
+  }
+
+  await writeJson(path.join(workspace, 'queue.json'), {
+    projectId: plan.projectId,
+    totalJobs: queue.length,
+    jobs: queue,
+  });
+
+  await writeFile(
+    path.join(keyframesRoot, 'README.txt'),
+    [
+      'Place approved ENTRY keyframes in this directory.',
+      'The exact filename expected by each job is recorded in jobs/*/source.json.',
+      'Do not replace a keyframe after downstream jobs have been accepted without invalidating those jobs.',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  return {
+    workspace,
+    queue,
+  };
+}
+
+async function readJobState(workspace, queueItem) {
+  const statePath = path.join(workspace, queueItem.jobDirectory, 'state.json');
+  const raw = await readFile(statePath, 'utf8');
+  return JSON.parse(raw);
+}
+
+export async function inspectFireflyWorkspace(workspacePath) {
+  const workspace = path.resolve(workspacePath);
+  const queue = JSON.parse(await readFile(path.join(workspace, 'queue.json'), 'utf8'));
+  const rows = [];
+
+  for (const item of queue.jobs) {
+    const state = await readJobState(workspace, item);
+    const sourceReady = await exists(path.join(workspace, item.sourcePath));
+    const videoReady = await exists(path.join(workspace, item.videoOutput));
+    const lastFrameReady = await exists(path.join(workspace, item.lastFrameOutput));
+
+    rows.push({
+      ...item,
+      status: state.status,
+      sourceReady,
+      videoReady,
+      lastFrameReady,
+      runnable: state.status === 'PENDING' && sourceReady,
+    });
+  }
+
+  return {
+    projectId: queue.projectId,
+    workspace,
+    totalJobs: rows.length,
+    pending: rows.filter(row => row.status === 'PENDING').length,
+    completed: rows.filter(row => row.status === 'COMPLETE').length,
+    runnable: rows.filter(row => row.runnable).length,
+    jobs: rows,
+  };
+}
+
+export async function completeFireflyJob(workspacePath, jobId) {
+  const inspection = await inspectFireflyWorkspace(workspacePath);
+  const item = inspection.jobs.find(job => job.jobId === jobId);
+  if (!item) throw new Error(`Unknown Firefly job '${jobId}'.`);
+  if (!item.videoReady) {
+    throw new Error(`Cannot complete '${jobId}': video output is missing at ${item.videoOutput}.`);
+  }
+  if (!item.lastFrameReady) {
+    throw new Error(
+      `Cannot complete '${jobId}': terminal frame is missing at ${item.lastFrameOutput}.`,
+    );
+  }
+
+  const statePath = path.join(inspection.workspace, item.jobDirectory, 'state.json');
+  await writeJson(statePath, {
+    jobId,
+    status: 'COMPLETE',
+    completedAt: new Date().toISOString(),
+    notes: [],
+  });
+
+  return inspectFireflyWorkspace(inspection.workspace);
+}
+
+function printStatus(inspection) {
+  process.stdout.write(
+    [
+      `Project: ${inspection.projectId}`,
+      `Workspace: ${inspection.workspace}`,
+      `Jobs: ${inspection.totalJobs}`,
+      `Pending: ${inspection.pending}`,
+      `Runnable now: ${inspection.runnable}`,
+      `Complete: ${inspection.completed}`,
+      '',
+      ...inspection.jobs.map(job => {
+        const readiness = job.runnable ? 'READY' : job.status;
+        return `${String(job.sequence).padStart(3, '0')}  ${readiness.padEnd(8)}  ${job.model.padEnd(8)}  ${job.durationSeconds}s  ${job.jobId}`;
+      }),
+      '',
+    ].join('\n'),
+  );
+}
+
+function usage() {
+  return [
+    'Construction AI Studio - Firefly Local Runner',
+    '',
+    'Commands:',
+    '  prepare <firefly_plan.json> [workspace-root]',
+    '  status <project-workspace>',
+    '  complete <project-workspace> <job-id>',
+    '',
+    'Examples:',
+    '  npm run firefly:prepare -- ./firefly_plan.json',
+    '  npm run firefly:status -- ./.firefly/my-project',
+    '  npm run firefly:complete -- ./.firefly/my-project firefly:scene-1:segment-1',
+    '',
+  ].join('\n');
+}
+
+async function main(argv) {
+  const [command, ...args] = argv;
+
+  if (!command || command === '--help' || command === '-h') {
+    process.stdout.write(usage());
+    return;
+  }
+
+  if (command === 'prepare') {
+    const [planPath, workspaceRoot = '.firefly'] = args;
+    if (!planPath) throw new Error('prepare requires <firefly_plan.json>.');
+    const plan = await loadFireflyPlan(planPath);
+    const prepared = await prepareFireflyWorkspace(plan, workspaceRoot);
+    const inspection = await inspectFireflyWorkspace(prepared.workspace);
+    printStatus(inspection);
+    return;
+  }
+
+  if (command === 'status') {
+    const [workspace] = args;
+    if (!workspace) throw new Error('status requires <project-workspace>.');
+    printStatus(await inspectFireflyWorkspace(workspace));
+    return;
+  }
+
+  if (command === 'complete') {
+    const [workspace, jobId] = args;
+    if (!workspace || !jobId) {
+      throw new Error('complete requires <project-workspace> <job-id>.');
+    }
+    printStatus(await completeFireflyJob(workspace, jobId));
+    return;
+  }
+
+  throw new Error(`Unknown command '${command}'.\n\n${usage()}`);
+}
+
+const isMain = process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+
+if (isMain) {
+  main(process.argv.slice(2)).catch(error => {
+    process.stderr.write(`ERROR: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
