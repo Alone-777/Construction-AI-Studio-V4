@@ -285,3 +285,38 @@ The 0->50 clip includes the physical/evidence milestones from 25% and 50%. The 5
 Final-segment acceptance is also scoped to the work that actually occurs in that segment; it no longer requires the final 15-second clip to reproduce evidence from earlier 25%/50% work.
 
 The local runner now requires schema `0.1.2`, explicit `startStagePercentage`, and an exact stage chain. Old `0.1.1` plans are rejected.
+
+
+## v0.1.3 — Continuous master chain and provider-safe prompts
+
+Auditing a real v0.1.2 export exposed two remaining production constraints.
+
+First, the project was continuous only inside each macro scene. The first job of every new macro scene still requested a fresh ENTRY keyframe, which could reintroduce visual drift between construction stages.
+
+v0.1.3 makes the entire long-form master one physical frame chain:
+
+```text
+initial ENTRY keyframe
+  -> job 1 terminal frame
+  -> job 2 terminal frame
+  -> job 3 terminal frame
+  -> ...
+  -> job 16 terminal frame
+```
+
+Only the very first job starts from a standalone keyframe. Every following job, including the first job of the next macro scene, starts from the immediately previous accepted terminal frame.
+
+Second, real v0.1.2 Kling prompts exceeded the 1,400-character production limit. v0.1.3 replaces inherited verbose stage text with a compact English prompt compiler based on:
+
+- exact source-stage percentage
+- exact target-stage percentage
+- global construction progress
+- normalized English construction action
+- one visible intermediate milestone
+- target work zone
+- continuity/conservation rules
+- compact forbidden-future list
+
+The Firefly validator now blocks any Kling prompt above 1,400 characters instead of allowing an unusable manifest to export.
+
+The local runner requires schema `0.1.3` and rejects older plans.
