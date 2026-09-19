@@ -63,7 +63,7 @@ export function buildFireflyReviewContext(job, operationType = resolveOperationT
     'Judge progress only for the CURRENT OPERATION, never for the whole building.',
     'Current operation type: ' + operationType + '.',
     'Stage starts at ' + job.startStagePercentage + '% and must end at ' + job.targetStagePercentage + '%.',
-    'For claims.apparentCompletion, estimate the RIGHT panel completion percentage of this current operation only.',
+    'For apparentCompletion, estimate the RIGHT panel completion percentage of this current operation only.',
     'Use LEFT and CENTER only as evidence of progression and continuity.',
     'If exact progress is not visually supportable, classify apparentCompletion as UNKNOWN instead of guessing.',
     'If any canonical forbidden element is visible, include its exact canonical ID in visibleCanonicalFutureElements: ' +
