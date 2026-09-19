@@ -13,7 +13,10 @@
     "test:accept": "vitest run --reporter=verbose src/core/__tests__/acceptance",
     "firefly:prepare": "node tools/firefly-local-runner.mjs prepare",
     "firefly:status": "node tools/firefly-local-runner.mjs status",
-    "firefly:complete": "node tools/firefly-local-runner.mjs complete"
+    "firefly:complete": "node tools/firefly-local-runner.mjs complete",
+    "firefly:review": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs review",
+    "firefly:ingest": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs ingest",
+    "firefly:prompt": "node --env-file-if-exists=.env tools/firefly-local-runner.mjs prompt"
   },
   "dependencies": {
     "dexie": "^4.0.11",
