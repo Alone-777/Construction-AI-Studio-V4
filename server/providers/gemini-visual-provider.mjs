@@ -1,7 +1,12 @@
 import { VISUAL_ANALYSIS_PROMPT, VISUAL_RESPONSE_SCHEMA } from '../visual-prompt.mjs';
 import {
+  FISCAL_VISUAL_ANALYSIS_PROMPT,
+  FISCAL_VISUAL_RESPONSE_SCHEMA,
+} from '../fiscal-visual-prompt.mjs';
+import {
   fetchWithTimeout,
   parseImageRequest,
+  parseFiscalJsonText,
   parseJsonText,
   providerTimeoutFromEnv,
   ProviderResponseError,
@@ -26,6 +31,9 @@ export class GeminiVisualProvider {
   async analyze(request) {
     if (!this.configured) throw new ProviderUnavailableError(this.id);
     const image = parseImageRequest(request);
+    const fiscal = request?.contract === 'construction-fiscal-v1';
+    const prompt = fiscal ? FISCAL_VISUAL_ANALYSIS_PROMPT : VISUAL_ANALYSIS_PROMPT;
+    const schema = fiscal ? FISCAL_VISUAL_RESPONSE_SCHEMA : VISUAL_RESPONSE_SCHEMA;
     const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`,
       {
@@ -39,14 +47,14 @@ export class GeminiVisualProvider {
             role: 'user',
             parts: [
               { inlineData: { mimeType: image.mimeType, data: image.base64 } },
-              { text: `${VISUAL_ANALYSIS_PROMPT}${image.userContext ? `\n\nContexto adicional do usuário: ${image.userContext}` : ''}` },
+              { text: `${prompt}${image.userContext ? `\n\nContexto adicional do usuário: ${image.userContext}` : ''}` },
             ],
           }],
           generationConfig: {
             responseFormat: {
               text: {
                 mimeType: 'application/json',
-                schema: VISUAL_RESPONSE_SCHEMA,
+                schema,
               },
             },
             temperature: 0.1,
@@ -66,6 +74,6 @@ export class GeminiVisualProvider {
     const text = payload?.candidates?.[0]?.content?.parts
       ?.map(part => typeof part.text === 'string' ? part.text : '')
       .join('');
-    return parseJsonText(text, this.id);
+    return fiscal ? parseFiscalJsonText(text, this.id) : parseJsonText(text, this.id);
   }
 }
