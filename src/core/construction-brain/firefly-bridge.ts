@@ -1,5 +1,6 @@
 import type {
   ConstructionBrainBundle,
+  ConstructionBrainGenerationSegment,
   ConstructionBrainSceneArtifact,
   FireflyBridgeModelId,
   FireflyExecutionJob,
@@ -12,33 +13,43 @@ function sanitizeSlotPart(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '_');
 }
 
-function sceneFallbackPrompt(scene: ConstructionBrainSceneArtifact): string {
-  const actions = scene.actionRequirements.length > 0
-    ? scene.actionRequirements.join('; ')
-    : 'continue the visible construction action already established in the source image';
-  const evidence = scene.executionEvidence.length > 0
-    ? scene.executionEvidence.join('; ')
+function segmentFallbackPrompt(
+  scene: ConstructionBrainSceneArtifact,
+  segment: ConstructionBrainGenerationSegment,
+): string {
+  const actions = segment.actionRequirements.length > 0
+    ? segment.actionRequirements.join('; ')
+    : scene.actionRequirements.join('; ') ||
+      'continue the visible construction action already established in the source image';
+  const evidence = segment.executionEvidence.length > 0
+    ? segment.executionEvidence.join('; ')
     : 'show a physically plausible visible result with continuity from the source image';
 
   return [
     'Realistic construction timelapse, documentary smartphone realism, physically plausible motion.',
+    `Continue only until the construction reaches the canonical ${segment.targetStagePercentage}% stage for this operation.`,
     `Scene action: ${actions}.`,
-    `Required visible result: ${evidence}.`,
+    `Required visible result at the end of this clip: ${evidence}.`,
+    `Target global construction progress: ${segment.targetState.constructionProgress}%.`,
     'Keep the same worker identity, terrain geometry, camera orientation, materials, tools, residues and already-built components.',
-    'No magical construction, no object teleportation, no disappearing materials, no premature future components.',
+    'Show visible physical labor and material handling; no magical construction.',
   ].join(' ');
 }
 
-function providerPrompt(scene: ConstructionBrainSceneArtifact, model: FireflyBridgeModelId): string {
-  if (model === 'KLING' && scene.prompts.kling?.trim()) {
-    return scene.prompts.kling.trim();
+function providerPrompt(
+  scene: ConstructionBrainSceneArtifact,
+  segment: ConstructionBrainGenerationSegment,
+  model: FireflyBridgeModelId,
+): string {
+  if (model === 'KLING' && segment.prompt.kling?.trim()) {
+    return segment.prompt.kling.trim();
   }
 
-  const base = sceneFallbackPrompt(scene);
+  const base = segmentFallbackPrompt(scene, segment);
   if (model === 'VEO_FAST') {
     return [
       base,
-      'Use concise continuous motion suitable for an 8-second image-to-video shot.',
+      'Use concise continuous image-to-video motion suitable for an 8-second shot.',
       'Prioritize one clear physical action and preserve exact visual continuity from the source frame.',
     ].join(' ');
   }
@@ -49,7 +60,7 @@ function providerPrompt(scene: ConstructionBrainSceneArtifact, model: FireflyBri
   ].join(' ');
 }
 
-function negativeConstraints(scene: ConstructionBrainSceneArtifact): string[] {
+function negativeConstraints(segment: ConstructionBrainGenerationSegment): string[] {
   return [
     'no magical appearance of construction elements',
     'no disappearing completed components',
@@ -60,20 +71,50 @@ function negativeConstraints(scene: ConstructionBrainSceneArtifact): string[] {
     'no residue disappearance without explicit removal',
     'no terrain geometry change unless explicitly authorized',
     'no camera jump',
-    ...scene.forbiddenFutureElements.map(element => `no premature ${element}`),
+    ...segment.forbiddenFutureElements.map(element => `no premature ${element}`),
   ];
 }
 
-function intermediateChecklist(scene: ConstructionBrainSceneArtifact): string[] {
+function segmentContinuityLocks(
+  scene: ConstructionBrainSceneArtifact,
+  segment: ConstructionBrainGenerationSegment,
+) {
+  return {
+    preserveWorkerIdentity: segment.targetState.worker.characterId,
+    preserveExistingComponents: [...segment.targetState.existingComponents],
+    preservePermanentObjects: [...segment.targetState.permanentObjects],
+    preserveZones: [...scene.preservedZones],
+    preserveTerrain: true,
+    forbiddenFutureElements: [...segment.forbiddenFutureElements],
+  };
+}
+
+function segmentChecklist(
+  scene: ConstructionBrainSceneArtifact,
+  segment: ConstructionBrainGenerationSegment,
+  isLast: boolean,
+): string[] {
   return [
-    'The worker identity matches the source frame.',
-    'All completed components visible in the source frame remain present.',
-    'Permanent objects and terrain remain stable.',
-    'The action progresses physically without an unexplained jump.',
-    'Tools, materials and residues remain accounted for.',
-    ...scene.forbiddenFutureElements.map(
+    `Worker identity remains ${segment.targetState.worker.characterId}.`,
+    'Terrain geometry and permanent objects remain unchanged unless explicitly authorized.',
+    'All components completed before this target stage remain present.',
+    'Materials, tools and residues remain physically accounted for.',
+    `The clip ends at the canonical ${segment.targetStagePercentage}% stage for this operation.`,
+    `Global construction progress at the target is ${segment.targetState.constructionProgress}%.`,
+    ...segment.forbiddenFutureElements.map(
       element => `Future element remains absent: ${element}.`,
     ),
+    ...segment.executionEvidence.map(
+      evidence => `Visible evidence is present: ${evidence}`,
+    ),
+    ...(isLast
+      ? [
+          'The terminal frame matches the scene EXIT state.',
+          ...scene.keyframes.exit.requiredVisibleEvidence.map(
+            evidence => `Scene EXIT evidence is present: ${evidence}`,
+          ),
+        ]
+      : ['The terminal frame is a valid continuation source for the next segment.']),
   ];
 }
 
@@ -108,6 +149,7 @@ export function buildFireflyExecutionPlan(
         sceneNumber: scene.number,
         segmentId: segment.id,
         segmentIndex: index + 1,
+        targetStagePercentage: segment.targetStagePercentage,
         model: segment.provider,
         durationSeconds: segment.durationSeconds,
         aspectRatio: '16:9',
@@ -119,12 +161,10 @@ export function buildFireflyExecutionPlan(
         terminalRequirement: isLast ? 'SCENE_EXIT' : 'INTERMEDIATE_CONTINUATION',
         entryKeyframeId: scene.keyframes.entry.id,
         exitKeyframeId: scene.keyframes.exit.id,
-        prompt: providerPrompt(scene, segment.provider),
-        negativeConstraints: negativeConstraints(scene),
-        continuityLocks: structuredClone(scene.keyframes.exit.continuityLocks),
-        acceptanceChecklist: isLast
-          ? [...scene.keyframes.exit.approvalChecklist]
-          : intermediateChecklist(scene),
+        prompt: providerPrompt(scene, segment, segment.provider),
+        negativeConstraints: negativeConstraints(segment),
+        continuityLocks: segmentContinuityLocks(scene, segment),
+        acceptanceChecklist: segmentChecklist(scene, segment, isLast),
         output: {
           videoSlot: `outputs/${scenePart}/${segmentPart}.mp4`,
           lastFrameSlot: `outputs/${scenePart}/${segmentPart}.last-frame.png`,
@@ -185,7 +225,9 @@ export function validateFireflyExecutionPlan(
       const segment = scene.generationSegments[index];
       const providerLimit = bundle.project.providers[job.model].maxGenerationSeconds;
 
-      if (job.segmentId !== segment.id || job.model !== segment.provider) {
+      if (job.segmentId !== segment.id ||
+          job.model !== segment.provider ||
+          job.targetStagePercentage !== segment.targetStagePercentage) {
         issues.push({
           severity: 'ERROR',
           code: 'FIREFLY_SEGMENT_BINDING_MISMATCH',
@@ -224,6 +266,20 @@ export function validateFireflyExecutionPlan(
         });
       }
 
+      for (const visible of [
+        ...segment.targetState.existingComponents,
+        ...segment.targetState.partialComponents,
+      ]) {
+        if (job.continuityLocks.forbiddenFutureElements.includes(visible)) {
+          issues.push({
+            severity: 'ERROR',
+            code: 'FIREFLY_VISIBLE_ELEMENT_FORBIDDEN',
+            message: `Firefly job ${job.id} forbids visible target element ${visible}.`,
+            sceneId: scene.id,
+          });
+        }
+      }
+
       if (index === 0) {
         if (job.source.kind !== 'KEYFRAME' ||
             job.source.keyframeId !== scene.keyframes.entry.id) {
@@ -245,6 +301,15 @@ export function validateFireflyExecutionPlan(
             sceneId: scene.id,
           });
         }
+
+        if (job.targetStagePercentage <= previous.targetStagePercentage) {
+          issues.push({
+            severity: 'ERROR',
+            code: 'FIREFLY_STAGE_REGRESSION',
+            message: `Firefly job ${job.id} does not advance beyond the previous target stage.`,
+            sceneId: scene.id,
+          });
+        }
       }
 
       const isLast = index === sceneJobs.length - 1;
@@ -261,13 +326,16 @@ export function validateFireflyExecutionPlan(
         });
       }
 
-      if (isLast && job.exitKeyframeId !== scene.keyframes.exit.id) {
-        issues.push({
-          severity: 'ERROR',
-          code: 'FIREFLY_EXIT_KEYFRAME_MISMATCH',
-          message: `Final Firefly job for ${scene.id} is not bound to the scene EXIT keyframe.`,
-          sceneId: scene.id,
-        });
+      if (isLast) {
+        if (job.exitKeyframeId !== scene.keyframes.exit.id ||
+            job.targetStagePercentage !== 100) {
+          issues.push({
+            severity: 'ERROR',
+            code: 'FIREFLY_EXIT_KEYFRAME_MISMATCH',
+            message: `Final Firefly job for ${scene.id} must target 100% and bind to the scene EXIT keyframe.`,
+            sceneId: scene.id,
+          });
+        }
       }
     });
   }
