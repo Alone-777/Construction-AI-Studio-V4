@@ -7,6 +7,7 @@ import {
   effectivePromptForFireflyJob,
   ingestAndReviewFireflyJob,
   reviewFireflyJob,
+  visualProviderStatuses,
 } from './firefly-review.mjs';
 
 const EXPECTED_SCHEMA_VERSION = '0.1.3';
@@ -364,6 +365,7 @@ function usage() {
     '  review <project-workspace> <job-id> [provider-id]',
     '  ingest <project-workspace> <job-id> <video-path> [provider-id]',
     '  prompt <project-workspace> <job-id>',
+    '  providers',
     '',
     'Examples:',
     '  npm run firefly:prepare -- ./firefly_plan.json',
@@ -372,6 +374,7 @@ function usage() {
     '  npm run firefly:review -- ./.firefly/my-project firefly:scene-1:segment-1 gemini',
     '  npm run firefly:ingest -- ./.firefly/my-project firefly:scene-1:segment-1 ./download.mp4 gemini',
     '  npm run firefly:prompt -- ./.firefly/my-project firefly:scene-1:segment-1',
+    '  npm run firefly:providers',
     '',
   ].join('\n');
 }
@@ -401,6 +404,16 @@ async function main(argv) {
     return;
   }
 
+
+  if (command === 'providers') {
+    for (const provider of visualProviderStatuses()) {
+      process.stdout.write(
+        provider.id.padEnd(8) + ' configured=' + String(provider.configured).padEnd(5) +
+        ' model=' + String(provider.model || 'default') + '\n',
+      );
+    }
+    return;
+  }
 
   if (command === 'review') {
     const [workspace, jobId, providerId] = args;
