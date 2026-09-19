@@ -65,12 +65,8 @@ export class GeminiVisualProvider {
             ],
           }],
           generationConfig: {
-            responseFormat: {
-              text: {
-                mimeType: 'application/json',
-                schema,
-              },
-            },
+            responseMimeType: 'application/json',
+            responseJsonSchema: schema,
           },
         }),
       },
