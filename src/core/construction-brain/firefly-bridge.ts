@@ -277,6 +277,15 @@ export function validateFireflyExecutionPlan(
         });
       }
 
+      if (job.model === 'KLING' && job.prompt.length > KLING_PROMPT_MAX_CHARACTERS) {
+        issues.push({
+          severity: 'ERROR',
+          code: 'FIREFLY_KLING_PROMPT_TOO_LONG',
+          message: `Kling prompt for ${job.id} has ${job.prompt.length} characters; maximum is ${KLING_PROMPT_MAX_CHARACTERS}.`,
+          sceneId: scene.id,
+        });
+      }
+
       for (const visible of [
         ...segment.targetState.existingComponents,
         ...segment.targetState.partialComponents,
@@ -291,28 +300,8 @@ export function validateFireflyExecutionPlan(
         }
       }
 
-      if (index === 0) {
-        if (job.source.kind !== 'KEYFRAME' ||
-            job.source.keyframeId !== scene.keyframes.entry.id) {
-          issues.push({
-            severity: 'ERROR',
-            code: 'FIREFLY_INVALID_FIRST_SOURCE',
-            message: `First Firefly job for ${scene.id} must start from the scene ENTRY keyframe.`,
-            sceneId: scene.id,
-          });
-        }
-      } else {
+      if (index > 0) {
         const previous = sceneJobs[index - 1];
-        if (job.source.kind !== 'PREVIOUS_SEGMENT_LAST_FRAME' ||
-            job.source.previousJobId !== previous.id) {
-          issues.push({
-            severity: 'ERROR',
-            code: 'FIREFLY_BROKEN_SEGMENT_CHAIN',
-            message: `Firefly job ${job.id} must start from the last frame of ${previous.id}.`,
-            sceneId: scene.id,
-          });
-        }
-
         if (job.startStagePercentage !== previous.targetStagePercentage ||
             job.targetStagePercentage <= previous.targetStagePercentage) {
           issues.push({
@@ -352,7 +341,7 @@ export function validateFireflyExecutionPlan(
     });
   }
 
-  for (const job of plan.jobs) {
+  plan.jobs.forEach((job, index) => {
     if (!scenesById.has(job.sceneId)) {
       issues.push({
         severity: 'ERROR',
@@ -362,7 +351,30 @@ export function validateFireflyExecutionPlan(
       });
     }
 
-    if (job.source.kind === 'PREVIOUS_SEGMENT_LAST_FRAME' &&
+    if (index === 0) {
+      if (job.source.kind !== 'KEYFRAME') {
+        issues.push({
+          severity: 'ERROR',
+          code: 'FIREFLY_INVALID_INITIAL_SOURCE',
+          message: `First Firefly job ${job.id} must start from the initial ENTRY keyframe.`,
+          sceneId: job.sceneId,
+        });
+      }
+      return;
+    }
+
+    const previous = plan.jobs[index - 1];
+    if (job.source.kind !== 'PREVIOUS_JOB_LAST_FRAME' ||
+        job.source.previousJobId !== previous.id) {
+      issues.push({
+        severity: 'ERROR',
+        code: 'FIREFLY_BROKEN_GLOBAL_CHAIN',
+        message: `Firefly job ${job.id} must start from the terminal frame of ${previous.id}.`,
+        sceneId: job.sceneId,
+      });
+    }
+
+    if (job.source.kind === 'PREVIOUS_JOB_LAST_FRAME' &&
         !jobsById.has(job.source.previousJobId)) {
       issues.push({
         severity: 'ERROR',
@@ -371,7 +383,7 @@ export function validateFireflyExecutionPlan(
         sceneId: job.sceneId,
       });
     }
-  }
+  });
 
   return {
     valid: !issues.some(issue => issue.severity === 'ERROR'),
