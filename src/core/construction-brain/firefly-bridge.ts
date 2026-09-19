@@ -13,53 +13,68 @@ function sanitizeSlotPart(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '_');
 }
 
-function segmentFallbackPrompt(
-  scene: ConstructionBrainSceneArtifact,
-  segment: ConstructionBrainGenerationSegment,
-): string {
-  const actions = segment.actionRequirements.length > 0
-    ? segment.actionRequirements.join('; ')
-    : scene.actionRequirements.join('; ') ||
-      'continue the visible construction action already established in the source image';
-  const evidence = segment.executionEvidence.length > 0
-    ? segment.executionEvidence.join('; ')
-    : 'show a physically plausible visible result with continuity from the source image';
+const KLING_PROMPT_MAX_CHARACTERS = 1400;
 
-  return [
-    'Realistic construction timelapse, documentary smartphone realism, physically plausible motion.',
-    `Use the supplied source frame as the exact canonical ${segment.startStagePercentage}% state for this operation.`,
-    `The source frame represents global construction progress ${segment.startState.constructionProgress}%.`,
-    `Advance continuously from canonical ${segment.startStagePercentage}% to canonical ${segment.targetStagePercentage}% for this operation.`,
-    `Perform the required physical work during this clip: ${actions}.`,
-    `Milestones that must become visibly true by the end of this clip: ${evidence}.`,
-    `Target global construction progress: ${segment.targetState.constructionProgress}%.`,
-    'Do not assume any skipped intermediate construction has already happened; perform all physical work needed between the source state and target state on screen.',
-    'Keep the same worker identity, terrain geometry, camera orientation, materials, tools, residues and already-built components.',
-    'Show visible physical labor and material handling; no magical construction, teleportation, morphing or unexplained disappearance.',
-    ...segment.forbiddenFutureElements.map(element => `Do not show future element ${element} before its authorized stage.`),
-  ].join(' ');
+function operationAction(bundle: ConstructionBrainBundle, scene: ConstructionBrainSceneArtifact): string {
+  const operation = bundle.constructionMap.operations.find(item => item.id === scene.operationId);
+  switch (operation?.type) {
+    case 'limpeza':
+      return 'selectively clear vegetation only inside the building footprint';
+    case 'sapata':
+      return 'excavate and set the stone footings by hand';
+    case 'piso':
+      return 'fit and secure the timber base and floor structure';
+    case 'pilar':
+      return 'position, plumb and secure the timber posts';
+    case 'parede':
+      return 'assemble the timber wall sections on the existing frame';
+    case 'viga':
+      return 'cut, lift and fit the roof beams';
+    case 'cobertura':
+      return 'tie and fasten the thatch panels to the roof frame';
+    case 'porta':
+      return 'align, fit and test the main door';
+    default:
+      return 'perform the current construction operation with visible manual labor';
+  }
 }
 
-function providerPrompt(
+function milestoneSentence(segment: ConstructionBrainGenerationSegment): string {
+  const intermediate = segment.startStagePercentage === 0 && segment.targetStagePercentage === 50
+    ? 25
+    : segment.startStagePercentage === 50 && segment.targetStagePercentage === 100
+      ? 75
+      : Math.round((segment.startStagePercentage + segment.targetStagePercentage) / 2);
+
+  return `Mid-clip, visibly pass the ${intermediate}% milestone; end at ${segment.targetStagePercentage}% in ${segment.targetState.activeZone}.`;
+}
+
+function futureSentence(segment: ConstructionBrainGenerationSegment): string {
+  if (segment.forbiddenFutureElements.length === 0) return '';
+  return `Do not show future elements: ${segment.forbiddenFutureElements.join(', ')}.`;
+}
+
+function segmentPrompt(
+  bundle: ConstructionBrainBundle,
   scene: ConstructionBrainSceneArtifact,
   segment: ConstructionBrainGenerationSegment,
   model: FireflyBridgeModelId,
 ): string {
-  const base = segmentFallbackPrompt(scene, segment);
-  if (model === 'VEO_FAST') {
-    return [
-      base,
-      'Use concise continuous image-to-video motion suitable for an 8-second shot.',
-      'Prioritize one clear physical action and preserve exact visual continuity from the source frame.',
-    ].join(' ');
-  }
-
   return [
-    base,
-    'Use continuous image-to-video motion suitable for a shot up to 15 seconds.',
-  ].join(' ');
+    'Realistic 16:9 construction timelapse, documentary smartphone look, physically plausible motion.',
+    `Source frame = exact ${segment.startStagePercentage}% state of this operation at global progress ${segment.startState.constructionProgress}%.`,
+    `Continuously ${operationAction(bundle, scene)} until ${segment.targetStagePercentage}% / global ${segment.targetState.constructionProgress}%.`,
+    milestoneSentence(segment),
+    'Show every required physical action on screen; do not skip hidden work between milestones.',
+    'Keep the same worker, clothing, terrain, creek, camera framing and all completed construction.',
+    'Materials, tools and debris persist and move only through visible handling.',
+    futureSentence(segment),
+    'No magical construction, teleportation, morphing, disappearing objects or camera jump.',
+    model === 'VEO_FAST'
+      ? 'Use one clear continuous image-to-video action within 8 seconds.'
+      : 'Use continuous image-to-video motion within 15 seconds.',
+  ].filter(Boolean).join(' ');
 }
-
 function negativeConstraints(segment: ConstructionBrainGenerationSegment): string[] {
   return [
     'no magical appearance of construction elements',
