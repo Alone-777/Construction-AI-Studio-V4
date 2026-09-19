@@ -63,8 +63,10 @@ describe('Construction Brain Firefly bridge', () => {
       keyframeId: firstScene.keyframes.entry.id,
     });
     expect(jobs[0].terminalRequirement).toBe('INTERMEDIATE_CONTINUATION');
+    expect(jobs[0].startStagePercentage).toBe(0);
     expect(jobs[0].targetStagePercentage).toBe(50);
-    expect(jobs[0].prompt).toContain('marco 50%');
+    expect(jobs[0].prompt).toContain('canonical 0%');
+    expect(jobs[0].prompt).toContain('canonical 50%');
 
     expect(jobs[1].model).toBe('VEO_FAST');
     expect(jobs[1].durationSeconds).toBe(8);
@@ -73,15 +75,52 @@ describe('Construction Brain Firefly bridge', () => {
       previousJobId: jobs[0].id,
     });
     expect(jobs[1].terminalRequirement).toBe('SCENE_EXIT');
+    expect(jobs[1].startStagePercentage).toBe(50);
     expect(jobs[1].targetStagePercentage).toBe(100);
-    expect(jobs[1].prompt).toContain('canonical 100% stage');
+    expect(jobs[1].prompt).toContain('canonical 50%');
+    expect(jobs[1].prompt).toContain('canonical 100%');
     expect(jobs[1].exitKeyframeId).toBe(firstScene.keyframes.exit.id);
     expect(jobs[1].acceptanceChecklist).toContain(
       'The terminal frame matches the scene EXIT state.',
     );
+    expect(
+      jobs[1].acceptanceChecklist.some(item => item.startsWith('Scene EXIT evidence')),
+    ).toBe(false);
 
     const validation = validateFireflyExecutionPlan(bundle, plan);
     expect(validation.valid).toBe(true);
+  });
+
+  it('builds prompts from the actual supplied source state without self-forbidden work', () => {
+    const project = createCabanaDoRiachoProject();
+    const bundle = compileConstructionBrain(project, { targetDurationSeconds: 240 });
+    const plan = buildFireflyExecutionPlan(bundle);
+
+    const first = plan.jobs.find(job =>
+      job.sceneId === 'scene_op_limpeza' && job.segmentIndex === 1
+    );
+    const second = plan.jobs.find(job =>
+      job.sceneId === 'scene_op_limpeza' && job.segmentIndex === 2
+    );
+    const door50 = plan.jobs.find(job =>
+      job.sceneId === 'scene_op_porta' && job.segmentIndex === 1
+    );
+    const walls50 = plan.jobs.find(job =>
+      job.sceneId === 'scene_op_paredes' && job.segmentIndex === 1
+    );
+
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(door50).toBeTruthy();
+    expect(walls50).toBeTruthy();
+
+    expect(first!.prompt).toContain('canonical 0%');
+    expect(first!.prompt).not.toContain('Start from the exact prior state at 3%');
+    expect(second!.prompt).toContain('canonical 50%');
+    expect(second!.prompt).not.toContain('Start from the exact prior state at 9%');
+
+    expect(door50!.prompt).not.toContain('no premature porta_principal');
+    expect(walls50!.prompt).not.toContain('no premature parede_norte');
   });
 
   it('rejects a broken Firefly segment chain', () => {
