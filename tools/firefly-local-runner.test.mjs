@@ -10,7 +10,7 @@ import {
 
 function fixturePlan() {
   return {
-    schemaVersion: '0.1.1',
+    schemaVersion: '0.1.2',
     projectId: 'runner-test-project',
     jobs: [
       {
@@ -20,6 +20,7 @@ function fixturePlan() {
         sceneNumber: 1,
         segmentId: 'scene-1:segment:1',
         segmentIndex: 1,
+        startStagePercentage: 0,
         targetStagePercentage: 50,
         model: 'KLING',
         durationSeconds: 15,
@@ -53,6 +54,7 @@ function fixturePlan() {
         sceneNumber: 1,
         segmentId: 'scene-1:segment:2',
         segmentIndex: 2,
+        startStagePercentage: 50,
         targetStagePercentage: 100,
         model: 'VEO_FAST',
         durationSeconds: 8,
@@ -152,24 +154,24 @@ describe('Firefly local runner', () => {
 
   it('rejects stale pre-stage-aware plans', async () => {
     const plan = fixturePlan();
-    plan.schemaVersion = '0.1.0';
+    plan.schemaVersion = '0.1.1';
 
     const root = await mkdtemp(path.join(os.tmpdir(), 'firefly-runner-'));
 
     await expect(
       prepareFireflyWorkspace(plan, root),
-    ).rejects.toThrow(/expected '0.1.1'/);
+    ).rejects.toThrow(/expected '0.1.2'/);
   });
 
   it('rejects non-increasing target stages', async () => {
     const plan = fixturePlan();
-    plan.jobs[1].targetStagePercentage = 50;
+    plan.jobs[1].startStagePercentage = 25;
 
     const root = await mkdtemp(path.join(os.tmpdir(), 'firefly-runner-'));
 
     await expect(
       prepareFireflyWorkspace(plan, root),
-    ).rejects.toThrow(/non-increasing target stages/);
+    ).rejects.toThrow(/broken stage chain/);
   });
 
   it('rejects provider durations beyond the configured Firefly limits', async () => {
