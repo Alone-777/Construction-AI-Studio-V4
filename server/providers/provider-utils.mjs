@@ -2,6 +2,9 @@ import {
   validateAndNormalizeVisualAnalysis,
   validateImageMetadata,
 } from '../../shared/visual-schema.mjs';
+import {
+  validateAndNormalizeFiscalVisualAnalysis,
+} from '../../shared/fiscal-visual-schema.mjs';
 
 export class ProviderUnavailableError extends Error {
   constructor(providerId) {
@@ -107,6 +110,22 @@ export function parseJsonText(text, providerId) {
 export function normalizeProviderObject(raw, providerId) {
   return validateAndNormalizeVisualAnalysis(raw, providerId);
 }
+export function parseFiscalJsonText(text, providerId) {
+  if (typeof text !== 'string' || !text.trim()) throw new ProviderResponseError(providerId);
+  const cleaned = text.trim().replace(/^\`\`\`(?:json)?\\s*/i, '').replace(/\\s*\`\`\`$/i, '');
+  let raw;
+  try {
+    raw = JSON.parse(cleaned);
+  } catch {
+    throw new ProviderResponseError(providerId);
+  }
+  return validateAndNormalizeFiscalVisualAnalysis(raw, providerId);
+}
+
+export function normalizeFiscalProviderObject(raw, providerId) {
+  return validateAndNormalizeFiscalVisualAnalysis(raw, providerId);
+}
+
 
 export function providerTimeoutFromEnv(env = process.env) {
   const configured = Number(env.VISUAL_PROVIDER_TIMEOUT_MS);
