@@ -199,3 +199,55 @@ npm run firefly:prepare -- /path/to/firefly_plan.json
 ```
 
 If the Construction Brain has an invalid state, dependency, scene duration, continuity contract or provider job, export is blocked instead of producing a bad execution queue.
+
+
+## v0.1.1 — Stage-aware production correction
+
+A real exported plan exposed an important production bug in v0.1.0:
+
+- one 15-second job was being created per macro scene
+- the selected Kling prompt came from the 100% stage only
+- some elements being built in the current operation also leaked into forbidden-future constraints
+
+v0.1.1 fixes this contract.
+
+### Default long-form profile
+
+Studio export now defaults to a 240-second / 4-minute master.
+
+For the eight-operation cabin demo, this produces two chained clips per macro operation:
+
+```text
+ENTRY
+  -> 50% target (15s Kling)
+  -> previous terminal frame
+  -> 100% target (15s Kling)
+  -> EXIT
+```
+
+The first clip uses the canonical 50% stage prompt. The second uses the canonical 100% stage prompt.
+
+### Stage-specific prohibitions
+
+Each generation segment now computes forbidden elements from the state expected **after that segment**.
+
+Elements already completed or partial at the target stage are removed from the forbidden list. This prevents contradictions such as:
+
+```text
+ACTION: install door
+NEGATIVE: no door
+```
+
+ENTRY and EXIT keyframes also maintain separate future-element locks: the current component may correctly be forbidden before work starts and allowed after the operation completes.
+
+### Stale-plan protection
+
+The schema version is now `0.1.1`.
+
+The local runner rejects older `0.1.0` manifests and requires:
+
+- explicit `targetStagePercentage`
+- strictly increasing target stages inside a scene
+- every scene to finish at 100%
+
+If an old plan is passed to the runner, export a fresh `firefly_plan.json` from the current Studio instead of executing it.
