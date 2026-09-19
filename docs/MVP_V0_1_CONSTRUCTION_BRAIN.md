@@ -83,9 +83,27 @@ Each scene now carries deterministic ENTRY and EXIT keyframe specifications with
 The validator also checks continuity across scene boundaries so completed components, permanent objects, worker identity and construction progress cannot silently regress.
 
 ### M2 — Firefly execution bridge
-Next milestone.
+Bridge core implemented; local/browser runner remains next.
 
-Translate provider-safe generation segments and keyframe specs into manual/automated Firefly jobs for Kling and Veo Fast.
+The Construction Brain now derives a portable Firefly execution plan with one job per canonical video segment.
+
+Each job contains:
+
+- selected model: KLING or VEO_FAST
+- provider-safe duration
+- 16:9 / 1920x1080 master format
+- deterministic source binding
+- video prompt and negative constraints
+- continuity locks
+- acceptance checklist
+- output video slot
+- terminal-frame slot for chaining
+
+For multi-segment scenes, the first job starts from the ENTRY keyframe. Every following job starts from the previous segment's terminal frame. The final job is bound to the scene EXIT keyframe.
+
+Example: a 23-second scene becomes KLING 15s -> previous last frame -> VEO_FAST 8s.
+
+Next step inside M2 is the local Firefly runner/adapter that consumes this manifest without moving construction logic into browser automation.
 
 ### M3 — Fiscal
 Compare expected state against generated image/video results and emit PASS / RETRY / REJECT.
