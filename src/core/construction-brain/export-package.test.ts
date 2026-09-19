@@ -3,6 +3,7 @@ import { createCabanaDoRiachoProject } from '../demo/cabana-do-riacho';
 import {
   buildConstructionBrainExportPackage,
   buildFireflyPlanJson,
+  createConstructionLearningMemory,
 } from './index';
 
 describe('Construction Brain export package', () => {
@@ -90,6 +91,32 @@ describe('Construction Brain export package', () => {
     expect(
       doorJobs[1].continuityLocks.forbiddenFutureElements,
     ).not.toContain('porta_principal');
+  });
+
+  it('exports learned successful piso corrections into the next Firefly plan', () => {
+    const project = createCabanaDoRiachoProject();
+    const memory = createConstructionLearningMemory([{
+      operationType: 'piso',
+      provider: 'KLING',
+      failureCode: 'PROGRESS_OVERSHOOT',
+      correction: 'Leave a clearly unfinished section of the floor for the next segment.',
+      successfulRetry: true,
+      uses: 2,
+    }]);
+
+    const exported = buildConstructionBrainExportPackage(project, {
+      learningMemory: memory,
+    });
+    const firefly = JSON.parse(exported.files['firefly_plan.json']) as {
+      jobs: Array<{ sceneId: string; prompt: string }>;
+    };
+
+    const floorJobs = firefly.jobs.filter(job => job.sceneId === 'scene_op_base');
+    const footingJobs = firefly.jobs.filter(job => job.sceneId === 'scene_op_sapatas');
+
+    expect(floorJobs.every(job => job.prompt.includes('LEARNED PRODUCTION RULES'))).toBe(true);
+    expect(floorJobs.every(job => job.prompt.includes('unfinished section of the floor'))).toBe(true);
+    expect(footingJobs.every(job => !job.prompt.includes('LEARNED PRODUCTION RULES'))).toBe(true);
   });
 
   it('blocks export when the Construction Brain state is invalid', () => {
