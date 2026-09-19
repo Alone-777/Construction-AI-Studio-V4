@@ -320,3 +320,56 @@ Second, real v0.1.2 Kling prompts exceeded the 1,400-character production limit.
 The Firefly validator now blocks any Kling prompt above 1,400 characters instead of allowing an unusable manifest to export.
 
 The local runner requires schema `0.1.3` and rejects older plans.
+
+
+## M3 — Construction Fiscal + retry learning loop
+
+The Construction Brain now has a deterministic fiscal layer for generated video jobs.
+
+The fiscal compares an observed result against the canonical Firefly job contract and can classify:
+
+- `PROGRESS_OVERSHOOT`
+- `PROGRESS_UNDERSHOOT`
+- `FUTURE_ELEMENT_LEAK`
+- `MISSING_EVIDENCE`
+- `CHARACTER_DRIFT`
+- `ENVIRONMENT_DRIFT`
+- `GEOMETRY_DRIFT`
+- `SOURCE_CONTINUITY_DRIFT`
+
+A failed job receives a generated corrective retry prompt rather than being manually rewritten.
+
+The first real regression case is the timber base/floor Job 005:
+
+```text
+expected stage: 50%
+observed stage: approximately 95%
+classification: PROGRESS_OVERSHOOT
+action: RETRY
+```
+
+The retry directive explicitly requires the operation to stop at 50% and preserve a visibly unfinished portion for the next segment.
+
+### Learning memory
+
+Retry outcomes can be stored as operation-scoped production lessons.
+
+A correction is reusable only after a retry using that correction is marked successful.
+
+Example:
+
+```text
+operation: piso
+provider: KLING
+failure: PROGRESS_OVERSHOOT
+successful correction:
+  leave a visibly unfinished portion for the next segment
+```
+
+Future `piso + KLING` jobs can receive that successful correction proactively. The lesson is not injected into unrelated operation types such as footings or roofing.
+
+This is operational learning, not model-weight training: the system accumulates production rules from successful corrections and uses them to reduce repeated failures.
+
+### Next M3 integration
+
+The fiscal decision and learning core are implemented. The next integration is an automatic visual observation provider that produces structured observations from generated video/keyframes so the fiscal can run without a human estimating progress.
