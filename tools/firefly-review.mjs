@@ -235,6 +235,15 @@ function providersFromEnv(env = process.env) {
   ];
 }
 
+export function visualProviderStatuses(env = process.env) {
+  return providersFromEnv(env).map(provider => ({
+    id: provider.id,
+    name: provider.name,
+    model: provider.model,
+    configured: provider.configured,
+  }));
+}
+
 export function selectConfiguredVisualProvider(providerId, env = process.env) {
   const providers = providersFromEnv(env);
   const selected = providerId
