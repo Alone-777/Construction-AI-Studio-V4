@@ -8,6 +8,10 @@ import type {
   FireflyExecutionPlanValidationResult,
 } from './types';
 import { CONSTRUCTION_BRAIN_SCHEMA_VERSION } from './types';
+import {
+  applyLearnedCorrectionsToPrompt,
+  type ConstructionLearningMemory,
+} from './fiscal-learning';
 
 function sanitizeSlotPart(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '_');
@@ -127,8 +131,13 @@ function segmentChecklist(
   ];
 }
 
+export interface BuildFireflyExecutionPlanOptions {
+  learningMemory?: ConstructionLearningMemory;
+}
+
 export function buildFireflyExecutionPlan(
   bundle: ConstructionBrainBundle,
+  options: BuildFireflyExecutionPlanOptions = {},
 ): FireflyExecutionPlan {
   const jobs: FireflyExecutionJob[] = [];
   let previousGlobalJobId: string | undefined;
@@ -150,6 +159,17 @@ export function buildFireflyExecutionPlan(
       const scenePart = sanitizeSlotPart(scene.id);
       const segmentPart = sanitizeSlotPart(segment.id);
 
+      const operationType = bundle.constructionMap.operations.find(
+        operation => operation.id === scene.operationId,
+      )?.type ?? 'unknown';
+      const basePrompt = segmentPrompt(bundle, scene, segment, segment.provider);
+      const prompt = applyLearnedCorrectionsToPrompt(
+        basePrompt,
+        options.learningMemory,
+        operationType,
+        segment.provider,
+      );
+
       jobs.push({
         id: jobId,
         projectId: bundle.project.projectId,
@@ -170,7 +190,7 @@ export function buildFireflyExecutionPlan(
         terminalRequirement: isLast ? 'SCENE_EXIT' : 'INTERMEDIATE_CONTINUATION',
         entryKeyframeId: scene.keyframes.entry.id,
         exitKeyframeId: scene.keyframes.exit.id,
-        prompt: segmentPrompt(bundle, scene, segment, segment.provider),
+        prompt,
         negativeConstraints: negativeConstraints(segment),
         continuityLocks: segmentContinuityLocks(scene, segment),
         acceptanceChecklist: segmentChecklist(segment, isLast),
