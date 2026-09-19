@@ -176,3 +176,26 @@ The runner refuses to mark a job complete if either the video file or terminal f
 ### Safety boundary
 
 The local runner never decides construction logic and never marks visual quality as approved. It only coordinates files and execution state. Construction logic remains in the Construction Brain; visual approval remains the future Fiscal's responsibility.
+
+
+## Exporting firefly_plan.json from the Studio
+
+The Construction Brain export package validates the canonical brain and Firefly execution plan before any production manifest is released.
+
+The export package contains:
+
+- `project.json`
+- `construction_map.json`
+- `world_state.json`
+- `scenes.json`
+- `firefly_plan.json`
+
+The Studio workspace now exposes **EXPORTAR FIREFLY** when a project is open. The button downloads a validated `firefly_plan.json` directly from the active project.
+
+The downloaded file can be passed to the local runner:
+
+```bash
+npm run firefly:prepare -- /path/to/firefly_plan.json
+```
+
+If the Construction Brain has an invalid state, dependency, scene duration, continuity contract or provider job, export is blocked instead of producing a bad execution queue.
