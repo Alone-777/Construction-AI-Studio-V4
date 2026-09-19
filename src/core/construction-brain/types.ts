@@ -187,3 +187,56 @@ export interface ConstructionBrainValidationResult {
   valid: boolean;
   issues: ConstructionBrainValidationIssue[];
 }
+
+
+export type FireflyBridgeModelId = 'KLING' | 'VEO_FAST';
+
+export type FireflyJobSource =
+  | {
+      kind: 'KEYFRAME';
+      keyframeId: string;
+    }
+  | {
+      kind: 'PREVIOUS_SEGMENT_LAST_FRAME';
+      previousJobId: string;
+    };
+
+export interface FireflyExecutionJob {
+  id: string;
+  projectId: string;
+  sceneId: string;
+  sceneNumber: number;
+  segmentId: string;
+  segmentIndex: number;
+  model: FireflyBridgeModelId;
+  durationSeconds: number;
+  aspectRatio: '16:9';
+  resolution: {
+    width: 1920;
+    height: 1080;
+  };
+  source: FireflyJobSource;
+  terminalRequirement: 'INTERMEDIATE_CONTINUATION' | 'SCENE_EXIT';
+  entryKeyframeId: string;
+  exitKeyframeId: string;
+  prompt: string;
+  negativeConstraints: string[];
+  continuityLocks: ConstructionBrainKeyframeSpec['continuityLocks'];
+  acceptanceChecklist: string[];
+  output: {
+    videoSlot: string;
+    lastFrameSlot: string;
+  };
+  status: 'READY';
+}
+
+export interface FireflyExecutionPlan {
+  schemaVersion: typeof CONSTRUCTION_BRAIN_SCHEMA_VERSION;
+  projectId: string;
+  jobs: FireflyExecutionJob[];
+}
+
+export interface FireflyExecutionPlanValidationResult {
+  valid: boolean;
+  issues: ConstructionBrainValidationIssue[];
+}
