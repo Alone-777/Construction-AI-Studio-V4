@@ -90,6 +90,19 @@ Ao receber `CRIAR NOVO PROJETO`, o ChatGPT deve:
 
 Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
+## Regra de acesso local
+
+O ChatGPT não deve exigir, sugerir ou inventar dependências como **Desktop Commander**, "dispositivo conectado", agente local externo ou qualquer outro conector que não esteja explicitamente configurado neste projeto.
+
+O ambiente local oficial é o **Construction AI Studio rodando no Windows + WSL**, iniciado por `npm run ligar` ou pelo atalho **Construction AI Studio**.
+
+Se a conversa não conseguir inspecionar diretamente o computador local:
+- não declarar o dispositivo como offline sem evidência;
+- não bloquear `CONTINUAR` ou `CRIAR NOVO PROJETO` por ausência de um conector não configurado;
+- usar o GitHub e o `START_HERE.md` para verificar código e regras;
+- para estado local realmente indispensável, pedir somente uma confirmação objetiva do usuário, saída de `npm run verificar` ou uma captura do próprio Construction AI Studio;
+- quando a Imagem Inicial precisar ser verificada, aceitar a confirmação do painel do Construction AI ou do comando `npm run verificar`; não exigir Desktop Commander.
+
 ## Regra de continuidade
 
 O repositório e os arquivos persistidos no Studio são a fonte durável de verdade. Conversas não devem ser usadas como banco de estado do Construction AI. Em retomadas, conferir o repo e o sistema antes de assumir o estado atual.
