@@ -125,6 +125,15 @@ try {
   assert.equal(bundle.result.policy.writeMode, 'readonly');
 
   ws.send(JSON.stringify({
+    id: 'review-1',
+    op: 'review_bundle',
+    includeImages: false,
+  }));
+  const review = await waitForMessage(ws, (message) => message.id === 'review-1');
+  assert.equal(review.ok, true);
+  assert.equal(review.result.reviewReady, false);
+
+  ws.send(JSON.stringify({
     id: 'blocked-write',
     op: 'write_file',
     path: 'bridge-smoke-should-not-exist.txt',
@@ -134,7 +143,7 @@ try {
   assert.equal(blocked.ok, false);
   assert.match(blocked.error, /read-only/i);
 
-  console.log('BRIDGE_SMOKE_PASS auth=ok overview=ok snapshot=ok bundle=ok readonly_gate=ok');
+  console.log('BRIDGE_SMOKE_PASS auth=ok overview=ok snapshot=ok bundle=ok review=ok readonly_gate=ok');
 } finally {
   if (ws && ws.readyState === WebSocket.OPEN) ws.close();
   child.kill('SIGTERM');
