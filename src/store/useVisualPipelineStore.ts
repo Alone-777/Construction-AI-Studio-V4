@@ -38,8 +38,12 @@ import {
   type VisualPipelineStartDraft,
 } from '../components/visual-pipeline/presentation';
 
+const FIREFLY_VIDEO_JOB_LOCKED_MESSAGE =
+  'Outro JOB Firefly está em andamento. Finalize o vídeo atual antes de preparar o próximo.';
+
 interface VisualPipelineUIState {
   readonly runs: Readonly<Record<string, VisualPipelineRun>>;
+  readonly activeVideoJobKey?: string;
   readonly projectMemories: Readonly<Record<string, VisualReferenceMemory>>;
   readonly errors: Readonly<Record<string, string | undefined>>;
   readonly busy: Readonly<Record<string, boolean>>;
@@ -90,6 +94,10 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
       set(state => ({
         errors: { ...state.errors, [key]: safePipelineError(result.error) },
         busy: { ...state.busy, [key]: false },
+        activeVideoJobKey: result.run?.currentPhase === 'FAILED' &&
+          state.activeVideoJobKey === key
+          ? undefined
+          : state.activeVideoJobKey,
       }));
       return;
     }
@@ -101,7 +109,23 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
       },
       errors: { ...state.errors, [key]: undefined },
       busy: { ...state.busy, [key]: false },
+      activeVideoJobKey: result.run.currentPhase === 'COMPLETED' &&
+        state.activeVideoJobKey === key
+        ? undefined
+        : state.activeVideoJobKey,
     }));
+  };
+
+  const claimVideoJob = (key: string): boolean => {
+    const activeVideoJobKey = get().activeVideoJobKey;
+    if (!activeVideoJobKey || activeVideoJobKey === key) {
+      if (!activeVideoJobKey) set({ activeVideoJobKey: key });
+      return true;
+    }
+    set(state => ({
+      errors: { ...state.errors, [key]: FIREFLY_VIDEO_JOB_LOCKED_MESSAGE },
+    }));
+    return false;
   };
 
   const withRun = (
@@ -135,6 +159,7 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
 
   return {
     runs: {},
+    activeVideoJobKey: undefined,
     projectMemories: {},
     errors: {},
     busy: {},
@@ -179,10 +204,17 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
       recordedAt: Date.now(),
       metadata: { source: 'visual-pipeline-ui', explicitApproval: true },
     })),
-    prepareVideo: key => withRun(key, run => orchestrator().prepareVideo(run)),
-    generateVideo: key => withRunAsync(key, run => orchestrator().generateVideo(run)),
+    prepareVideo(key) {
+      if (!claimVideoJob(key)) return;
+      withRun(key, run => orchestrator().prepareVideo(run));
+    },
+    generateVideo(key) {
+      if (!claimVideoJob(key)) return Promise.resolve();
+      return withRunAsync(key, run => orchestrator().generateVideo(run));
+    },
 
     submitVideo(key, asset) {
+      if (!claimVideoJob(key)) return;
       withRun(key, run => {
         if (!run.videoState) return {
           status: 'FAILURE',
@@ -201,6 +233,7 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
     },
 
     validateVideo(key, answers) {
+      if (!claimVideoJob(key)) return Promise.resolve();
       return withRunAsync(key, run => {
         const provider = createManualVideoObservationProvider({
           id: UI_VIDEO_OBSERVER_ID,
@@ -212,9 +245,18 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
       });
     },
 
-    acknowledgeVideoWarning: key => withRun(key, run => orchestrator().acknowledgeVideoWarning(run)),
-    retryVideo: key => withRun(key, run => orchestrator().retryVideo(run)),
-    acceptVideo: key => withRun(key, run => orchestrator().acceptVideo(run)),
+    acknowledgeVideoWarning(key) {
+      if (!claimVideoJob(key)) return;
+      withRun(key, run => orchestrator().acknowledgeVideoWarning(run));
+    },
+    retryVideo(key) {
+      if (!claimVideoJob(key)) return;
+      withRun(key, run => orchestrator().retryVideo(run));
+    },
+    acceptVideo(key) {
+      if (!claimVideoJob(key)) return;
+      withRun(key, run => orchestrator().acceptVideo(run));
+    },
     clearError: key => set(state => ({ errors: { ...state.errors, [key]: undefined } })),
   };
 });
