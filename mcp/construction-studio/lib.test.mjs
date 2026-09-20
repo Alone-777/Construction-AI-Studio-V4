@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -7,6 +10,8 @@ import {
   buildNamedAction,
   normalizeRelativePath,
   redactSecrets,
+  resolveExistingPath,
+  resolveWritePath,
 } from './lib.mjs';
 
 test('normalizeRelativePath blocks absolute paths and traversal', () => {
@@ -56,4 +61,20 @@ test('named actions expose only deterministic commands', () => {
   });
 
   assert.throws(() => buildNamedAction('shell'));
+});
+
+
+test('symlinks cannot bypass secret or runtime write boundaries', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'construction-mcp-'));
+  try {
+    await writeFile(path.join(root, '.env'), 'SECRET=value\n', 'utf8');
+    await mkdir(path.join(root, '.firefly'));
+    await symlink(path.join(root, '.env'), path.join(root, 'safe-looking-file'));
+    await symlink(path.join(root, '.firefly'), path.join(root, 'runtime-alias'));
+
+    await assert.rejects(() => resolveExistingPath(root, 'safe-looking-file'));
+    await assert.rejects(() => resolveWritePath(root, 'runtime-alias/state.json'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
