@@ -21,7 +21,8 @@ console.log('CONSTRUCTION AI STUDIO');
 console.log('Raiz:', root);
 console.log('Imagem Inicial:', initialImagePath);
 console.log('Backend: http://127.0.0.1:8787');
-console.log('Painel Vite: o endereço será mostrado abaixo.');
+const panelUrl = 'http://127.0.0.1:5173';
+console.log('Painel:', panelUrl);
 if (!existsSync(resolve(root, '.env'))) {
   console.log('AVISO: .env não encontrado. O Studio inicia, mas providers externos podem ficar indisponíveis.');
 }
@@ -58,4 +59,15 @@ process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
 launch(['run', 'server'], 'Backend');
-launch(['run', 'dev'], 'Painel');
+launch(['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], 'Painel');
+
+if (process.platform === 'linux') {
+  setTimeout(() => {
+    const opener = spawn('xdg-open', [panelUrl], {
+      cwd: root,
+      stdio: 'ignore',
+      detached: true,
+    });
+    opener.unref();
+  }, 1500);
+}
