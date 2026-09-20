@@ -40,7 +40,16 @@
 
   <div class="row">
     <button id="bundle" class="primary">Supervisor bundle</button>
-    <button id="copy" class="secondary">Copiar resultado</button>
+    <button id="review" class="primary">Review bundle</button>
+  </div>
+
+  <button id="copy" class="secondary" style="margin-top:10px">Copiar resultado</button>
+
+  <div id="imagePanel" style="display:none;margin-top:12px">
+    <label>Source frame</label>
+    <img id="sourceImage" alt="Source frame" style="width:100%;border-radius:8px;border:1px solid #333">
+    <label>Contact sheet</label>
+    <img id="contactImage" alt="Contact sheet" style="width:100%;border-radius:8px;border:1px solid #333">
   </div>
 
   <label for="request">Requisição JSON</label>
