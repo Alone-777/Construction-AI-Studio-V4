@@ -174,6 +174,9 @@ Read operations:
 
 Safe write operations, disabled by default:
 
+- `record_review_retry`
+- `record_review_pass`
+- `ingest_review_candidate`
 - `write_file`
 - `replace_text`
 - `git_stage`
@@ -249,67 +252,10 @@ Construction AI Studio
 This keeps the local security model independent of whichever transport is used.
 
 
-## Temporary ChatGPT read-share gateway
 
-The project also contains a separate HTTP process for temporary, **read-only** sharing with ChatGPT or another approved HTTPS client.
+## Current transport
 
-It is deliberately separate from the WebSocket control bridge:
-
-```text
-Local control bridge: 127.0.0.1:8791  -> read/write policy + WebSocket
-Read-share gateway:   127.0.0.1:8792  -> GET-only, read-only, temporary
-```
-
-The share gateway never exposes `write_file`, `replace_text`, Git mutation, arbitrary shell, or the control WebSocket.
-
-Generate a **separate disposable token**:
-
-```bash
-npm run --silent share-token
-```
-
-Configure and start it:
-
-```bash
-export CONSTRUCTION_STUDIO_ROOT="$HOME/Construction-AI-Studio-V4"
-export CONSTRUCTION_SHARE_TOKEN='DISPOSABLE_READ_ONLY_TOKEN'
-export CONSTRUCTION_SHARE_WORKSPACE='cabana_do_riacho_1789836983388'
-export CONSTRUCTION_SHARE_HOST=127.0.0.1
-export CONSTRUCTION_SHARE_PORT=8792
-export CONSTRUCTION_SHARE_TTL_MINUTES=30
-export CONSTRUCTION_SHARE_MAX_REQUESTS=20
-
-npm run share
-```
-
-Supported GET endpoints:
-
-```text
-/health
-/s/<share-token>/supervisor
-/s/<share-token>/review
-/s/<share-token>/source
-/s/<share-token>/contact
-```
-
-An optional `?workspace=<name>` query parameter overrides `CONSTRUCTION_SHARE_WORKSPACE`.
-
-The token expires when its configured TTL elapses or when the process is stopped. The gateway also stops serving after the configured request cap. Restart it with a new token for another session.
-
-### Tunnel only the read-share port
-
-If a remote HTTPS client needs to reach it, tunnel **port 8792 only**. Do not tunnel the local control bridge on port 8791.
-
-For example, with Cloudflare Quick Tunnel:
-
-```bash
-cloudflared tunnel --url http://127.0.0.1:8792
-```
-
-The resulting HTTPS URL can be combined with one of the read-only paths above.
-
-The disposable share token is intentionally different from `CONSTRUCTION_BRIDGE_TOKEN`. Never share the control token.
-
+The normal remote transport is the private `Construction-AI-Relay` GitHub mailbox. The bridge itself remains bound to loopback only and is not tunneled to the public internet.
 
 ## Guarded ChatGPT review writeback
 
