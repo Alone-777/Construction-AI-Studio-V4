@@ -18,7 +18,8 @@ function psLiteral(value) {
   return "'" + value.replaceAll("'", "''") + "'";
 }
 
-const linuxCommand = `cd '${root.replaceAll("'", "'\\''")}' && npm run ligar`;
+const linuxRoot = root.replaceAll("'", "'\\''");
+const launchArgs = `/k wsl.exe -d "${distro}" bash -ic "cd '${linuxRoot}' && npm run ligar"`;
 const shortcutName = 'Construction AI Studio.lnk';
 const description = 'Ligar Construction AI Studio (WSL + backend + painel)';
 
@@ -27,8 +28,8 @@ const ps = [
   `$shortcutPath = Join-Path $desktop ${psLiteral(shortcutName)}`,
   `$shell = New-Object -ComObject WScript.Shell`,
   `$shortcut = $shell.CreateShortcut($shortcutPath)`,
-  `$shortcut.TargetPath = (Get-Command wsl.exe).Source`,
-  `$shortcut.Arguments = ${psLiteral(`-d "${distro}" bash -lc "${linuxCommand.replaceAll('"', '\\"')}"`)}`,
+  `$shortcut.TargetPath = "$env:SystemRoot\\System32\\cmd.exe"`,
+  `$shortcut.Arguments = ${psLiteral(launchArgs)}`,
   `$shortcut.WorkingDirectory = $desktop`,
   `$shortcut.Description = ${psLiteral(description)}`,
   `$shortcut.IconLocation = "$env:SystemRoot\\System32\\wsl.exe,0"`,
@@ -55,6 +56,7 @@ console.log('');
 console.log('BOTÃO INSTALADO COM SUCESSO');
 console.log('Atalho:', result.stdout.trim());
 console.log('');
-console.log('Daqui em diante, clique em "Construction AI Studio" na Área de Trabalho do Windows.');
-console.log('Ele liga o sistema; o navegador abre automaticamente quando o painel estiver pronto.');
+console.log('O botão abre um terminal visível do Windows e inicia o WSL em modo interativo.');
+console.log('Se houver algum erro, a janela permanece aberta para diagnóstico.');
+console.log('Quando o painel estiver pronto, o navegador do Windows será aberto automaticamente.');
 console.log('');
