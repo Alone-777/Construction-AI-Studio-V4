@@ -15,6 +15,7 @@ import {
   runProcess,
   sha256,
 } from '../../mcp/construction-studio/lib.mjs';
+import { applyExternalRetryDecision } from '../../tools/firefly-review.mjs';
 
 const READ_OPS = new Set([
   'overview',
@@ -30,6 +31,7 @@ const READ_OPS = new Set([
 ]);
 
 const WRITE_OPS = new Set([
+  'record_review_retry',
   'write_file',
   'replace_text',
   'git_stage',
@@ -67,6 +69,8 @@ export function safeRequestSummary(message) {
   if (typeof message.action === 'string') summary.action = message.action;
   if (typeof message.workspace === 'string') summary.workspace = message.workspace;
   if (typeof message.jobId === 'string') summary.jobId = message.jobId;
+  if (typeof message.expectedAttempts === 'number') summary.expectedAttempts = message.expectedAttempts;
+  if (typeof message.observedStagePercentage === 'number') summary.observedStagePercentage = message.observedStagePercentage;
   if (typeof message.message === 'string') summary.commitMessageLength = message.message.length;
   if (typeof message.content === 'string') summary.contentBytes = Buffer.byteLength(message.content, 'utf8');
   if (typeof message.search === 'string') summary.searchLength = message.search.length;
@@ -496,6 +500,34 @@ export function createBridgeExecutor({
           result = await buildReviewBundle(projectRoot, message.workspace, {
             includeImages: message.includeImages !== false,
           });
+          break;
+        }
+
+        case 'record_review_retry': {
+          requireWriteMode(policy);
+
+          const workspace = normalizeRelativePath(message.workspace);
+          const workspaces = await listWorkspaces(projectRoot);
+          if (!workspaces.includes(workspace)) {
+            throw new Error(`Unknown Firefly workspace: ${workspace}`);
+          }
+
+          if (typeof message.jobId !== 'string' || !message.jobId) {
+            throw new Error('jobId is required.');
+          }
+          if (message.confirm !== 'RETRY_CURRENT_JOB') {
+            throw new Error('record_review_retry requires confirm=RETRY_CURRENT_JOB.');
+          }
+
+          result = await applyExternalRetryDecision(
+            path.join(projectRoot, '.firefly', workspace),
+            message.jobId,
+            {
+              expectedAttempts: message.expectedAttempts,
+              expectedContactSheetSha256: message.expectedContactSheetSha256,
+              observedStagePercentage: message.observedStagePercentage,
+            },
+          );
           break;
         }
 
