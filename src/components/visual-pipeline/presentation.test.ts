@@ -38,7 +38,13 @@ const VIDEO_OK: VideoEvidenceAnswers = {
 };
 
 beforeEach(() => {
-  useVisualPipelineStore.setState({ runs: {}, projectMemories: {}, errors: {}, busy: {} });
+  useVisualPipelineStore.setState({
+    runs: {},
+    activeVideoJobKey: undefined,
+    projectMemories: {},
+    errors: {},
+    busy: {},
+  });
 });
 
 describe('operational visual pipeline presentation', () => {
@@ -169,11 +175,40 @@ describe('operational visual pipeline presentation', () => {
     const { key } = await videoManualReady();
     const run = useVisualPipelineStore.getState().runs[key];
     expect(run.currentPhase).toBe('VIDEO_MANUAL_ACTION_REQUIRED');
-    expect(requiredActionLabel(run)).toBe('Enviar vídeo gerado');
+    expect(requiredActionLabel(run)).toBe('Enviar vídeo do Firefly');
+    expect(run.videoState?.request.durationSeconds).toBe(8);
     if (run.videoState?.result?.status === 'MANUAL_READY') {
       expect(run.videoState.result.package.prompt).toBe(run.videoState.request.renderedPrompt);
       expect(run.videoState.result.package.sourceImage.id).toBe(run.imageState.officialReference?.asset.id);
     }
+  });
+
+  it('allows only one Firefly video job at a time and releases the next job after acceptance', async () => {
+    const first = await imageValidated(0);
+    useVisualPipelineStore.getState().approveImage(first.key);
+    useVisualPipelineStore.getState().prepareVideo(first.key);
+
+    expect(useVisualPipelineStore.getState().activeVideoJobKey).toBe(first.key);
+    expect(useVisualPipelineStore.getState().runs[first.key].currentPhase).toBe('VIDEO_REQUEST_READY');
+
+    const second = await imageValidated(1);
+    useVisualPipelineStore.getState().approveImage(second.key);
+    useVisualPipelineStore.getState().prepareVideo(second.key);
+
+    expect(useVisualPipelineStore.getState().activeVideoJobKey).toBe(first.key);
+    expect(useVisualPipelineStore.getState().runs[second.key].videoState).toBeUndefined();
+    expect(useVisualPipelineStore.getState().errors[second.key]).toContain('Outro JOB Firefly');
+
+    await useVisualPipelineStore.getState().generateVideo(first.key);
+    useVisualPipelineStore.getState().submitVideo(first.key, videoAsset('first'));
+    await useVisualPipelineStore.getState().validateVideo(first.key, VIDEO_OK);
+    useVisualPipelineStore.getState().acceptVideo(first.key);
+
+    expect(useVisualPipelineStore.getState().activeVideoJobKey).toBeUndefined();
+
+    useVisualPipelineStore.getState().prepareVideo(second.key);
+    expect(useVisualPipelineStore.getState().activeVideoJobKey).toBe(second.key);
+    expect(useVisualPipelineStore.getState().runs[second.key].currentPhase).toBe('VIDEO_REQUEST_READY');
   });
 
   it('submits and validates video without accepting it automatically', async () => {
@@ -263,11 +298,12 @@ describe('operational visual pipeline presentation', () => {
   });
 });
 
-function startRun() {
+function startRun(index = 0) {
   const project = createCabanaDoRiachoProject();
-  const pair = project.scenes.flatMap(scene => scene.stages.map(stage => ({ scene, stage })))
-    .find(item => item.stage.decision && item.stage.worldStateBefore && item.stage.worldStateAfter);
-  if (!pair) throw new Error('Demo project has no committed stage.');
+  const pairs = project.scenes.flatMap(scene => scene.stages.map(stage => ({ scene, stage })))
+    .filter(item => item.stage.decision && item.stage.worldStateBefore && item.stage.worldStateAfter);
+  const pair = pairs[index];
+  if (!pair) throw new Error(`Demo project has no committed stage at index ${index}.`);
   const key = visualPipelineKey(project.id, pair.scene.id, String(pair.stage.percentage));
   useVisualPipelineStore.getState().start(
     key,
@@ -276,20 +312,20 @@ function startRun() {
   return { project, key, run: useVisualPipelineStore.getState().runs[key] };
 }
 
-async function imageManualReady() {
-  const value = startRun();
+async function imageManualReady(index = 0) {
+  const value = startRun(index);
   await useVisualPipelineStore.getState().generateImage(value.key);
   return value;
 }
 
-async function imageSubmitted() {
-  const value = await imageManualReady();
-  useVisualPipelineStore.getState().submitImage(value.key, imageAsset('candidate'));
+async function imageSubmitted(index = 0) {
+  const value = await imageManualReady(index);
+  useVisualPipelineStore.getState().submitImage(value.key, imageAsset(`candidate-${index}`));
   return value;
 }
 
-async function imageValidated() {
-  const value = await imageSubmitted();
+async function imageValidated(index = 0) {
+  const value = await imageSubmitted(index);
   await useVisualPipelineStore.getState().validateImage(value.key, IMAGE_OK);
   return value;
 }
