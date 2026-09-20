@@ -9,6 +9,7 @@ import {
   imageAssetFromFile,
   isLocalPreviewUri,
   pipelineSteps,
+  nextVisualPipelineJobKey,
   requiredActionLabel,
   videoAssetFromFile,
   visualPipelineKey,
@@ -58,7 +59,15 @@ export function VisualPipelineWorkspace() {
   const busy = key ? !!pipeline.busy[key] : false;
   const error = localError || (key ? pipeline.errors[key] : undefined);
   const ownsActiveVideoJob = !!key && pipeline.activeVideoJobKey === key;
-  const videoJobBlocked = !!pipeline.activeVideoJobKey && pipeline.activeVideoJobKey !== key;
+  const nextJobKey = project ? nextVisualPipelineJobKey(project, pipeline.runs) : undefined;
+  const sequenceBlocked = !!nextJobKey && nextJobKey !== key;
+  const activeJobBlocked = !!pipeline.activeVideoJobKey && pipeline.activeVideoJobKey !== key;
+  const videoJobBlockMessage = activeJobBlocked
+    ? 'Outro JOB Firefly está em andamento. Finalize o vídeo atual para liberar esta etapa.'
+    : sequenceBlocked
+      ? 'Esta etapa está aguardando a conclusão do JOB anterior na ordem temporal.'
+      : undefined;
+  const videoJobBlocked = !!videoJobBlockMessage;
 
   const start = () => {
     if (!project || !scene || !stage) return;
@@ -98,6 +107,7 @@ export function VisualPipelineWorkspace() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {ownsActiveVideoJob && <span className="badge badge-warning">JOB Firefly ativo · 8s</span>}
+            {sequenceBlocked && <span className="badge badge-locked">Aguardando JOB anterior</span>}
             <span className={`badge ${run?.currentPhase === 'COMPLETED' ? 'badge-success' : 'badge-info'}`}>
               {run ? humanPhase(run.currentPhase) : 'Não iniciado'}
             </span>
@@ -119,8 +129,13 @@ export function VisualPipelineWorkspace() {
           <p className="mx-auto mt-2 max-w-xl text-xs text-studio-muted">
             A interface usará a ação física e o snapshot oficial já aprovados. Geração, validação e aprovação continuam sendo passos separados.
           </p>
-          <button type="button" onClick={start} className="btn-primary mt-4">
-            Iniciar pipeline visual
+          {sequenceBlocked && (
+            <p className="mx-auto mt-3 max-w-xl rounded border border-purple-500/40 bg-purple-500/10 p-2 text-xs text-purple-200">
+              O Construction AI mantém a ordem temporal: conclua o JOB anterior antes de iniciar esta etapa.
+            </p>
+          )}
+          <button type="button" onClick={start} className="btn-primary mt-4" disabled={sequenceBlocked}>
+            {sequenceBlocked ? 'Aguardando JOB anterior' : 'Iniciar pipeline visual'}
           </button>
         </section>
       ) : (
@@ -128,6 +143,7 @@ export function VisualPipelineWorkspace() {
           run={run}
           busy={busy}
           videoJobBlocked={videoJobBlocked}
+          videoJobBlockMessage={videoJobBlockMessage}
           onLocalError={setLocalError}
           actions={{
             generateImage: () => pipeline.generateImage(key),
@@ -179,12 +195,14 @@ function PipelinePhase({
   run,
   busy,
   videoJobBlocked,
+  videoJobBlockMessage,
   actions,
   onLocalError,
 }: {
   run: VisualPipelineRun;
   busy: boolean;
   videoJobBlocked: boolean;
+  videoJobBlockMessage?: string;
   actions: PipelineActions;
   onLocalError: (message: string) => void;
 }) {
@@ -245,7 +263,7 @@ function PipelinePhase({
           <AssetPreview uri={run.imageState.officialReference?.asset.uri} kind="image" />
           {videoJobBlocked && (
             <p className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">
-              Outro JOB Firefly está em andamento. Finalize o vídeo atual para liberar esta etapa.
+              {videoJobBlockMessage}
             </p>
           )}
           <button type="button" className="btn-primary" disabled={videoJobBlocked}
