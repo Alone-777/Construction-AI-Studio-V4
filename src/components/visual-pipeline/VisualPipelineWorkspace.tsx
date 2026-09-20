@@ -57,6 +57,8 @@ export function VisualPipelineWorkspace() {
   const run = key ? pipeline.runs[key] : undefined;
   const busy = key ? !!pipeline.busy[key] : false;
   const error = localError || (key ? pipeline.errors[key] : undefined);
+  const ownsActiveVideoJob = !!key && pipeline.activeVideoJobKey === key;
+  const videoJobBlocked = !!pipeline.activeVideoJobKey && pipeline.activeVideoJobKey !== key;
 
   const start = () => {
     if (!project || !scene || !stage) return;
@@ -94,9 +96,12 @@ export function VisualPipelineWorkspace() {
               Cena {scene.number} · Etapa {stage.percentage}% · {stage.physicalAction}
             </p>
           </div>
-          <span className={`badge ${run?.currentPhase === 'COMPLETED' ? 'badge-success' : 'badge-info'}`}>
-            {run ? humanPhase(run.currentPhase) : 'Não iniciado'}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {ownsActiveVideoJob && <span className="badge badge-warning">JOB Firefly ativo · 8s</span>}
+            <span className={`badge ${run?.currentPhase === 'COMPLETED' ? 'badge-success' : 'badge-info'}`}>
+              {run ? humanPhase(run.currentPhase) : 'Não iniciado'}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -122,6 +127,7 @@ export function VisualPipelineWorkspace() {
         <PipelinePhase
           run={run}
           busy={busy}
+          videoJobBlocked={videoJobBlocked}
           onLocalError={setLocalError}
           actions={{
             generateImage: () => pipeline.generateImage(key),
@@ -172,11 +178,13 @@ interface PipelineActions {
 function PipelinePhase({
   run,
   busy,
+  videoJobBlocked,
   actions,
   onLocalError,
 }: {
   run: VisualPipelineRun;
   busy: boolean;
+  videoJobBlocked: boolean;
   actions: PipelineActions;
   onLocalError: (message: string) => void;
 }) {
@@ -235,27 +243,34 @@ function PipelinePhase({
         <section className="panel p-4 space-y-3">
           <SectionHeading title="Imagem oficial desta etapa" subtitle="A aprovação explícita foi registrada na memória visual." />
           <AssetPreview uri={run.imageState.officialReference?.asset.uri} kind="image" />
-          <button type="button" className="btn-primary" onClick={actions.prepareVideo}>{cta ?? 'Preparar vídeo'}</button>
+          {videoJobBlocked && (
+            <p className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">
+              Outro JOB Firefly está em andamento. Finalize o vídeo atual para liberar esta etapa.
+            </p>
+          )}
+          <button type="button" className="btn-primary" disabled={videoJobBlocked}
+            onClick={actions.prepareVideo}>{cta ?? 'Preparar JOB Firefly'}</button>
         </section>
       );
     case 'VIDEO_REQUEST_READY':
       return (
-        <GenerationPanel title="Preparar vídeo" prompt={run.videoState?.request.renderedPrompt ?? ''}
+        <GenerationPanel title="JOB Firefly · imagem + prompt" prompt={run.videoState?.request.renderedPrompt ?? ''}
           aspectRatio={run.videoState?.request.aspectRatio} resolution={run.videoState?.request.resolution}
           duration={run.videoState?.request.durationSeconds}
           referenceUri={run.imageState.officialReference?.asset.uri}
           correctionChange={run.videoState?.correctionPlan?.changeInstructions}
           correctionPreserve={run.videoState?.correctionPlan?.preserveInstructions}
-          cta={cta ?? 'Gerar vídeo'} busy={busy} onAction={actions.generateVideo} />
+          status="Duração fixa: 8 segundos · processe somente este JOB no Firefly"
+          cta={cta ?? 'Abrir JOB Firefly'} busy={busy} onAction={actions.generateVideo} />
       );
     case 'VIDEO_MANUAL_ACTION_REQUIRED':
       return (
-        <GenerationPanel title="Geração manual de vídeo" prompt={run.videoState?.request.renderedPrompt ?? ''}
+        <GenerationPanel title="JOB Firefly em andamento" prompt={run.videoState?.request.renderedPrompt ?? ''}
           aspectRatio={run.videoState?.request.aspectRatio} resolution={run.videoState?.request.resolution}
           duration={run.videoState?.request.durationSeconds}
           referenceUri={run.imageState.officialReference?.asset.uri}
-          status="Aguardando vídeo gerado" hideAction>
-          <FileSubmission kind="video" cta={cta ?? 'Enviar vídeo gerado'} onError={onLocalError}
+          status="Aguardando o vídeo de 8 segundos gerado no Firefly" hideAction>
+          <FileSubmission kind="video" cta={cta ?? 'Enviar vídeo do Firefly'} onError={onLocalError}
             onSubmit={actions.submitVideo} />
         </GenerationPanel>
       );
