@@ -101,6 +101,25 @@ export function visualPipelineKey(projectId: string, sceneId: string, stageId: s
   return `${projectId}::${sceneId}::${stageId}`;
 }
 
+export function nextVisualPipelineJobKey(
+  project: Project,
+  runs: Readonly<Record<string, VisualPipelineRun>>,
+): string | undefined {
+  for (const scene of project.scenes) {
+    for (const stage of scene.stages) {
+      const eligible = !!stage.decision &&
+        stage.status !== 'rejected' &&
+        !!stage.worldStateBefore &&
+        !!stage.worldStateAfter;
+      if (!eligible) continue;
+
+      const key = visualPipelineKey(project.id, scene.id, String(stage.percentage));
+      if (runs[key]?.currentPhase !== 'COMPLETED') return key;
+    }
+  }
+  return undefined;
+}
+
 export function createVisualPipelineStartDraft(
   project: Project,
   scene: Scene,
