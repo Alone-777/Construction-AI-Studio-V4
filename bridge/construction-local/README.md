@@ -163,6 +163,7 @@ Read operations:
 
 - `overview`
 - `supervisor_snapshot` — bundles Git status, diff check, recent log, workspace list and optional Firefly workspace status in one request
+- `supervisor_bundle` — returns the selected workspace's current job, state, effective prompt, source descriptor, checklist, negative constraints, latest contact-sheet path, downstream blocked jobs, queue summary and next suggested system action, plus Git context
 - `list_directory`
 - `read_file`
 - `read_files`
