@@ -105,9 +105,29 @@ Ao receber `CRIAR NOVO PROJETO`, o ChatGPT deve:
 1. ler este `START_HERE.md`;
 2. verificar GitHub, branch operacional e funcionamento básico do sistema;
 3. tratar o trabalho como um projeto novo, sem reutilizar o estado operacional de uma construção anterior;
-4. verificar ou solicitar a Imagem Inicial;
-5. preparar a nova construção desde o primeiro JOB elegível em ordem temporal;
-6. manter o Construction AI como executor e fonte do estado operacional.
+4. verificar que existe exatamente uma Imagem Inicial;
+5. se a descrição do que será construído ainda não estiver disponível, pedir somente essa informação indispensável;
+6. enviar pelo repositório privado `Alone-777/Construction-AI-Relay` uma operação guardada `create_project` com `confirm=CREATE_NEW_PROJECT`;
+7. aguardar a resposta real do Relay e confirmar o workspace criado;
+8. continuar pelo primeiro JOB elegível em ordem temporal;
+9. manter o Construction AI como executor e fonte do estado operacional.
+
+Formato operacional do Relay:
+
+```json
+{
+  "protocol": "construction-ai-relay/0.1",
+  "requestId": "<id-unico>",
+  "operation": {
+    "op": "create_project",
+    "description": "<descrição da construção>",
+    "name": "<nome opcional>",
+    "confirm": "CREATE_NEW_PROJECT"
+  }
+}
+```
+
+O bootstrap cria o workspace `.firefly`, gera os JOBs oficiais de vídeo com **8 segundos cada**, copia a Imagem Inicial para a fonte do primeiro JOB e encadeia cada JOB seguinte ao último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
 
 Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
