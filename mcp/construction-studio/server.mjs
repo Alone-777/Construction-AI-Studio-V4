@@ -304,7 +304,7 @@ function buildMcpServer() {
     },
     async ({ query, paths }) => safeTool(async () => {
       const safePaths = (paths ?? []).map((item) => assertReadablePath(item));
-      const argv = ['grep', '-n', '-I', '-F', '--', query];
+      const argv = ['grep', '-n', '-I', '-F', '-e', query];
       if (safePaths.length) argv.push('--', ...safePaths);
       const result = await runProcess(PROJECT_ROOT, 'git', argv, { timeoutMs: 30_000 });
 
