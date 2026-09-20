@@ -178,6 +178,13 @@ export function createProjectFromVisualReview(
       interpretation: compiled.interpretation,
       assumptions: compiled.assumptions,
     },
+    initialImage: {
+      name: request.imageName || 'imagem-original',
+      mimeType: request.mimeType,
+      size: request.imageSize ?? 0,
+      dataUrl: request.imageData,
+      source: 'VISUAL_RECONSTRUCTION',
+    },
     visualReconstruction: {
       referenceImage: {
         name: request.imageName || 'imagem-original',
