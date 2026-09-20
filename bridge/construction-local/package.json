@@ -8,7 +8,8 @@
     "start": "node server.mjs",
     "test": "node --test *.test.mjs",
     "smoke": "node smoke.mjs",
-    "token": "node --input-type=module -e \"import { randomBytes } from 'node:crypto'; console.log(randomBytes(32).toString('base64url'))\""
+    "token": "node --input-type=module -e \"import { randomBytes } from 'node:crypto'; console.log(randomBytes(32).toString('base64url'))\"",
+    "client": "node client.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
