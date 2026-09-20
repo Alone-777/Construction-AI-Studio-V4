@@ -162,6 +162,7 @@ Response:
 Read operations:
 
 - `overview`
+- `supervisor_snapshot` — bundles Git status, diff check, recent log, workspace list and optional Firefly workspace status in one request
 - `list_directory`
 - `read_file`
 - `read_files`
