@@ -37,32 +37,32 @@ const ps = [
   `if ($profiles.Count -eq 0) { throw 'Nenhum perfil foi encontrado no Windows Terminal.' }`,
   `$profile = $null`,
   `if ($profiles.Count -ge 4) {
-      $candidate = $profiles[3]
-      if ($candidate.name -match 'Ubuntu|WSL|Linux' -or $candidate.source -eq 'Windows.Terminal.Wsl') {
-        $profile = $candidate
-      }
-    }`,
+    $candidate = $profiles[3]
+    if ($candidate.name -match 'Ubuntu|WSL|Linux' -or $candidate.source -eq 'Windows.Terminal.Wsl') {
+      $profile = $candidate
+    }
+  }`,
   `if (-not $profile) {
-      $profile = $profiles | Where-Object {
-        $_.name -match 'Ubuntu' -or $_.source -eq 'Windows.Terminal.Wsl'
-      } | Select-Object -First 1
-    }`,
+    $profile = $profiles | Where-Object {
+      $_.name -match 'Ubuntu' -or $_.source -eq 'Windows.Terminal.Wsl'
+    } | Select-Object -First 1
+  }`,
   `if (-not $profile) { throw 'Não encontrei o perfil Ubuntu/WSL do Windows Terminal.' }`,
   `$profileName = [string]$profile.name`,
   `$wt = (Get-Command wt.exe -ErrorAction Stop).Source`,
   `$desktop = [Environment]::GetFolderPath('Desktop')`,
   `$shortcutPath = Join-Path $desktop ${psLiteral(shortcutName)}`,
+  `$launchScript = $projectPath + '/scripts/launch-studio-wsl.sh'`,
   `$shell = New-Object -ComObject WScript.Shell`,
   `$shortcut = $shell.CreateShortcut($shortcutPath)`,
   `$shortcut.TargetPath = $wt`,
-  `$linuxCommand = "cd '$projectPath' && npm run ligar"`,
-  `$launchScript = $projectPath + '/scripts/launch-studio-wsl.sh'`,
-  `$shortcut.Arguments = '-w new new-tab -p "' + $profileName + '" --appendCommandLine run bash "' + $launchScript + '"'
-  `$shortcut.WorkingDirectory = $desktop``,
+  `$shortcut.Arguments = '-w new new-tab -p "' + $profileName + '" --appendCommandLine run bash "' + $launchScript + '"'`,
+  `$shortcut.WorkingDirectory = $desktop`,
   `$shortcut.Description = ${psLiteral(description)}`,
   `$shortcut.IconLocation = "$env:SystemRoot\\System32\\wsl.exe,0"`,
   `$shortcut.Save()`,
   `Write-Output ("PERFIL_WINDOWS_TERMINAL=" + $profileName)`,
+  `Write-Output ("SCRIPT_LINUX=" + $launchScript)`,
   `Write-Output ("ATALHO=" + $shortcutPath)`,
 ].join('; ');
 
@@ -87,7 +87,7 @@ console.log('');
 console.log('BOTÃO INSTALADO COM SUCESSO');
 console.log(result.stdout.trim());
 console.log('');
-console.log('O botão usa o perfil Ubuntu/WSL do Windows Terminal, a mesma rota usada pelo Ctrl+Shift+4.');
-console.log('O atalho chama um script Linux absoluto dentro do projeto, evitando depender da pasta atual do Windows.');
-console.log('Ao abrir, ele entra no projeto, executa npm run ligar e o navegador é aberto quando o painel estiver pronto.');
+console.log('O botão usa o perfil Ubuntu/WSL do Windows Terminal.');
+console.log('O atalho chama um script Linux absoluto dentro do projeto, sem depender da pasta atual do Windows.');
+console.log('Quando o painel estiver pronto, o navegador do Windows será aberto automaticamente.');
 console.log('');
