@@ -296,6 +296,34 @@ test('supervisor bundle returns the current Firefly job and latest contact sheet
   });
 });
 
+test('review bundle returns current-job review context and image payloads', async () => {
+  await withProject(async (root) => {
+    const { workspaceName } = await createFireflyFixture(root);
+    const executor = createBridgeExecutor({
+      projectRoot: root,
+      policy: { writeMode: 'readonly', allowPush: false },
+      audit: new MemoryAudit(),
+    });
+
+    const response = await executor.execute({
+      id: 'rb1',
+      op: 'review_bundle',
+      workspace: workspaceName,
+      includeImages: true,
+    });
+
+    assert.equal(response.ok, true);
+    assert.equal(response.result.reviewReady, true);
+    assert.equal(response.result.reviewTarget.jobId, 'firefly:scene-1:segment-1');
+    assert.equal(response.result.reviewTarget.status, 'RETRY_REQUIRED');
+    assert.equal(response.result.reviewTarget.attempts, 6);
+    assert.equal(response.result.continuityFromJobId, null);
+    assert.equal(response.result.contactSheetLayout.bottomRight, 'terminal/end');
+    assert.ok(response.result.images.sourceFrame.dataBase64);
+    assert.ok(response.result.images.contactSheet.dataBase64);
+  });
+});
+
 test('git push remains separately disabled even in write mode', async () => {
   await withProject(async (root) => {
     const executor = createBridgeExecutor({
