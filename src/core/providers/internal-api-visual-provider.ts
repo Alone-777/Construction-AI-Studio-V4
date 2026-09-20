@@ -7,6 +7,7 @@ import type {
   VisualProvider,
   VisualProviderDescriptor,
 } from './visual-provider';
+import type { ProjectInitialImage } from '../types';
 
 export class VisualApiError extends Error {
   readonly code: string;
@@ -32,6 +33,44 @@ async function parseApiResponse(response: Response): Promise<Record<string, unkn
     );
   }
   return payload;
+}
+
+export async function fetchInitialImageFromFolder(): Promise<{
+  image?: ProjectInitialImage;
+  warnings: string[];
+}> {
+  let response: Response;
+  try {
+    response = await fetch('/api/visual/initial-image', { headers: { accept: 'application/json' } });
+  } catch {
+    throw new VisualApiError('Backend visual indisponível ao procurar a Imagem Inicial.');
+  }
+  const payload = await parseApiResponse(response);
+  const warnings = Array.isArray(payload.warnings)
+    ? payload.warnings.filter((item): item is string => typeof item === 'string')
+    : [];
+  if (!payload.image) return { warnings };
+  if (typeof payload.image !== 'object') {
+    throw new VisualApiError('Resposta da Imagem Inicial inválida.', 'INITIAL_IMAGE_ERROR');
+  }
+  const image = payload.image as Record<string, unknown>;
+  if (typeof image.name !== 'string' ||
+      typeof image.mimeType !== 'string' ||
+      typeof image.size !== 'number' ||
+      typeof image.dataUrl !== 'string' ||
+      image.source !== 'FOLDER') {
+    throw new VisualApiError('Metadados da Imagem Inicial inválidos.', 'INITIAL_IMAGE_ERROR');
+  }
+  return {
+    image: {
+      name: image.name,
+      mimeType: image.mimeType,
+      size: image.size,
+      dataUrl: image.dataUrl,
+      source: 'FOLDER',
+    },
+    warnings,
+  };
 }
 
 export async function fetchVisualProviderDescriptors(): Promise<VisualProviderDescriptor[]> {
