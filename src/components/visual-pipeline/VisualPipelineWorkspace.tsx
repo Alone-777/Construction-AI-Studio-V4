@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useVisualPipelineStore } from '../../store/useVisualPipelineStore';
+import { fetchInitialImageFromFolder } from '../../core/providers/internal-api-visual-provider';
 import type { VisualPipelineRun } from '../../core/visual-pipeline';
 import {
   createVisualPipelineStartDraft,
@@ -45,6 +46,7 @@ export function VisualPipelineWorkspace() {
   const selectedStagePercentage = useUIStore(state => state.selectedStagePercentage);
   const selectScene = useUIStore(state => state.selectScene);
   const selectStage = useUIStore(state => state.selectStage);
+  const setInitialImage = useProjectStore(state => state.setInitialImage);
   const pipeline = useVisualPipelineStore();
   const [localError, setLocalError] = useState('');
 
@@ -56,6 +58,12 @@ export function VisualPipelineWorkspace() {
     ? visualPipelineKey(project.id, scene.id, String(stage.percentage))
     : '';
   const run = key ? pipeline.runs[key] : undefined;
+  const initialImage = project?.initialImage ?? (project?.visualReconstruction?.referenceImage
+    ? { ...project.visualReconstruction.referenceImage, source: 'VISUAL_RECONSTRUCTION' as const }
+    : undefined);
+  const projectRunPrefix = project ? `${project.id}::` : '';
+  const initialImageLocked = !!project && Object.keys(pipeline.runs)
+    .some(runKey => runKey.startsWith(projectRunPrefix));
   const busy = key ? !!pipeline.busy[key] : false;
   const error = localError || (key ? pipeline.errors[key] : undefined);
   const ownsActiveVideoJob = !!key && pipeline.activeVideoJobKey === key;
@@ -68,6 +76,45 @@ export function VisualPipelineWorkspace() {
       ? 'Esta etapa está aguardando a conclusão do JOB anterior na ordem temporal.'
       : undefined;
   const videoJobBlocked = !!videoJobBlockMessage;
+
+  useEffect(() => {
+    if (!project || initialImage) return;
+    let active = true;
+    fetchInitialImageFromFolder()
+      .then(({ image, warnings }) => {
+        if (!active) return;
+        if (warnings.length > 0) setLocalError(warnings.join(' '));
+        if (image) setInitialImage(image);
+      })
+      .catch(() => {
+        // Folder auto-discovery is optional; manual upload remains available.
+      });
+    return () => { active = false; };
+  }, [project?.id, !!initialImage, setInitialImage]);
+
+  const handleInitialImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || initialImageLocked) return;
+    try {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        throw new Error('A Imagem Inicial deve ser JPEG, PNG ou WebP.');
+      }
+      if (file.size <= 0 || file.size > 10 * 1024 * 1024) {
+        throw new Error('A Imagem Inicial deve ter no máximo 10 MB.');
+      }
+      const dataUrl = await fileToDataUrl(file);
+      setInitialImage({
+        name: file.name,
+        mimeType: file.type,
+        size: file.size,
+        dataUrl,
+        source: 'UPLOAD',
+      });
+      setLocalError('');
+    } catch (cause) {
+      setLocalError(cause instanceof Error ? cause.message : 'Não foi possível carregar a Imagem Inicial.');
+    }
+  };
 
   const start = () => {
     if (!project || !scene || !stage) return;
@@ -114,6 +161,45 @@ export function VisualPipelineWorkspace() {
           </div>
         </div>
       </header>
+
+      <section className="panel p-3 space-y-3">
+        <SectionHeading
+          title="Imagem Inicial"
+          subtitle="Referência-base do projeto. O Construction AI usa esta imagem para orientar identidade, design, materiais e ambiente sem antecipar etapas futuras."
+        />
+        {initialImage ? (
+          <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+            <AssetPreview uri={initialImage.dataUrl} kind="image" label="Imagem Inicial" />
+            <div className="space-y-2 text-xs text-studio-muted">
+              <div>{initialImage.name} · {initialImage.mimeType} · {Math.ceil(initialImage.size / 1024)} KB</div>
+              <div>Origem: {initialImage.source === 'FOLDER'
+                ? 'pasta Imagem Inicial'
+                : initialImage.source === 'UPLOAD'
+                  ? 'upload no painel'
+                  : 'reconstrução por imagem'}</div>
+              {initialImageLocked && (
+                <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-amber-200">
+                  Referência bloqueada porque o pipeline deste projeto já começou.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-studio-muted">
+            Nenhuma Imagem Inicial encontrada. Coloque uma JPG/PNG/WebP na pasta “Imagem Inicial” ou selecione abaixo.
+          </p>
+        )}
+        <label className="block text-xs text-studio-muted">
+          {initialImage ? 'Substituir Imagem Inicial' : 'Selecionar Imagem Inicial'}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="input-field mt-1"
+            disabled={initialImageLocked}
+            onChange={handleInitialImage}
+          />
+        </label>
+      </section>
 
       {run && <PipelineStepper run={run} />}
 
@@ -207,6 +293,11 @@ function PipelinePhase({
   onLocalError: (message: string) => void;
 }) {
   const cta = requiredActionLabel(run);
+  const initialReference = run.imageState.request.references.find(reference => reference.role === 'MANUAL_REFERENCE');
+  const generationReferenceUri = run.imageState.previousOfficialReference?.asset.uri ?? initialReference?.asset.uri;
+  const generationReferenceLabel = run.imageState.previousOfficialReference
+    ? 'Referência oficial anterior'
+    : initialReference ? 'Imagem Inicial' : 'Referência';
   const imageAsset = run.imageState.result?.status === 'SUCCESS' ? run.imageState.result.asset : undefined;
   const videoAsset = run.videoState?.result?.status === 'SUCCESS' ? run.videoState.result.asset : undefined;
 
@@ -215,7 +306,8 @@ function PipelinePhase({
       return (
         <GenerationPanel title="Preparar imagem" prompt={run.imageState.request.prompt}
           aspectRatio={run.imageState.request.aspectRatio} resolution={run.imageState.request.resolution}
-          referenceUri={run.imageState.previousOfficialReference?.asset.uri}
+          referenceUri={generationReferenceUri}
+          referenceLabel={generationReferenceLabel}
           correctionChange={run.imageState.correctionPlan?.correctionInstructions}
           correctionPreserve={run.imageState.correctionPlan?.preserveConstraints}
           cta={cta ?? 'Gerar imagem'} busy={busy} onAction={actions.generateImage} />
@@ -224,7 +316,8 @@ function PipelinePhase({
       return (
         <GenerationPanel title="Geração manual de imagem" prompt={run.imageState.request.prompt}
           aspectRatio={run.imageState.request.aspectRatio} resolution={run.imageState.request.resolution}
-          referenceUri={run.imageState.previousOfficialReference?.asset.uri}
+          referenceUri={generationReferenceUri}
+          referenceLabel={generationReferenceLabel}
           status="Aguardando imagem gerada" hideAction>
           <FileSubmission kind="image" cta={cta ?? 'Enviar imagem gerada'} onError={onLocalError}
             onSubmit={actions.submitImage} />
@@ -344,7 +437,7 @@ function PipelineStepper({ run }: { run: VisualPipelineRun }) {
 }
 
 function GenerationPanel({
-  title, prompt, aspectRatio, resolution, duration, referenceUri, correctionChange,
+  title, prompt, aspectRatio, resolution, duration, referenceUri, referenceLabel, correctionChange,
   correctionPreserve, status, cta, busy, hideAction, onAction, children,
 }: {
   title: string;
@@ -353,6 +446,7 @@ function GenerationPanel({
   resolution?: { width: number; height: number };
   duration?: number;
   referenceUri?: string;
+  referenceLabel?: string;
   correctionChange?: readonly string[];
   correctionPreserve?: readonly string[];
   status?: string;
@@ -383,7 +477,7 @@ function GenerationPanel({
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border border-studio-border bg-studio-bg p-3 text-[10px] text-studio-muted">{prompt}</pre>
         </div>
         <div className="space-y-2 text-xs">
-          <AssetPreview uri={referenceUri} kind="image" label="Referência oficial" />
+          <AssetPreview uri={referenceUri} kind="image" label={referenceLabel ?? 'Referência oficial'} />
           <div className="rounded border border-studio-border bg-studio-bg p-2 text-studio-muted">
             <div>Aspecto: {formatAspectRatio(aspectRatio)}</div>
             <div>Resolução: {resolution ? `${resolution.width} × ${resolution.height}` : 'não definida'}</div>
@@ -629,4 +723,16 @@ function humanFinding(code: string, fallback: string): string {
     SOURCE_IMAGE_CONTINUITY: 'O vídeo não preservou a imagem oficial de origem.',
   };
   return labels[code] ?? fallback;
+}
+
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error('Não foi possível ler a Imagem Inicial.'));
+    reader.onerror = () => reject(new Error('Não foi possível ler a Imagem Inicial.'));
+    reader.readAsDataURL(file);
+  });
 }
