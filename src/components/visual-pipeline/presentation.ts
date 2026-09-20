@@ -156,6 +156,13 @@ export function createVisualPipelineStartDraft(
   const stageOrder = scene.stages.findIndex(candidate => candidate.percentage === stage.percentage);
   if (sceneOrder < 0 || stageOrder < 0) throw new Error('A posição temporal da etapa é inválida.');
 
+  const initialImage = project.initialImage ?? (project.visualReconstruction?.referenceImage
+    ? {
+        ...project.visualReconstruction.referenceImage,
+        source: 'VISUAL_RECONSTRUCTION' as const,
+      }
+    : undefined);
+
   return {
     physicalAction,
     snapshot: snapshots.official,
@@ -163,6 +170,25 @@ export function createVisualPipelineStartDraft(
       providerId: UI_IMAGE_PROVIDER_ID,
       temporalPosition: { sceneOrder, stageOrder },
       aspectRatio: project.visualDNA.consistencyRules.aspectRatio,
+      references: initialImage ? [{
+        role: 'MANUAL_REFERENCE' as const,
+        asset: {
+          id: `initial-image:${project.id}:${initialImage.name}:${initialImage.size}`,
+          source: 'IMPORTED' as const,
+          uri: initialImage.dataUrl,
+          mimeType: initialImage.mimeType,
+          metadata: {
+            referenceKind: 'INITIAL_IMAGE',
+            source: initialImage.source,
+            name: initialImage.name,
+            size: initialImage.size,
+          },
+        },
+      }] : undefined,
+      metadata: initialImage ? {
+        initialImageName: initialImage.name,
+        initialImageSource: initialImage.source,
+      } : undefined,
     },
     video: {
       providerId: UI_VIDEO_PROVIDER_ID,
