@@ -130,8 +130,10 @@ export function buildNamedAction(action, args = {}) {
       return { command: 'git', argv: ['status', '--short', '--branch'], timeoutMs: 30_000 };
     case 'git_diff_check':
       return { command: 'git', argv: ['diff', '--check'], timeoutMs: 30_000 };
-    case 'git_diff':
-      return { command: 'git', argv: ['diff', '--', ...(args.paths ?? [])], timeoutMs: 30_000 };
+    case 'git_diff': {
+      const paths = (args.paths ?? []).map((item) => assertReadablePath(item));
+      return { command: 'git', argv: ['diff', '--', ...paths], timeoutMs: 30_000 };
+    }
     case 'git_log':
       return { command: 'git', argv: ['log', '--oneline', '-n', String(Math.min(Math.max(args.count ?? 10, 1), 50))], timeoutMs: 30_000 };
     case 'git_pull':
