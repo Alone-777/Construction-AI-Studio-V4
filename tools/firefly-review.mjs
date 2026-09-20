@@ -1,5 +1,6 @@
 import { access, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import {
@@ -544,6 +545,113 @@ export async function effectivePromptForFireflyJob(workspacePath, jobId) {
     ...corrections.map((correction, index) => (index + 1) + '. ' + correction),
     '',
   ].join('\n');
+}
+
+export async function applyExternalRetryDecision(workspacePath, jobId, decision = {}) {
+  const loaded = await loadWorkspaceJob(workspacePath, jobId);
+
+  if (loaded.state.status !== 'REVIEW_REQUIRED') {
+    throw new Error(
+      `External retry decision requires REVIEW_REQUIRED state; current state is ${loaded.state.status}.`,
+    );
+  }
+
+  const expectedAttempts = Number(decision.expectedAttempts);
+  if (!Number.isInteger(expectedAttempts) || expectedAttempts < 1) {
+    throw new Error('expectedAttempts must be a positive integer.');
+  }
+  if (Number(loaded.state.attempts ?? 0) !== expectedAttempts) {
+    throw new Error(
+      `Stale review decision: expected attempt ${expectedAttempts}, current attempt is ${loaded.state.attempts ?? 0}.`,
+    );
+  }
+
+  const expectedHash = String(decision.expectedContactSheetSha256 || '').toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(expectedHash)) {
+    throw new Error('expectedContactSheetSha256 must be a SHA-256 hex digest.');
+  }
+
+  const contactSheetRel = loaded.state.lastReview?.contactSheet;
+  if (typeof contactSheetRel !== 'string' || !contactSheetRel) {
+    throw new Error('Current review state has no contact sheet to bind the decision to.');
+  }
+
+  const contactSheetAbs = path.join(loaded.workspace, contactSheetRel);
+  if (!(await exists(contactSheetAbs))) {
+    throw new Error('Current review contact sheet is missing: ' + contactSheetRel);
+  }
+
+  const contactBytes = await readFile(contactSheetAbs);
+  const actualHash = createHash('sha256').update(contactBytes).digest('hex');
+  if (actualHash !== expectedHash) {
+    throw new Error('Stale review decision: contact sheet SHA-256 no longer matches.');
+  }
+
+  const observed = Number(decision.observedStagePercentage);
+  if (!Number.isFinite(observed) || observed < 0 || observed > 100) {
+    throw new Error('observedStagePercentage must be between 0 and 100.');
+  }
+
+  const target = Number(loaded.job.targetStagePercentage);
+  if (!(observed > target + DEFAULT_PROGRESS_TOLERANCE)) {
+    throw new Error(
+      `External retry path currently accepts only clear progress overshoot (> ${target + DEFAULT_PROGRESS_TOLERANCE}%).`,
+    );
+  }
+
+  const operationType = resolveOperationType(loaded.job);
+  const failure = {
+    code: 'PROGRESS_OVERSHOOT',
+    message: `Observed progress ${observed}% exceeds target ${target}%.`,
+    correction: `Stop clearly at ${target}% completion. Leave a visibly unfinished portion for the next segment; do not complete the current operation.`,
+  };
+  const assessment = {
+    contract: 'construction-external-review-v1',
+    verdict: 'RETRY',
+    reviewSource: 'chatgpt-relay',
+    jobId,
+    operationType,
+    observedStagePercentage: observed,
+    targetStagePercentage: target,
+    failures: [failure],
+    warnings: [],
+    blockers: [],
+    contactSheet: contactSheetRel,
+    contactSheetSha256: actualHash,
+    reviewedAttempt: expectedAttempts,
+  };
+
+  const queue = await readJson(path.join(loaded.workspace, 'queue.json'));
+  await invalidateDownstream(loaded.workspace, queue, jobId);
+
+  const memory = await loadLearningMemory(loaded.workspace);
+  const retryPrompt = composeRetryPrompt(loaded.job, assessment, memory);
+  await writeFile(path.join(loaded.jobDir, 'retry-prompt.txt'), retryPrompt + '\n', 'utf8');
+
+  const reviewDir = path.join(
+    loaded.jobDir,
+    'review',
+    'attempt-' + String(expectedAttempts).padStart(3, '0'),
+  );
+  await mkdir(reviewDir, { recursive: true });
+  await writeJson(path.join(reviewDir, 'chatgpt-assessment.json'), assessment);
+
+  await writeJson(loaded.statePath, {
+    ...loaded.state,
+    status: 'RETRY_REQUIRED',
+    completedAt: null,
+    lastReview: assessment,
+    pendingLearning: {
+      operationType,
+      provider: loaded.job.model,
+      failures: [failure],
+    },
+  });
+
+  return {
+    ...assessment,
+    retryPrompt,
+  };
 }
 
 export async function reviewFireflyJob(workspacePath, jobId, providerId) {
