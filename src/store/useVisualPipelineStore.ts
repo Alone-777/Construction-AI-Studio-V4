@@ -117,9 +117,10 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
   };
 
   const claimVideoJob = (key: string): boolean => {
+    const run = runFor(key);
     const activeVideoJobKey = get().activeVideoJobKey;
     if (!activeVideoJobKey || activeVideoJobKey === key) {
-      if (!activeVideoJobKey) set({ activeVideoJobKey: key });
+      if (!activeVideoJobKey && run?.videoState) set({ activeVideoJobKey: key });
       return true;
     }
     set(state => ({
@@ -205,8 +206,20 @@ export const useVisualPipelineStore = create<VisualPipelineUIState>((set, get) =
       metadata: { source: 'visual-pipeline-ui', explicitApproval: true },
     })),
     prepareVideo(key) {
-      if (!claimVideoJob(key)) return;
-      withRun(key, run => orchestrator().prepareVideo(run));
+      const activeVideoJobKey = get().activeVideoJobKey;
+      if (activeVideoJobKey && activeVideoJobKey !== key) {
+        set(state => ({
+          errors: { ...state.errors, [key]: FIREFLY_VIDEO_JOB_LOCKED_MESSAGE },
+        }));
+        return;
+      }
+      const run = runFor(key);
+      if (!run) return;
+      const result = orchestrator().prepareVideo(run);
+      if (result.status === 'SUCCESS' && result.run.videoState) {
+        set({ activeVideoJobKey: key });
+      }
+      apply(key, result);
     },
     generateVideo(key) {
       if (!claimVideoJob(key)) return Promise.resolve();
