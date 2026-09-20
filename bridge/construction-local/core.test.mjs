@@ -139,6 +139,36 @@ test('write mode requires stale-write protection for existing files', async () =
   });
 });
 
+test('supervisor snapshot bundles project state without enabling writes', async () => {
+  await withProject(async (root) => {
+    const executor = createBridgeExecutor({
+      projectRoot: root,
+      policy: { writeMode: 'readonly', allowPush: false },
+      audit: new MemoryAudit(),
+    });
+
+    const snapshot = await executor.execute({
+      id: 's1',
+      op: 'supervisor_snapshot',
+    });
+
+    assert.equal(snapshot.ok, true);
+    assert.equal(snapshot.result.policy.writeMode, 'readonly');
+    assert.deepEqual(snapshot.result.fireflyWorkspaces, []);
+    assert.equal(snapshot.result.selectedWorkspace, null);
+    assert.equal(snapshot.result.fireflyStatus, null);
+
+    const unknown = await executor.execute({
+      id: 's2',
+      op: 'supervisor_snapshot',
+      workspace: 'missing-workspace',
+    });
+
+    assert.equal(unknown.ok, false);
+    assert.match(unknown.error, /Unknown Firefly workspace/i);
+  });
+});
+
 test('git push remains separately disabled even in write mode', async () => {
   await withProject(async (root) => {
     const executor = createBridgeExecutor({
