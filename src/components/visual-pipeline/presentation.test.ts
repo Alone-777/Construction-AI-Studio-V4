@@ -8,6 +8,7 @@ import {
   createVisualPipelineStartDraft,
   formatAspectRatio,
   imageObservationFromAnswers,
+  nextVisualPipelineJobKey,
   pipelineSteps,
   requiredActionLabel,
   safePipelineError,
@@ -69,6 +70,30 @@ describe('operational visual pipeline presentation', () => {
     expect(run.videoState?.request.renderedPrompt).toContain('Aspect ratio: 0.5625.');
     expect(formatAspectRatio(run.imageState.request.aspectRatio)).toBe('9:16 / 0.5625');
     expect(formatAspectRatio(run.videoState?.request.aspectRatio)).toBe('9:16 / 0.5625');
+  });
+
+  it('selects the first unfinished committed stage as the next temporal JOB', async () => {
+    const first = startRun(0);
+    const initialNext = nextVisualPipelineJobKey(first.project, useVisualPipelineStore.getState().runs);
+    expect(initialNext).toBe(first.key);
+
+    await useVisualPipelineStore.getState().generateImage(first.key);
+    useVisualPipelineStore.getState().submitImage(first.key, imageAsset('sequence-first'));
+    await useVisualPipelineStore.getState().validateImage(first.key, IMAGE_OK);
+    useVisualPipelineStore.getState().approveImage(first.key);
+    useVisualPipelineStore.getState().prepareVideo(first.key);
+    await useVisualPipelineStore.getState().generateVideo(first.key);
+    useVisualPipelineStore.getState().submitVideo(first.key, videoAsset('sequence-first'));
+    await useVisualPipelineStore.getState().validateVideo(first.key, VIDEO_OK);
+    useVisualPipelineStore.getState().acceptVideo(first.key);
+
+    const eligible = first.project.scenes.flatMap(scene =>
+      scene.stages
+        .filter(stage => stage.decision && stage.worldStateBefore && stage.worldStateAfter && stage.status !== 'rejected')
+        .map(stage => visualPipelineKey(first.project.id, scene.id, String(stage.percentage))),
+    );
+    expect(eligible.length).toBeGreaterThan(1);
+    expect(nextVisualPipelineJobKey(first.project, useVisualPipelineStore.getState().runs)).toBe(eligible[1]);
   });
 
   it('maps run status to the eight human visual steps', () => {
