@@ -436,6 +436,86 @@ test('record_review_retry requires write mode, exact review evidence and explici
   });
 });
 
+test('record_review_pass requires complete continuity evidence before mutation', async () => {
+  await withProject(async (root) => {
+    const { workspaceName } = await createFireflyFixture(root, { firstStatus: 'REVIEW_REQUIRED' });
+    const contactBytes = await readFile(path.join(
+      root,
+      '.firefly',
+      workspaceName,
+      'jobs',
+      '001__job_one',
+      'review',
+      'attempt-006',
+      'contact-sheet.png',
+    ));
+    const contactHash = createHash('sha256').update(contactBytes).digest('hex');
+
+    const executor = createBridgeExecutor({
+      projectRoot: root,
+      policy: { writeMode: 'allow', allowPush: false },
+      audit: new MemoryAudit(),
+    });
+
+    const response = await executor.execute({
+      id: 'rp1',
+      op: 'record_review_pass',
+      workspace: workspaceName,
+      jobId: 'firefly:scene-1:segment-1',
+      expectedAttempts: 6,
+      expectedContactSheetSha256: contactHash,
+      observedStagePercentage: 50,
+      continuity: {
+        worker: 'MATCH',
+        environment: 'MATCH',
+        geometry: 'MATCH',
+        source: 'MINOR_DIVERGENCE',
+      },
+      futureElementsAbsent: true,
+      requiredEvidenceSatisfied: true,
+      terminalFrameValid: true,
+      confirm: 'PASS_CURRENT_JOB',
+    });
+
+    assert.equal(response.ok, false);
+    assert.match(response.error, /continuity\.source=MATCH/i);
+
+    const state = JSON.parse(await readFile(path.join(
+      root,
+      '.firefly',
+      workspaceName,
+      'jobs',
+      '001__job_one',
+      'state.json',
+    ), 'utf8'));
+    assert.equal(state.status, 'REVIEW_REQUIRED');
+  });
+});
+
+test('ingest_review_candidate rejects path traversal before touching Firefly state', async () => {
+  await withProject(async (root) => {
+    const { workspaceName } = await createFireflyFixture(root);
+    const executor = createBridgeExecutor({
+      projectRoot: root,
+      policy: { writeMode: 'allow', allowPush: false },
+      audit: new MemoryAudit(),
+    });
+
+    const response = await executor.execute({
+      id: 'ic1',
+      op: 'ingest_review_candidate',
+      workspace: workspaceName,
+      jobId: 'firefly:scene-1:segment-1',
+      candidateFile: '../outside.mp4',
+      expectedCurrentAttempts: 6,
+      confirm: 'INGEST_CURRENT_JOB',
+    });
+
+    assert.equal(response.ok, false);
+    assert.match(response.error, /simple \.mp4 filename/i);
+  });
+});
+
 test('git push remains separately disabled even in write mode', async () => {
   await withProject(async (root) => {
     const executor = createBridgeExecutor({
