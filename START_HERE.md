@@ -127,7 +127,7 @@ Formato operacional do Relay:
 }
 ```
 
-O bootstrap cria o workspace `.firefly`, gera os JOBs oficiais de vídeo com **8 segundos cada**, copia a Imagem Inicial para a fonte do primeiro JOB e encadeia cada JOB seguinte ao último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
+O bootstrap cria o workspace `.firefly` e gera os JOBs oficiais de vídeo com **8 segundos cada**. A Imagem Inicial é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial; o vídeo só é liberado quando essa fonte temporal existir. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
 
 Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
