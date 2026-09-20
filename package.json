@@ -4,6 +4,8 @@
   "type": "module",
   "description": "Construction AI Studio V4 — Motor Determinístico de Construção Audiovisual",
   "scripts": {
+    "ligar": "node scripts/start-studio.mjs",
+    "verificar": "node scripts/check-studio.mjs",
     "dev": "vite",
     "server": "node --env-file-if-exists=.env server/index.mjs",
     "build": "tsc -b && vite build",
