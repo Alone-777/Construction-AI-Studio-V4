@@ -1,0 +1,360 @@
+import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import {
+  MAX_IMAGE_BYTES,
+  MAX_TEXT_BYTES,
+  assertReadablePath,
+  assertWritablePath,
+  buildNamedAction,
+  fileMeta,
+  normalizeRelativePath,
+  resolveExistingPath,
+  resolveWritePath,
+  runProcess,
+  sha256,
+} from '../../mcp/construction-studio/lib.mjs';
+
+const READ_OPS = new Set([
+  'overview',
+  'list_directory',
+  'read_file',
+  'read_files',
+  'read_image',
+  'search_code',
+  'run_action',
+]);
+
+const WRITE_OPS = new Set([
+  'write_file',
+  'replace_text',
+  'git_stage',
+  'git_commit',
+]);
+
+const READ_ONLY_ACTIONS = new Set([
+  'test',
+  'build',
+  'git_status',
+  'git_diff_check',
+  'git_diff',
+  'git_log',
+  'firefly_status',
+  'firefly_prompt',
+]);
+
+const MUTATING_ACTIONS = new Set([
+  'git_pull',
+  'git_push',
+  'firefly_complete',
+]);
+
+export function validateToken(token) {
+  return typeof token === 'string' && /^[A-Za-z0-9_-]{24,128}$/.test(token);
+}
+
+export function safeRequestSummary(message) {
+  if (!message || typeof message !== 'object') return {};
+  const { op, id } = message;
+  const summary = { id: typeof id === 'string' ? id : null, op: typeof op === 'string' ? op : null };
+
+  if (typeof message.path === 'string') summary.path = message.path;
+  if (Array.isArray(message.paths)) summary.paths = message.paths.slice(0, 20);
+  if (typeof message.action === 'string') summary.action = message.action;
+  if (typeof message.workspace === 'string') summary.workspace = message.workspace;
+  if (typeof message.jobId === 'string') summary.jobId = message.jobId;
+  if (typeof message.message === 'string') summary.commitMessageLength = message.message.length;
+  if (typeof message.content === 'string') summary.contentBytes = Buffer.byteLength(message.content, 'utf8');
+  if (typeof message.search === 'string') summary.searchLength = message.search.length;
+  if (typeof message.replace === 'string') summary.replaceLength = message.replace.length;
+
+  return summary;
+}
+
+export class AuditLog {
+  constructor(filePath = path.join(os.homedir(), '.local', 'state', 'construction-ai-bridge', 'audit.log')) {
+    this.filePath = filePath;
+  }
+
+  async write(entry) {
+    await mkdir(path.dirname(this.filePath), { recursive: true });
+    await appendFile(this.filePath, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n', 'utf8');
+  }
+}
+
+async function listWorkspaces(projectRoot) {
+  const firefly = path.join(projectRoot, '.firefly');
+  try {
+    const entries = await readdir(firefly, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  } catch (error) {
+    if (error?.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+function requireWriteMode(policy) {
+  if (policy.writeMode !== 'allow') {
+    throw new Error('Bridge is read-only. Restart with CONSTRUCTION_BRIDGE_WRITE_MODE=allow to permit safe writes.');
+  }
+}
+
+function requirePushMode(policy) {
+  requireWriteMode(policy);
+  if (!policy.allowPush) {
+    throw new Error('git push is disabled. Restart with CONSTRUCTION_BRIDGE_ALLOW_PUSH=true to permit it.');
+  }
+}
+
+function normalizedPaths(paths = []) {
+  return paths.map((item) => assertReadablePath(item));
+}
+
+export function createBridgeExecutor({
+  projectRoot,
+  policy = { writeMode: 'readonly', allowPush: false },
+  audit = new AuditLog(),
+} = {}) {
+  if (!projectRoot) throw new Error('projectRoot is required.');
+
+  async function execute(message) {
+    const started = Date.now();
+    const summary = safeRequestSummary(message);
+
+    try {
+      if (!message || typeof message !== 'object') throw new Error('Request must be an object.');
+      if (typeof message.id !== 'string' || !message.id) throw new Error('Request id is required.');
+      if (typeof message.op !== 'string' || !message.op) throw new Error('Request op is required.');
+
+      if (!READ_OPS.has(message.op) && !WRITE_OPS.has(message.op)) {
+        throw new Error(`Unsupported operation: ${message.op}`);
+      }
+
+      let result;
+      switch (message.op) {
+        case 'overview': {
+          const [gitStatus, latestCommit, workspaces] = await Promise.all([
+            runProcess(projectRoot, 'git', ['status', '--short', '--branch'], { timeoutMs: 30_000 }),
+            runProcess(projectRoot, 'git', ['log', '-1', '--oneline'], { timeoutMs: 30_000 }),
+            listWorkspaces(projectRoot),
+          ]);
+          result = { projectRoot, policy, gitStatus, latestCommit, fireflyWorkspaces: workspaces };
+          break;
+        }
+
+        case 'list_directory': {
+          const { rel, absolute } = await resolveExistingPath(projectRoot, message.path ?? '.');
+          const info = await stat(absolute);
+          if (!info.isDirectory()) throw new Error('Requested path is not a directory.');
+          const entries = (await readdir(absolute, { withFileTypes: true }))
+            .slice(0, 500)
+            .map((entry) => ({
+              name: entry.name,
+              type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other',
+            }));
+          result = { path: rel, entries };
+          break;
+        }
+
+        case 'read_file': {
+          const { rel, absolute } = await resolveExistingPath(projectRoot, message.path);
+          const meta = await fileMeta(absolute);
+          if (!meta.isFile) throw new Error('Requested path is not a file.');
+          if (meta.size > MAX_TEXT_BYTES) throw new Error(`Text file is too large (${meta.size} bytes).`);
+          const buffer = await readFile(absolute);
+          result = {
+            path: rel,
+            sha256: sha256(buffer),
+            size: meta.size,
+            modifiedAt: meta.modifiedAt,
+            content: buffer.toString('utf8'),
+          };
+          break;
+        }
+
+        case 'read_files': {
+          if (!Array.isArray(message.paths) || message.paths.length < 1 || message.paths.length > 20) {
+            throw new Error('paths must contain 1-20 entries.');
+          }
+          const files = [];
+          let totalBytes = 0;
+          for (const requestedPath of message.paths) {
+            const { rel, absolute } = await resolveExistingPath(projectRoot, requestedPath);
+            const meta = await fileMeta(absolute);
+            if (!meta.isFile) throw new Error(`Requested path is not a file: ${rel}`);
+            if (meta.size > MAX_TEXT_BYTES) throw new Error(`Text file is too large: ${rel}`);
+            totalBytes += meta.size;
+            if (totalBytes > MAX_TEXT_BYTES * 2) throw new Error('Combined file payload is too large.');
+            const buffer = await readFile(absolute);
+            files.push({
+              path: rel,
+              sha256: sha256(buffer),
+              size: meta.size,
+              modifiedAt: meta.modifiedAt,
+              content: buffer.toString('utf8'),
+            });
+          }
+          result = { files };
+          break;
+        }
+
+        case 'read_image': {
+          const { rel, absolute } = await resolveExistingPath(projectRoot, message.path);
+          const ext = path.extname(rel).toLowerCase();
+          const mimeType = ext === '.png'
+            ? 'image/png'
+            : ext === '.jpg' || ext === '.jpeg'
+              ? 'image/jpeg'
+              : ext === '.webp'
+                ? 'image/webp'
+                : null;
+          if (!mimeType) throw new Error('Only PNG, JPEG and WebP images are allowed.');
+          const meta = await fileMeta(absolute);
+          if (!meta.isFile) throw new Error('Requested path is not a file.');
+          if (meta.size > MAX_IMAGE_BYTES) throw new Error(`Image is too large (${meta.size} bytes).`);
+          const buffer = await readFile(absolute);
+          result = {
+            path: rel,
+            mimeType,
+            size: meta.size,
+            sha256: sha256(buffer),
+            dataBase64: buffer.toString('base64'),
+          };
+          break;
+        }
+
+        case 'search_code': {
+          if (typeof message.query !== 'string' || !message.query || message.query.length > 200) {
+            throw new Error('query must be a non-empty string up to 200 characters.');
+          }
+          const safePaths = normalizedPaths(message.paths ?? []);
+          const argv = ['grep', '-n', '-I', '-F', '-e', message.query];
+          if (safePaths.length) argv.push('--', ...safePaths);
+          const search = await runProcess(projectRoot, 'git', argv, { timeoutMs: 30_000 });
+          if (search.exitCode === 1 && !search.stderr) {
+            result = { query: message.query, matchesFound: false, output: '' };
+          } else {
+            result = { query: message.query, matchesFound: search.exitCode === 0, search };
+          }
+          break;
+        }
+
+        case 'write_file': {
+          requireWriteMode(policy);
+          if (typeof message.content !== 'string') throw new Error('content must be a string.');
+          if (Buffer.byteLength(message.content, 'utf8') > MAX_TEXT_BYTES) throw new Error('Content exceeds maximum size.');
+          const { rel, absolute } = await resolveWritePath(projectRoot, message.path);
+          let existed = false;
+          try {
+            const current = await readFile(absolute);
+            existed = true;
+            if (!message.expectedSha256) throw new Error('expectedSha256 is required when overwriting an existing file.');
+            if (sha256(current) !== message.expectedSha256) throw new Error('File changed since it was read.');
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+          }
+          await writeFile(absolute, message.content, 'utf8');
+          const written = await readFile(absolute);
+          result = { path: rel, created: !existed, sha256: sha256(written), bytes: written.length };
+          break;
+        }
+
+        case 'replace_text': {
+          requireWriteMode(policy);
+          const { rel, absolute } = await resolveWritePath(projectRoot, message.path);
+          const current = await readFile(absolute);
+          if (current.length > MAX_TEXT_BYTES) throw new Error('File exceeds maximum edit size.');
+          if (message.expectedSha256 && sha256(current) !== message.expectedSha256) {
+            throw new Error('File changed since it was read.');
+          }
+          if (typeof message.search !== 'string' || !message.search) throw new Error('search must be a non-empty string.');
+          if (typeof message.replace !== 'string') throw new Error('replace must be a string.');
+          const expectedOccurrences = Number.isInteger(message.expectedOccurrences) ? message.expectedOccurrences : 1;
+          const text = current.toString('utf8');
+          const occurrences = text.split(message.search).length - 1;
+          if (occurrences !== expectedOccurrences) {
+            throw new Error(`Expected ${expectedOccurrences} occurrence(s), found ${occurrences}.`);
+          }
+          const updated = text.split(message.search).join(message.replace);
+          await writeFile(absolute, updated, 'utf8');
+          const written = Buffer.from(updated, 'utf8');
+          result = { path: rel, replacedOccurrences: occurrences, sha256: sha256(written), bytes: written.length };
+          break;
+        }
+
+        case 'git_stage': {
+          requireWriteMode(policy);
+          if (!Array.isArray(message.paths) || message.paths.length < 1 || message.paths.length > 100) {
+            throw new Error('paths must contain 1-100 entries.');
+          }
+          const safePaths = message.paths.map((item) => assertWritablePath(item));
+          result = await runProcess(projectRoot, 'git', ['add', '--', ...safePaths], { timeoutMs: 60_000 });
+          break;
+        }
+
+        case 'git_commit': {
+          requireWriteMode(policy);
+          if (typeof message.message !== 'string' || !message.message || message.message.length > 200) {
+            throw new Error('commit message must be 1-200 characters.');
+          }
+          result = await runProcess(projectRoot, 'git', ['commit', '-m', message.message], { timeoutMs: 60_000 });
+          break;
+        }
+
+        case 'run_action': {
+          const action = message.action;
+          if (typeof action !== 'string') throw new Error('action is required.');
+          if (!READ_ONLY_ACTIONS.has(action) && !MUTATING_ACTIONS.has(action)) {
+            throw new Error(`Unsupported action: ${action}`);
+          }
+          if (MUTATING_ACTIONS.has(action)) requireWriteMode(policy);
+          if (action === 'git_push') requirePushMode(policy);
+
+          const args = {
+            workspace: message.workspace,
+            jobId: message.jobId,
+            paths: normalizedPaths(message.paths ?? []),
+            count: message.count,
+            remote: message.remote,
+          };
+          const spec = buildNamedAction(action, args);
+          result = {
+            action,
+            command: [spec.command, ...spec.argv],
+            result: await runProcess(projectRoot, spec.command, spec.argv, { timeoutMs: spec.timeoutMs }),
+          };
+          break;
+        }
+
+        default:
+          throw new Error(`Unsupported operation: ${message.op}`);
+      }
+
+      await audit.write({
+        event: 'request',
+        ok: true,
+        durationMs: Date.now() - started,
+        ...summary,
+      });
+
+      return { id: message.id, ok: true, result };
+    } catch (error) {
+      await audit.write({
+        event: 'request',
+        ok: false,
+        durationMs: Date.now() - started,
+        error: error instanceof Error ? error.message : String(error),
+        ...summary,
+      });
+
+      return {
+        id: message?.id ?? null,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  return { execute };
+}
