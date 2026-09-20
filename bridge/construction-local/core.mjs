@@ -20,6 +20,7 @@ const READ_OPS = new Set([
   'overview',
   'supervisor_snapshot',
   'supervisor_bundle',
+  'review_bundle',
   'list_directory',
   'read_file',
   'read_files',
@@ -260,6 +261,123 @@ async function buildSupervisorBundle(projectRoot, workspaceName) {
   };
 }
 
+function imageMimeType(relativePath) {
+  const ext = path.extname(relativePath).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  return null;
+}
+
+async function readReviewImage(projectRoot, relativePath, includeData) {
+  if (!relativePath) return null;
+  const { rel, absolute } = await resolveExistingPath(projectRoot, relativePath);
+  const mimeType = imageMimeType(rel);
+  if (!mimeType) throw new Error(`Unsupported review image type: ${rel}`);
+  const meta = await fileMeta(absolute);
+  if (!meta.isFile) throw new Error(`Review image is not a file: ${rel}`);
+  if (meta.size > MAX_IMAGE_BYTES) throw new Error(`Review image is too large (${meta.size} bytes): ${rel}`);
+
+  const buffer = await readFile(absolute);
+  return {
+    path: rel,
+    mimeType,
+    size: meta.size,
+    sha256: sha256(buffer),
+    ...(includeData ? { dataBase64: buffer.toString('base64') } : {}),
+  };
+}
+
+async function buildReviewBundle(projectRoot, workspaceName, { includeImages = true } = {}) {
+  const supervisor = await buildSupervisorBundle(projectRoot, workspaceName);
+  const blockers = [];
+
+  if (!supervisor.selectedWorkspace) {
+    blockers.push('WORKSPACE_REQUIRED');
+    return {
+      ...supervisor,
+      reviewReady: false,
+      reviewBlockers: blockers,
+      reviewTarget: null,
+      lastReview: null,
+      continuityFromJobId: null,
+      images: { sourceFrame: null, contactSheet: null },
+    };
+  }
+
+  if (!supervisor.currentJob) {
+    blockers.push('NO_CURRENT_JOB');
+    return {
+      ...supervisor,
+      reviewReady: false,
+      reviewBlockers: blockers,
+      reviewTarget: null,
+      lastReview: null,
+      continuityFromJobId: null,
+      images: { sourceFrame: null, contactSheet: null },
+    };
+  }
+
+  const sourcePath = supervisor.currentJob.paths.source;
+  const contactSheetPath = supervisor.currentJob.paths.contactSheet;
+
+  if (!sourcePath || !(await exists(path.join(projectRoot, sourcePath)))) {
+    blockers.push('SOURCE_FRAME_MISSING');
+  }
+  if (!contactSheetPath || !(await exists(path.join(projectRoot, contactSheetPath)))) {
+    blockers.push('CONTACT_SHEET_MISSING');
+  }
+
+  const [sourceFrame, contactSheet] = await Promise.all([
+    blockers.includes('SOURCE_FRAME_MISSING')
+      ? null
+      : readReviewImage(projectRoot, sourcePath, includeImages),
+    blockers.includes('CONTACT_SHEET_MISSING')
+      ? null
+      : readReviewImage(projectRoot, contactSheetPath, includeImages),
+  ]);
+
+  const job = supervisor.currentJob.job;
+  const state = supervisor.currentJob.state;
+  const source = supervisor.currentJob.source;
+
+  return {
+    ...supervisor,
+    reviewReady: blockers.length === 0,
+    reviewBlockers: blockers,
+    reviewTarget: {
+      jobId: supervisor.currentJob.queue.jobId,
+      sequence: supervisor.currentJob.queue.sequence,
+      sceneId: supervisor.currentJob.queue.sceneId,
+      model: supervisor.currentJob.queue.model,
+      durationSeconds: supervisor.currentJob.queue.durationSeconds,
+      startStagePercentage: supervisor.currentJob.queue.startStagePercentage,
+      targetStagePercentage: supervisor.currentJob.queue.targetStagePercentage,
+      status: state.status,
+      attempts: state.attempts ?? 0,
+      acceptanceChecklist: job.acceptanceChecklist ?? [],
+      continuityLocks: job.continuityLocks ?? null,
+    },
+    lastReview: state.lastReview ?? null,
+    continuityFromJobId: source?.kind === 'PREVIOUS_JOB_LAST_FRAME'
+      ? source.previousJobId ?? null
+      : null,
+    contactSheetLayout: contactSheet
+      ? {
+          kind: 'chronological_2x2',
+          topLeft: 'start',
+          topRight: 'one-third',
+          bottomLeft: 'two-thirds',
+          bottomRight: 'terminal/end',
+        }
+      : null,
+    images: {
+      sourceFrame,
+      contactSheet,
+    },
+  };
+}
+
 async function listWorkspaces(projectRoot) {
   const firefly = path.join(projectRoot, '.firefly');
   try {
@@ -371,6 +489,13 @@ export function createBridgeExecutor({
             gitLog,
             ...bundle,
           };
+          break;
+        }
+
+        case 'review_bundle': {
+          result = await buildReviewBundle(projectRoot, message.workspace, {
+            includeImages: message.includeImages !== false,
+          });
           break;
         }
 
