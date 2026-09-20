@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:accept": "vitest run --reporter=verbose src/core/__tests__/acceptance",
-    "instalar-atalho": "node scripts/install-ubuntu-launcher.mjs"
+    "instalar-atalho": "node scripts/install-launcher.mjs",
+    "instalar-botao": "node scripts/install-launcher.mjs"
   },
   "dependencies": {
     "dexie": "^4.0.11",
