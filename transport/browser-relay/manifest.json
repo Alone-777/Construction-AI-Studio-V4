@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Construction AI Browser Relay",
+  "version": "0.1.0",
+  "description": "Local browser relay for Construction AI Studio V4.",
+  "action": {
+    "default_title": "Construction AI Relay",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage"
+  ]
+}
