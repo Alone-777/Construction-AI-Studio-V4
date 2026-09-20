@@ -59,15 +59,4 @@ process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
 launch(['run', 'server'], 'Backend');
-launch(['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], 'Painel');
-
-if (process.platform === 'linux') {
-  setTimeout(() => {
-    const opener = spawn('xdg-open', [panelUrl], {
-      cwd: root,
-      stdio: 'ignore',
-      detached: true,
-    });
-    opener.unref();
-  }, 1500);
-}
+launch(['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173', '--strictPort', '--open'], 'Painel');
