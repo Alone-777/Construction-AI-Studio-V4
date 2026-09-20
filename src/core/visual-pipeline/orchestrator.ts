@@ -82,18 +82,36 @@ export function createVisualPipelineOrchestrator(
       }
 
       try {
+        const hasInitialImageReference = startInput.image.references?.some(
+          reference => reference.role === 'MANUAL_REFERENCE',
+        ) ?? false;
+        const canonicalPrompt = renderCanonicalImagePrompt(canonicalImageSpec);
+        const prompt = hasInitialImageReference
+          ? [
+              canonicalPrompt,
+              '',
+              '[INITIAL IMAGE REFERENCE]',
+              '- Use the MANUAL_REFERENCE image as the project visual origin for design, proportions, materials, terrain, environmental landmarks and stable visual identity.',
+              '- Preserve only details compatible with the current OFFICIAL temporal state.',
+              '- Never copy construction components, progress, tools, materials or actions from the reference before the current timeline allows them.',
+              '- OFFICIAL temporal state and MUST NOT SHOW rules always override the reference image when there is any conflict.',
+            ].join('\n')
+          : canonicalPrompt;
         const baseRequest = createImageGenerationRequest({
           canonicalSpec: canonicalImageSpec,
           providerPrompt: {
             canonicalSpecId: canonicalImageSpec.id,
-            prompt: renderCanonicalImagePrompt(canonicalImageSpec),
+            prompt,
             mode: 'GENERATE',
-            adapterId: 'canonical-image-prompt-renderer',
+            adapterId: hasInitialImageReference
+              ? 'canonical-image-prompt-renderer+initial-image'
+              : 'canonical-image-prompt-renderer',
           },
           providerId: startInput.image.providerId,
           mode: 'GENERATE',
           aspectRatio: startInput.image.aspectRatio,
           resolution: startInput.image.resolution,
+          references: startInput.image.references,
           temporalPosition: startInput.image.temporalPosition,
           metadata: startInput.image.metadata,
         });
