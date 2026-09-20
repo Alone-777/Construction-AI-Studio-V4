@@ -80,3 +80,12 @@ The popup exposes **Supervisor bundle**. Enter a Firefly workspace name and the 
 Use **Copiar resultado** to copy the JSON response without giving the extension permission to inspect any webpage.
 
 The older `supervisor_snapshot` operation remains available through manual JSON requests for lightweight diagnostics.
+
+
+## Review bundle
+
+Use **Review bundle** after selecting a workspace. The extension requests one read-only visual-review package containing the current job context plus the source frame and latest contact sheet.
+
+The popup renders both images locally. Base64 image data is deliberately replaced with a placeholder in the visible JSON so the output remains readable.
+
+This operation does not alter `.firefly` state and does not call any external AI provider.
