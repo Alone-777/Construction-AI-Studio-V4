@@ -37,6 +37,22 @@ Na primeira instalação ou depois de trocar dependências:
 npm install
 ```
 
+## Painel operacional preferido
+
+Por enquanto, o painel oficial para uso operacional é o **Construction AI Operator Panel** do repositório `Alone-777/Construction-AI-Relay`:
+
+```text
+http://127.0.0.1:8793
+```
+
+Abrir pelo Ubuntu/WSL:
+
+```bash
+bash ~/Construction-AI-Relay/scripts/open-panel.sh
+```
+
+As portas `5173` (Vite/dev) e `8787` (backend do Studio) não devem ser apresentadas ao usuário como painel principal. Elas ficam reservadas para desenvolvimento, API interna e diagnóstico técnico quando necessário.
+
 ## Imagem Inicial
 
 Coloque preferencialmente uma única JPG, JPEG, PNG ou WebP em:
