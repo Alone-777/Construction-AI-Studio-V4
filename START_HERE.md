@@ -8,28 +8,26 @@ Este arquivo é o ponto permanente de retomada do projeto.
 - Branch de trabalho: `feature/v4.2-visual-pipeline`
 - Pasta de entrada: `Imagem Inicial/`
 
-## Inicialização no Ubuntu
+## Inicialização fácil
 
-Na primeira vez, na raiz do repositório:
+Este projeto é usado no WSL/Ubuntu com Windows. Na primeira vez, na raiz do repositório:
 
 ```bash
 npm install
-npm run instalar-atalho
+npm run instalar-botao
 ```
 
-Isso cria **Construction AI Studio** no menu de aplicativos e, quando a Área de Trabalho existe, também cria um atalho nela.
+O instalador detecta o ambiente. No WSL, cria um atalho **Construction AI Studio** na Área de Trabalho do Windows. Em Ubuntu nativo, cria o launcher Linux.
 
-Depois disso, para trabalhar normalmente basta clicar em **Construction AI Studio**. O atalho inicia backend + painel e o navegador abre automaticamente quando o Vite estiver pronto.
+Depois disso, o uso normal é apenas clicar em **Construction AI Studio**. O botão liga backend + painel e o navegador abre automaticamente quando o painel estiver pronto.
 
 Alternativas de terminal:
 
 ```bash
-construction-ai
 npm run verificar
 npm run ligar
 ```
 
-- `construction-ai`: comando curto instalado em `~/.local/bin`.
 - `npm run verificar`: mostra a raiz absoluta do Studio, o caminho absoluto da pasta Imagem Inicial, verifica dependências, .env, branch e imagens encontradas.
 - `npm run ligar`: inicia backend e painel Vite juntos. Ctrl+C encerra os dois.
 
@@ -62,21 +60,23 @@ A Imagem Inicial entra como `MANUAL_REFERENCE`. Ela orienta design, proporções
 7. O Construction AI decide o estado operacional do JOB e libera correção ou próximo JOB.
 8. O ChatGPT atua como orquestrador; o Construction AI continua sendo o sistema executor e a fonte do estado operacional.
 
-## Comandos de conversa
+## Comando de conversa
 
-Em uma conversa nova deste projeto, use uma destas frases:
+Em qualquer conversa nova deste projeto, use primeiro:
 
-### `Construction AI: CONTINUAR`
+### `Construction AI: INICIAR`
 
-Objetivo: retomar o sistema existente. O primeiro passo é ler este `START_HERE.md`, verificar o GitHub Relay e a branch operacional, e então continuar do estado atual sem reconstruir decisões antigas por memória da conversa.
+Esse é o comando mestre. Ao recebê-lo, o ChatGPT deve:
+1. ler este `START_HERE.md` na branch operacional;
+2. verificar conexão com o GitHub e o estado atual da branch;
+3. usar o repositório e o Construction AI como fonte de verdade;
+4. identificar pelo contexto se o trabalho é continuação ou projeto novo;
+5. só pedir uma escolha entre NOVO ou CONTINUAR se isso realmente não puder ser determinado.
 
-### `Construction AI: NOVO PROJETO`
-
-Objetivo: começar uma construção do zero. Primeiro verificar conexão com o repo e o funcionamento local; depois confirmar/usar a Imagem Inicial e iniciar a sequência temporal desde o primeiro JOB elegível.
-
-### `Construction AI: VERIFICAR`
-
-Objetivo: auditar conexão GitHub, branch atual, arquivos essenciais e estrutura do fluxo antes de modificar qualquer coisa.
+Atalhos opcionais continuam válidos:
+- `Construction AI: CONTINUAR`
+- `Construction AI: NOVO PROJETO`
+- `Construction AI: VERIFICAR`
 
 ## Regra de continuidade
 
