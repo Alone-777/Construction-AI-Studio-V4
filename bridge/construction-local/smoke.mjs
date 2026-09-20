@@ -109,6 +109,14 @@ try {
   assert.equal(overview.result.policy.writeMode, 'readonly');
 
   ws.send(JSON.stringify({
+    id: 'snapshot-1',
+    op: 'supervisor_snapshot',
+  }));
+  const snapshot = await waitForMessage(ws, (message) => message.id === 'snapshot-1');
+  assert.equal(snapshot.ok, true);
+  assert.equal(snapshot.result.policy.writeMode, 'readonly');
+
+  ws.send(JSON.stringify({
     id: 'blocked-write',
     op: 'write_file',
     path: 'bridge-smoke-should-not-exist.txt',
@@ -118,7 +126,7 @@ try {
   assert.equal(blocked.ok, false);
   assert.match(blocked.error, /read-only/i);
 
-  console.log('BRIDGE_SMOKE_PASS auth=ok overview=ok readonly_gate=ok');
+  console.log('BRIDGE_SMOKE_PASS auth=ok overview=ok snapshot=ok readonly_gate=ok');
 } finally {
   if (ws && ws.readyState === WebSocket.OPEN) ws.close();
   child.kill('SIGTERM');
