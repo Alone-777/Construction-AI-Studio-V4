@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -38,7 +39,7 @@ async function writeJson(filePath, value) {
   await writeFile(filePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
 }
 
-async function createFireflyFixture(root) {
+async function createFireflyFixture(root, { firstStatus = 'RETRY_REQUIRED' } = {}) {
   const workspaceName = 'fixture_workspace';
   const workspace = path.join(root, '.firefly', workspaceName);
   const firstDir = path.join(workspace, 'jobs', '001__job_one');
@@ -92,9 +93,14 @@ async function createFireflyFixture(root) {
   });
   await writeJson(path.join(firstDir, 'state.json'), {
     jobId: 'firefly:scene-1:segment-1',
-    status: 'RETRY_REQUIRED',
+    status: firstStatus,
     attempts: 6,
-    lastReview: { verdict: 'RETRY', observedStagePercentage: 88 },
+    lastReview: firstStatus === 'REVIEW_REQUIRED'
+      ? {
+          verdict: 'REOBSERVE',
+          contactSheet: 'jobs/001__job_one/review/attempt-006/contact-sheet.png',
+        }
+      : { verdict: 'RETRY', observedStagePercentage: 88 },
   });
   await writeJson(path.join(firstDir, 'source.json'), {
     kind: 'KEYFRAME',
@@ -321,6 +327,112 @@ test('review bundle returns current-job review context and image payloads', asyn
     assert.equal(response.result.contactSheetLayout.bottomRight, 'terminal/end');
     assert.ok(response.result.images.sourceFrame.dataBase64);
     assert.ok(response.result.images.contactSheet.dataBase64);
+  });
+});
+
+test('record_review_retry requires write mode, exact review evidence and explicit confirmation', async () => {
+  await withProject(async (root) => {
+    const { workspaceName } = await createFireflyFixture(root, { firstStatus: 'REVIEW_REQUIRED' });
+    const contactBytes = await readFile(path.join(
+      root,
+      '.firefly',
+      workspaceName,
+      'jobs',
+      '001__job_one',
+      'review',
+      'attempt-006',
+      'contact-sheet.png',
+    ));
+    const contactHash = createHash('sha256').update(contactBytes).digest('hex');
+
+    const readonly = createBridgeExecutor({
+      projectRoot: root,
+      policy: { writeMode: 'readonly', allowPush: false },
+      audit: new MemoryAudit(),
+    });
+
+    const blocked = await readonly.execute({
+      id: 'rr0',
+      op: 'record_review_retry',
+      workspace: workspaceName,
+      jobId: 'firefly:scene-1:segment-1',
+      expectedAttempts: 6,
+      expectedContactSheetSha256: contactHash,
+      observedStagePercentage: 85,
+      confirm: 'RETRY_CURRENT_JOB',
+    });
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.error, /read-only/i);
+
+    const writable = createBridgeExecutor({
+      projectRoot: root,
+      policy: { writeMode: 'allow', allowPush: false },
+      audit: new MemoryAudit(),
+    });
+
+    const stale = await writable.execute({
+      id: 'rr1',
+      op: 'record_review_retry',
+      workspace: workspaceName,
+      jobId: 'firefly:scene-1:segment-1',
+      expectedAttempts: 6,
+      expectedContactSheetSha256: '0'.repeat(64),
+      observedStagePercentage: 85,
+      confirm: 'RETRY_CURRENT_JOB',
+    });
+    assert.equal(stale.ok, false);
+    assert.match(stale.error, /SHA-256 no longer matches/i);
+
+    const response = await writable.execute({
+      id: 'rr2',
+      op: 'record_review_retry',
+      workspace: workspaceName,
+      jobId: 'firefly:scene-1:segment-1',
+      expectedAttempts: 6,
+      expectedContactSheetSha256: contactHash,
+      observedStagePercentage: 85,
+      confirm: 'RETRY_CURRENT_JOB',
+    });
+
+    assert.equal(response.ok, true);
+    assert.equal(response.result.verdict, 'RETRY');
+    assert.equal(response.result.reviewSource, 'chatgpt-relay');
+    assert.equal(response.result.observedStagePercentage, 85);
+
+    const state = JSON.parse(await readFile(path.join(
+      root,
+      '.firefly',
+      workspaceName,
+      'jobs',
+      '001__job_one',
+      'state.json',
+    ), 'utf8'));
+    assert.equal(state.status, 'RETRY_REQUIRED');
+    assert.equal(state.attempts, 6);
+    assert.equal(state.lastReview.contract, 'construction-external-review-v1');
+
+    const retryPrompt = await readFile(path.join(
+      root,
+      '.firefly',
+      workspaceName,
+      'jobs',
+      '001__job_one',
+      'retry-prompt.txt',
+    ), 'utf8');
+    assert.match(retryPrompt, /Stop clearly at 50% completion/);
+
+    const replay = await writable.execute({
+      id: 'rr3',
+      op: 'record_review_retry',
+      workspace: workspaceName,
+      jobId: 'firefly:scene-1:segment-1',
+      expectedAttempts: 6,
+      expectedContactSheetSha256: contactHash,
+      observedStagePercentage: 85,
+      confirm: 'RETRY_CURRENT_JOB',
+    });
+    assert.equal(replay.ok, false);
+    assert.match(replay.error, /requires REVIEW_REQUIRED state/i);
   });
 });
 
