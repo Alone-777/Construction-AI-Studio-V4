@@ -1,6 +1,7 @@
 const endpointEl = document.getElementById('endpoint');
 const tokenEl = document.getElementById('token');
 const requestEl = document.getElementById('request');
+const workspaceEl = document.getElementById('workspace');
 const outputEl = document.getElementById('output');
 const statusEl = document.getElementById('status');
 
@@ -16,9 +17,14 @@ function pretty(value) {
 }
 
 async function loadSettings() {
-  const saved = await chrome.storage.local.get(['constructionBridgeEndpoint', 'constructionBridgeToken']);
+  const saved = await chrome.storage.local.get([
+    'constructionBridgeEndpoint',
+    'constructionBridgeToken',
+    'constructionBridgeWorkspace',
+  ]);
   if (saved.constructionBridgeEndpoint) endpointEl.value = saved.constructionBridgeEndpoint;
   if (saved.constructionBridgeToken) tokenEl.value = saved.constructionBridgeToken;
+  if (saved.constructionBridgeWorkspace) workspaceEl.value = saved.constructionBridgeWorkspace;
 }
 
 async function saveSettings() {
@@ -36,6 +42,7 @@ async function saveSettings() {
   await chrome.storage.local.set({
     constructionBridgeEndpoint: endpoint,
     constructionBridgeToken: token,
+    constructionBridgeWorkspace: workspaceEl.value.trim(),
   });
 }
 
@@ -139,6 +146,30 @@ document.getElementById('overview').addEventListener('click', async () => {
   } catch (error) {
     outputEl.textContent = pretty({ ok: false, error: error.message });
     setStatus(error.message, false);
+  }
+});
+
+document.getElementById('snapshot').addEventListener('click', async () => {
+  try {
+    const workspace = workspaceEl.value.trim();
+    const request = {
+      id: `snapshot-${Date.now()}`,
+      op: 'supervisor_snapshot',
+    };
+    if (workspace) request.workspace = workspace;
+    await runRequest(request);
+  } catch (error) {
+    outputEl.textContent = pretty({ ok: false, error: error.message });
+    setStatus(error.message, false);
+  }
+});
+
+document.getElementById('copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(outputEl.textContent);
+    setStatus('Resultado copiado.', true);
+  } catch (error) {
+    setStatus(`Falha ao copiar: ${error.message}`, false);
   }
 });
 
