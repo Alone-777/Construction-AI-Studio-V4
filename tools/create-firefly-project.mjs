@@ -202,6 +202,30 @@ function promptFor({
   ].join(' ');
 }
 
+function sourceImagePromptFor({
+  description,
+  environment,
+  materials,
+  initialImageName,
+  firstOperation,
+}) {
+  return [
+    '[OFFICIAL SOURCE IMAGE PREPARATION]',
+    'Create a photorealistic 16:9 still image for the canonical START state of JOB 1.',
+    `Project intent: ${description.trim()}.`,
+    `Use ${initialImageName} strictly as MANUAL_REFERENCE for compatible design identity, proportions, materials, terrain, vegetation, environmental landmarks and lighting logic.`,
+    'The MANUAL_REFERENCE is not temporal authority. Do not copy any construction component that belongs to a future state.',
+    `Environment identity: ${environment}. Material/design vocabulary: ${materials.join(', ')}.`,
+    `The upcoming first physical operation is: ${firstOperation[1]} — ${firstOperation[2]}.`,
+    'This image must represent the moment immediately BEFORE that operation starts.',
+    'Show the preserved site, terrain and environment consistently, but no completed construction, no foundations, no floor, no pillars, no walls, no roof and no future components unless they are explicitly part of the true preconstruction environment.',
+    'Keep one stable wide camera position suitable for the entire timelapse.',
+    'If a worker is visible, keep a single consistent worker identity and clothing ready to begin work.',
+    'No magical objects, no premature construction, no temporal contradiction.',
+    'The result becomes OFFICIAL temporal source for JOB 1 only after it is reviewed/accepted.',
+  ].join(' ');
+}
+
 function negativeConstraints(future) {
   return [
     'no magical construction',
@@ -280,17 +304,28 @@ export async function createFireflyProject({
   if (await exists(workspace)) throw new Error('Workspace já existe: ' + projectId);
 
   const jobsRoot = path.join(workspace, 'jobs');
-  const keyframesRoot = path.join(workspace, 'inputs', 'keyframes');
+  const referencesRoot = path.join(workspace, 'references');
+  const officialInputsRoot = path.join(workspace, 'inputs', 'official');
   const outputsRoot = path.join(workspace, 'outputs');
   const incomingRoot = path.join(workspace, 'incoming');
   await mkdir(jobsRoot, { recursive: true });
-  await mkdir(keyframesRoot, { recursive: true });
+  await mkdir(referencesRoot, { recursive: true });
+  await mkdir(officialInputsRoot, { recursive: true });
   await mkdir(outputsRoot, { recursive: true });
   await mkdir(incomingRoot, { recursive: true });
 
-  const keyframeName = 'initial-master' + initial.extension;
-  const keyframeAbs = path.join(keyframesRoot, keyframeName);
-  await copyFile(initial.absolute, keyframeAbs);
+  const referenceName = 'initial-master' + initial.extension;
+  const referenceAbs = path.join(referencesRoot, referenceName);
+  await copyFile(initial.absolute, referenceAbs);
+  const referencePath = path.posix.join('references', referenceName);
+  const firstOfficialSourcePath = path.posix.join('inputs', 'official', 'job-001-source.png');
+  const firstSourceImagePrompt = sourceImagePromptFor({
+    description,
+    environment,
+    materials,
+    initialImageName: initial.name,
+    firstOperation: operations[0],
+  });
 
   const jobs = [];
   let previousJob = null;
@@ -308,11 +343,16 @@ export async function createFireflyProject({
 
       const source = previousJob
         ? { kind: 'PREVIOUS_JOB_LAST_FRAME', previousJobId: previousJob.id }
-        : { kind: 'KEYFRAME', keyframeId: 'initial-image:' + initial.name };
+        : {
+            kind: 'KEYFRAME',
+            keyframeId: 'official-source:job-001',
+            referenceKind: 'MANUAL_REFERENCE',
+            referencePath,
+          };
 
       const sourcePath = previousJob
         ? previousJob.output.lastFrameSlot
-        : path.posix.join('inputs', 'keyframes', keyframeName);
+        : firstOfficialSourcePath;
 
       const future = operations.slice(operationIndex + 1).map(item => item[1]);
       const prompt = promptFor({
@@ -348,6 +388,8 @@ export async function createFireflyProject({
         aspectRatio: '16:9',
         resolution: { width: 1920, height: 1080 },
         source,
+        sourceImagePrompt: sequence === 1 ? firstSourceImagePrompt : null,
+        initialReferencePath: referencePath,
         terminalRequirement: target === 100 ? 'SCENE_EXIT' : 'INTERMEDIATE_CONTINUATION',
         prompt,
         negativeConstraints: negativeConstraints(future),
@@ -378,7 +420,16 @@ export async function createFireflyProject({
         ...source,
         resolvedPath: sourcePath,
         absolutePath: sourceAbsolute,
+        initialReferencePath: referencePath,
+        sourceReady: await exists(sourceAbsolute),
       });
+      if (sequence === 1) {
+        await writeFile(
+          path.join(jobDir, 'source-image-prompt.txt'),
+          firstSourceImagePrompt + '\n',
+          'utf8',
+        );
+      }
       await writeJson(path.join(jobDir, 'state.json'), {
         jobId,
         status: 'PENDING',
@@ -429,8 +480,9 @@ export async function createFireflyProject({
     initialImage: {
       name: initial.name,
       sourcePath: path.relative(resolvedRoot, initial.absolute).split(path.sep).join('/'),
-      workspacePath: path.posix.join('inputs', 'keyframes', keyframeName),
-      temporalRole: 'INITIAL_VISUAL_ORIGIN',
+      workspacePath: referencePath,
+      temporalRole: 'MANUAL_REFERENCE',
+      temporalAuthority: false,
     },
     videoPolicy: {
       provider: 'ADOBE_FIREFLY_MANUAL',
@@ -464,7 +516,12 @@ export async function createFireflyProject({
     workspaceName: projectId,
     totalJobs: jobs.length,
     totalDurationSeconds: jobs.length * 8,
-    firstJob: jobs[0],
+    firstJob: {
+      ...jobs[0],
+      sourceReady: false,
+      sourceImagePrompt: firstSourceImagePrompt,
+      expectedOfficialSource: firstOfficialSourcePath,
+    },
     initialImage: {
       name: initial.name,
       size: initialInfo.size,
@@ -482,7 +539,7 @@ async function main() {
   process.stdout.write(JSON.stringify(result) + '\n');
 }
 
-if (import.meta.url === new URL('file://' + process.argv[1]).href) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
   main().catch(error => {
     process.stderr.write((error instanceof Error ? error.message : String(error)) + '\n');
     process.exitCode = 1;
