@@ -4,6 +4,7 @@ import type {
   ImageGenerationRequest,
   ImageGenerationResult,
   ImageMetadataValue,
+  ImageReference,
   ImageResolution,
   ImageTemporalPosition,
   ManualImageSubmission,
@@ -172,6 +173,7 @@ export interface StartVisualPipelineInput {
     readonly temporalPosition: ImageTemporalPosition;
     readonly aspectRatio?: number;
     readonly resolution?: ImageResolution;
+    readonly references?: readonly ImageReference[];
     readonly metadata?: Readonly<Record<string, ImageMetadataValue>>;
   };
   readonly video: VisualPipelineVideoConfig;
