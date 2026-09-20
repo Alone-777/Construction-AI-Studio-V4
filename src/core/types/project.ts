@@ -234,6 +234,14 @@ export interface DependencyGraph {
   edges: DependencyEdge[];
 }
 
+export interface ProjectInitialImage {
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+  source: 'FOLDER' | 'UPLOAD' | 'VISUAL_RECONSTRUCTION';
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -264,6 +272,8 @@ export interface Project {
     interpretation: string[];
     assumptions: string[];
   };
+  /** Imagem-base do projeto usada como referência visual de origem para os prompts. */
+  initialImage?: ProjectInitialImage;
   visualReconstruction?: {
     referenceImage: {
       name: string;
