@@ -4,6 +4,9 @@ const requestEl = document.getElementById('request');
 const workspaceEl = document.getElementById('workspace');
 const outputEl = document.getElementById('output');
 const statusEl = document.getElementById('status');
+const imagePanelEl = document.getElementById('imagePanel');
+const sourceImageEl = document.getElementById('sourceImage');
+const contactImageEl = document.getElementById('contactImage');
 
 function setStatus(message, ok = null) {
   statusEl.textContent = message;
@@ -14,6 +17,38 @@ function setStatus(message, ok = null) {
 
 function pretty(value) {
   return JSON.stringify(value, null, 2);
+}
+
+function imageDataUrl(image) {
+  if (!image?.dataBase64 || !image?.mimeType) return null;
+  return `data:${image.mimeType};base64,${image.dataBase64}`;
+}
+
+function responseForDisplay(response) {
+  const copy = structuredClone(response);
+  for (const key of ['sourceFrame', 'contactSheet']) {
+    if (copy?.result?.images?.[key]?.dataBase64) {
+      copy.result.images[key].dataBase64 = '[rendered in popup]';
+    }
+  }
+  return copy;
+}
+
+function renderReviewImages(response) {
+  const sourceUrl = imageDataUrl(response?.result?.images?.sourceFrame);
+  const contactUrl = imageDataUrl(response?.result?.images?.contactSheet);
+
+  sourceImageEl.removeAttribute('src');
+  contactImageEl.removeAttribute('src');
+
+  if (!sourceUrl && !contactUrl) {
+    imagePanelEl.style.display = 'none';
+    return;
+  }
+
+  if (sourceUrl) sourceImageEl.src = sourceUrl;
+  if (contactUrl) contactImageEl.src = contactUrl;
+  imagePanelEl.style.display = 'block';
 }
 
 async function loadSettings() {
@@ -121,7 +156,8 @@ async function runRequest(request) {
   try {
     setStatus('Autenticado. Enviando requisição...');
     const response = await sendAndWait(ws, request);
-    outputEl.textContent = pretty(response);
+    renderReviewImages(response);
+    outputEl.textContent = pretty(responseForDisplay(response));
     setStatus(response.ok ? 'Resposta recebida.' : 'Bridge recusou a operação.', response.ok);
   } finally {
     ws.close();
@@ -155,6 +191,22 @@ document.getElementById('bundle').addEventListener('click', async () => {
     const request = {
       id: `bundle-${Date.now()}`,
       op: 'supervisor_bundle',
+    };
+    if (workspace) request.workspace = workspace;
+    await runRequest(request);
+  } catch (error) {
+    outputEl.textContent = pretty({ ok: false, error: error.message });
+    setStatus(error.message, false);
+  }
+});
+
+document.getElementById('review').addEventListener('click', async () => {
+  try {
+    const workspace = workspaceEl.value.trim();
+    const request = {
+      id: `review-${Date.now()}`,
+      op: 'review_bundle',
+      includeImages: true,
     };
     if (workspace) request.workspace = workspace;
     await runRequest(request);
