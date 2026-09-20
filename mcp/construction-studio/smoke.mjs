@@ -20,7 +20,7 @@ const child = spawn(process.execPath, ['server.mjs'], {
     CONSTRUCTION_MCP_INSECURE_LOCAL: 'true',
     CONSTRUCTION_MCP_TOKEN: '',
   },
-  stdio: ['ignore', 'pipe', 'pipe'],
+  stdio: ['ignore', 'ignore', 'pipe'],
 });
 
 let stderr = '';
@@ -31,6 +31,10 @@ child.stderr.on('data', (chunk) => {
 async function waitForHealth() {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(`MCP server exited early with code ${child.exitCode}. stderr: ${stderr}`);
+    }
+
     try {
       const response = await fetch(`${BASE}/health`);
       if (response.ok) return;
