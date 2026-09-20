@@ -17,6 +17,7 @@ export const UI_IMAGE_PROVIDER_ID = 'ui-manual-image';
 export const UI_VIDEO_PROVIDER_ID = 'ui-manual-video';
 export const UI_IMAGE_OBSERVER_ID = 'ui-manual-image-observer';
 export const UI_VIDEO_OBSERVER_ID = 'ui-manual-video-observer';
+export const FIREFLY_VIDEO_DURATION_SECONDS = 8;
 
 export function formatAspectRatio(aspectRatio?: number): string {
   if (aspectRatio === undefined) return 'padrão';
@@ -61,12 +62,12 @@ const ACTION_LABELS: Record<VisualPipelineRequiredActionType, string> = {
   ACKNOWLEDGE_IMAGE_WARNING: 'Revisar aviso',
   RETRY_IMAGE: 'Corrigir e tentar novamente',
   APPROVE_IMAGE: 'Aprovar imagem',
-  PREPARE_VIDEO: 'Preparar vídeo',
-  GENERATE_VIDEO_EXTERNALLY: 'Gerar vídeo',
+  PREPARE_VIDEO: 'Preparar JOB Firefly',
+  GENERATE_VIDEO_EXTERNALLY: 'Abrir JOB Firefly',
   PROVIDE_VIDEO_EVIDENCE: 'Validar vídeo',
   ACKNOWLEDGE_VIDEO_WARNING: 'Revisar aviso',
   RETRY_VIDEO: 'Tentar vídeo novamente',
-  ACCEPT_VIDEO: 'Finalizar vídeo',
+  ACCEPT_VIDEO: 'Finalizar JOB Firefly',
 };
 
 const PHASE_INDEX: Record<VisualPipelinePhase, number> = {
@@ -146,14 +147,14 @@ export function createVisualPipelineStartDraft(
     },
     video: {
       providerId: UI_VIDEO_PROVIDER_ID,
-      durationSeconds: 8,
+      durationSeconds: FIREFLY_VIDEO_DURATION_SECONDS,
     },
   };
 }
 
 export function requiredActionLabel(run: VisualPipelineRun): string | undefined {
   if (run.currentPhase === 'IMAGE_MANUAL_ACTION_REQUIRED') return 'Enviar imagem gerada';
-  if (run.currentPhase === 'VIDEO_MANUAL_ACTION_REQUIRED') return 'Enviar vídeo gerado';
+  if (run.currentPhase === 'VIDEO_MANUAL_ACTION_REQUIRED') return 'Enviar vídeo do Firefly';
   return run.requiredAction ? ACTION_LABELS[run.requiredAction.type] : undefined;
 }
 
