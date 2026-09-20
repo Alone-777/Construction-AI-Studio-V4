@@ -8,15 +8,28 @@ Este arquivo é o ponto permanente de retomada do projeto.
 - Branch de trabalho: `feature/v4.2-visual-pipeline`
 - Pasta de entrada: `Imagem Inicial/`
 
-## Comandos locais
+## Inicialização no Ubuntu
 
-Na raiz do repositório:
+Na primeira vez, na raiz do repositório:
 
 ```bash
+npm install
+npm run instalar-atalho
+```
+
+Isso cria **Construction AI Studio** no menu de aplicativos e, quando a Área de Trabalho existe, também cria um atalho nela.
+
+Depois disso, para trabalhar normalmente basta clicar em **Construction AI Studio**. O atalho inicia backend + painel e o navegador abre automaticamente quando o Vite estiver pronto.
+
+Alternativas de terminal:
+
+```bash
+construction-ai
 npm run verificar
 npm run ligar
 ```
 
+- `construction-ai`: comando curto instalado em `~/.local/bin`.
 - `npm run verificar`: mostra a raiz absoluta do Studio, o caminho absoluto da pasta Imagem Inicial, verifica dependências, .env, branch e imagens encontradas.
 - `npm run ligar`: inicia backend e painel Vite juntos. Ctrl+C encerra os dois.
 
