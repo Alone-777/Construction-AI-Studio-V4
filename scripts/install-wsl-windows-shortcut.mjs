@@ -3,9 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
-const distro = process.env.WSL_DISTRO_NAME;
-
-if (!distro) {
+if (!process.env.WSL_INTEROP && !process.env.WSL_DISTRO_NAME) {
   console.error('Este instalador deve ser executado dentro do WSL.');
   process.exit(1);
 }
