@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GeminiVisualProvider } from './providers/gemini-visual-provider.mjs';
@@ -16,6 +16,14 @@ const PORT = Number(process.env.CONSTRUCTION_AI_PORT || 8787);
 const HOST = process.env.CONSTRUCTION_AI_HOST || '127.0.0.1';
 const MAX_JSON_BYTES = 11 * 1024 * 1024;
 const distRoot = resolve(fileURLToPath(new URL('../dist', import.meta.url)));
+const initialImageRoot = resolve(fileURLToPath(new URL('../Imagem Inicial', import.meta.url)));
+const INITIAL_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+const initialImageMimeTypes = new Map([
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.webp', 'image/webp'],
+]);
 const providers = [
   new GeminiVisualProvider(),
   new OpenAIVisualProvider(),
@@ -68,6 +76,50 @@ function providerDescriptors() {
   }));
 }
 
+async function readInitialImage() {
+  let entries;
+  try {
+    entries = await readdir(initialImageRoot, { withFileTypes: true });
+  } catch {
+    return { image: null, warnings: [] };
+  }
+
+  const candidates = entries
+    .filter(entry => entry.isFile() && initialImageMimeTypes.has(extname(entry.name).toLowerCase()))
+    .map(entry => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+
+  if (candidates.length === 0) return { image: null, warnings: [] };
+
+  const name = candidates[0];
+  const filePath = resolve(join(initialImageRoot, name));
+  if (!filePath.startsWith(`${initialImageRoot}${sep}`)) {
+    throw new Error('Caminho da Imagem Inicial inválido.');
+  }
+
+  const info = await stat(filePath);
+  if (!info.isFile() || info.size <= 0 || info.size > INITIAL_IMAGE_MAX_BYTES) {
+    throw new Error('A Imagem Inicial deve ter entre 1 byte e 10 MB.');
+  }
+
+  const mimeType = initialImageMimeTypes.get(extname(name).toLowerCase());
+  if (!mimeType) throw new Error('Formato da Imagem Inicial não suportado.');
+  const data = await readFile(filePath);
+
+  return {
+    image: {
+      name,
+      mimeType,
+      size: info.size,
+      dataUrl: `data:${mimeType};base64,${data.toString('base64')}`,
+      source: 'FOLDER',
+    },
+    warnings: candidates.length > 1
+      ? [`Mais de uma imagem encontrada em Imagem Inicial; usando '${name}'.`]
+      : [],
+  };
+}
+
 function providerErrorResponse(error) {
   if (error instanceof ProviderUnavailableError) {
     return { status: 503, body: { error: error.message, code: error.code } };
@@ -95,6 +147,17 @@ function providerErrorResponse(error) {
 }
 
 async function handleApi(request, response, pathname) {
+  if (request.method === 'GET' && pathname === '/api/visual/initial-image') {
+    try {
+      json(response, 200, await readInitialImage());
+    } catch (error) {
+      json(response, 400, {
+        error: error instanceof Error ? error.message : 'Não foi possível ler a Imagem Inicial.',
+        code: 'INITIAL_IMAGE_ERROR',
+      });
+    }
+    return true;
+  }
   if (request.method === 'GET' && pathname === '/api/visual/providers') {
     json(response, 200, { providers: providerDescriptors() });
     return true;
