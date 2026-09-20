@@ -149,12 +149,12 @@ document.getElementById('overview').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('snapshot').addEventListener('click', async () => {
+document.getElementById('bundle').addEventListener('click', async () => {
   try {
     const workspace = workspaceEl.value.trim();
     const request = {
-      id: `snapshot-${Date.now()}`,
-      op: 'supervisor_snapshot',
+      id: `bundle-${Date.now()}`,
+      op: 'supervisor_bundle',
     };
     if (workspace) request.workspace = workspace;
     await runRequest(request);
