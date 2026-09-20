@@ -61,6 +61,12 @@ export async function resolveExistingPath(root, input, { allowSensitive = false 
   if (!isWithin(absoluteRoot, resolved)) {
     throw new Error('Resolved path escapes the Construction AI Studio root.');
   }
+
+  if (!allowSensitive) {
+    const resolvedRel = path.relative(absoluteRoot, resolved).split(path.sep).join('/') || '.';
+    assertReadablePath(resolvedRel);
+  }
+
   return { root: absoluteRoot, rel, absolute: resolved };
 }
 
@@ -77,6 +83,9 @@ export async function resolveWritePath(root, input) {
   if (!isWithin(absoluteRoot, resolvedParent)) {
     throw new Error('Write parent escapes the Construction AI Studio root.');
   }
+
+  const resolvedParentRel = path.relative(absoluteRoot, resolvedParent).split(path.sep).join('/') || '.';
+  assertWritablePath(resolvedParentRel);
 
   try {
     const info = await lstat(candidate);
