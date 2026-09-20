@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Construction AI Relay</title>
+  <style>
+    body { font-family: system-ui, sans-serif; width: 420px; margin: 0; padding: 16px; background: #111; color: #eee; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    label { display: block; font-size: 12px; margin: 10px 0 6px; color: #bbb; }
+    input, textarea, button { box-sizing: border-box; width: 100%; }
+    input, textarea { background: #1c1c1c; color: #eee; border: 1px solid #444; border-radius: 8px; padding: 10px; }
+    textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    button { border: 0; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: 600; }
+    button.primary { background: #f5f5f5; color: #111; }
+    button.secondary { background: #2b2b2b; color: #eee; border: 1px solid #444; }
+    .status { margin-top: 10px; font-size: 12px; color: #aaa; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #181818; border: 1px solid #333; padding: 10px; border-radius: 8px; max-height: 260px; overflow: auto; font-size: 11px; }
+    .ok { color: #8ee38e; }
+    .err { color: #ff9d9d; }
+  </style>
+</head>
+<body>
+  <h1>Construction AI Relay</h1>
+
+  <label for="endpoint">Bridge WebSocket</label>
+  <input id="endpoint" value="ws://127.0.0.1:8791/bridge">
+
+  <label for="token">Token local</label>
+  <input id="token" type="password" autocomplete="off" placeholder="Cole o token local">
+
+  <div class="row">
+    <button id="save" class="secondary">Salvar configuração</button>
+    <button id="overview" class="primary">Testar overview</button>
+  </div>
+
+  <label for="request">Requisição JSON</label>
+  <textarea id="request">{
+  "id": "manual-1",
+  "op": "overview"
+}</textarea>
+
+  <button id="send" class="primary" style="margin-top:10px">Enviar requisição</button>
+
+  <div id="status" class="status">Aguardando.</div>
+  <pre id="output">{}</pre>
+
+  <script src="popup.js"></script>
+</body>
+</html>
