@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
@@ -14,80 +15,32 @@ if (!existsSync(resolve(root, 'package.json'))) {
   process.exit(1);
 }
 
-function psLiteral(value) {
-  return "'" + value.replaceAll("'", "''") + "'";
+const relayInstaller = resolve(homedir(), 'Construction-AI-Relay', 'scripts', 'install-operator-mode.sh');
+
+if (!existsSync(relayInstaller)) {
+  console.error('Não encontrei o Construction AI Relay em ~/Construction-AI-Relay.');
+  console.error('Atualize ou clone o Relay antes de instalar o botão operacional.');
+  process.exit(1);
 }
 
-const shortcutName = 'Construction AI Studio.lnk';
-const description = 'Ligar Construction AI Studio pelo perfil Ubuntu do Windows Terminal';
-
-const ps = [
-  `$ErrorActionPreference = 'Stop'`,
-  `$projectPath = ${psLiteral(root)}`,
-  `$settingsCandidates = @(
-    (Join-Path $env:LOCALAPPDATA 'Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState\\settings.json'),
-    (Join-Path $env:LOCALAPPDATA 'Packages\\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\\LocalState\\settings.json'),
-    (Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows Terminal\\settings.json')
-  )`,
-  `$settingsPath = $settingsCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1`,
-  `if (-not $settingsPath) { throw 'Não encontrei o settings.json do Windows Terminal.' }`,
-  `$settingsText = Get-Content -Raw -LiteralPath $settingsPath`,
-  `try { $settings = $settingsText | ConvertFrom-Json } catch { throw "Não consegui ler as configurações do Windows Terminal: $($_.Exception.Message)" }`,
-  `$profiles = @($settings.profiles.list)`,
-  `if ($profiles.Count -eq 0) { throw 'Nenhum perfil foi encontrado no Windows Terminal.' }`,
-  `$profile = $null`,
-  `if ($profiles.Count -ge 4) {
-    $candidate = $profiles[3]
-    if ($candidate.name -match 'Ubuntu|WSL|Linux' -or $candidate.source -eq 'Windows.Terminal.Wsl') {
-      $profile = $candidate
-    }
-  }`,
-  `if (-not $profile) {
-    $profile = $profiles | Where-Object {
-      $_.name -match 'Ubuntu' -or $_.source -eq 'Windows.Terminal.Wsl'
-    } | Select-Object -First 1
-  }`,
-  `if (-not $profile) { throw 'Não encontrei o perfil Ubuntu/WSL do Windows Terminal.' }`,
-  `$profileName = [string]$profile.name`,
-  `$wt = (Get-Command wt.exe -ErrorAction Stop).Source`,
-  `$desktop = [Environment]::GetFolderPath('Desktop')`,
-  `$shortcutPath = Join-Path $desktop ${psLiteral(shortcutName)}`,
-  `$launchScript = $projectPath + '/scripts/launch-studio-wsl.sh'`,
-  `$shell = New-Object -ComObject WScript.Shell`,
-  `$shortcut = $shell.CreateShortcut($shortcutPath)`,
-  `$shortcut.TargetPath = $wt`,
-  `$shortcut.Arguments = '-w new new-tab -p "' + $profileName + '" --appendCommandLine run bash "' + $launchScript + '"'`,
-  `$shortcut.WorkingDirectory = $desktop`,
-  `$shortcut.Description = ${psLiteral(description)}`,
-  `$shortcut.IconLocation = "$env:SystemRoot\\System32\\wsl.exe,0"`,
-  `$shortcut.Save()`,
-  `Write-Output ("PERFIL_WINDOWS_TERMINAL=" + $profileName)`,
-  `Write-Output ("SCRIPT_LINUX=" + $launchScript)`,
-  `Write-Output ("ATALHO=" + $shortcutPath)`,
-].join('; ');
-
-const result = spawnSync('powershell.exe', [
-  '-NoProfile',
-  '-ExecutionPolicy', 'Bypass',
-  '-Command', ps,
-], {
+const result = spawnSync('bash', [relayInstaller], {
   cwd: root,
-  encoding: 'utf8',
+  stdio: 'inherit',
+  env: process.env,
 });
 
 if (result.status !== 0) {
   console.error('');
-  console.error('NÃO FOI POSSÍVEL CRIAR O BOTÃO.');
-  console.error((result.stderr || result.stdout || '').trim());
+  console.error('NÃO FOI POSSÍVEL INSTALAR O MODO OPERADOR.');
   console.error('');
   process.exit(result.status || 1);
 }
 
 console.log('');
-console.log('BOTÃO INSTALADO COM SUCESSO');
-console.log(result.stdout.trim());
+console.log('BOTÃO OPERACIONAL INSTALADO');
+console.log('O atalho "Construction AI Studio" agora abre somente o Operator Panel:');
+console.log('http://127.0.0.1:8793');
 console.log('');
-console.log('O botão usa o perfil Ubuntu/WSL do Windows Terminal.');
-console.log('O atalho chama um script Linux absoluto dentro do projeto, sem depender da pasta atual do Windows.');
-console.log('Quando o painel estiver pronto, o navegador do Windows será aberto automaticamente.');
+console.log('Bridge + Relay + Panel ficam ligados como infraestrutura persistente.');
+console.log('As portas 5173 e 8787 ficam reservadas para desenvolvimento/diagnóstico.');
 console.log('');
