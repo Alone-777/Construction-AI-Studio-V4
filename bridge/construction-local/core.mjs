@@ -19,6 +19,7 @@ import {
 const READ_OPS = new Set([
   'overview',
   'supervisor_snapshot',
+  'supervisor_bundle',
   'list_directory',
   'read_file',
   'read_files',
@@ -82,6 +83,181 @@ export class AuditLog {
     await mkdir(path.dirname(this.filePath), { recursive: true });
     await appendFile(this.filePath, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n', 'utf8');
   }
+}
+
+async function exists(filePath) {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function readJsonFile(filePath) {
+  return JSON.parse(await readFile(filePath, 'utf8'));
+}
+
+async function readTextIfExists(filePath, maxBytes = MAX_TEXT_BYTES) {
+  if (!(await exists(filePath))) return null;
+  const meta = await fileMeta(filePath);
+  if (!meta.isFile) return null;
+  if (meta.size > maxBytes) throw new Error(`File is too large: ${filePath}`);
+  return readFile(filePath, 'utf8');
+}
+
+async function latestContactSheet(jobDir) {
+  const reviewRoot = path.join(jobDir, 'review');
+  if (!(await exists(reviewRoot))) return null;
+
+  const attempts = (await readdir(reviewRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && /^attempt-\d+$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+    .reverse();
+
+  for (const attempt of attempts) {
+    for (const name of ['contact-sheet.png', 'contact-sheet-compact.png', 'terminal-verification.png']) {
+      const candidate = path.join(reviewRoot, attempt, name);
+      if (await exists(candidate)) return candidate;
+    }
+  }
+
+  return null;
+}
+
+async function buildSupervisorBundle(projectRoot, workspaceName) {
+  const workspaces = await listWorkspaces(projectRoot);
+  const requestedWorkspace = typeof workspaceName === 'string' && workspaceName
+    ? normalizeRelativePath(workspaceName)
+    : null;
+
+  if (!requestedWorkspace) {
+    return {
+      selectedWorkspace: null,
+      fireflyWorkspaces: workspaces,
+      currentJob: null,
+      queueSummary: null,
+      nextAction: workspaces.length === 1 ? 'SELECT_ONLY_WORKSPACE' : 'SELECT_WORKSPACE',
+    };
+  }
+
+  if (!workspaces.includes(requestedWorkspace)) {
+    throw new Error(`Unknown Firefly workspace: ${requestedWorkspace}`);
+  }
+
+  const workspaceRoot = path.join(projectRoot, '.firefly', requestedWorkspace);
+  const queuePath = path.join(workspaceRoot, 'queue.json');
+  if (!(await exists(queuePath))) {
+    throw new Error(`Workspace queue.json is missing: ${requestedWorkspace}`);
+  }
+
+  const queue = await readJsonFile(queuePath);
+  if (!Array.isArray(queue.jobs)) throw new Error('Workspace queue.json has no jobs array.');
+
+  const jobs = [];
+  for (const item of queue.jobs) {
+    const jobDir = path.join(workspaceRoot, item.jobDirectory);
+    const statePath = path.join(jobDir, 'state.json');
+    const state = await readJsonFile(statePath);
+    const sourceReady = await exists(path.join(workspaceRoot, item.sourcePath));
+    const videoReady = await exists(path.join(workspaceRoot, item.videoOutput));
+    const lastFrameReady = await exists(path.join(workspaceRoot, item.lastFrameOutput));
+
+    jobs.push({
+      ...item,
+      status: state.status,
+      attempts: state.attempts ?? 0,
+      sourceReady,
+      videoReady,
+      lastFrameReady,
+      runnable: ['PENDING', 'RETRY_REQUIRED'].includes(state.status) && sourceReady,
+    });
+  }
+
+  const currentIndex = jobs.findIndex((job) => job.status !== 'COMPLETE');
+  const current = currentIndex >= 0 ? jobs[currentIndex] : null;
+
+  let currentJob = null;
+  if (current) {
+    const jobDir = path.join(workspaceRoot, current.jobDirectory);
+    const [job, state, source, basePrompt, retryPrompt, checklist, negative, contactSheetAbs] = await Promise.all([
+      readJsonFile(path.join(jobDir, 'job.json')),
+      readJsonFile(path.join(jobDir, 'state.json')),
+      readJsonFile(path.join(jobDir, 'source.json')),
+      readTextIfExists(path.join(jobDir, 'prompt.txt')),
+      readTextIfExists(path.join(jobDir, 'retry-prompt.txt')),
+      readTextIfExists(path.join(jobDir, 'checklist.txt')),
+      readTextIfExists(path.join(jobDir, 'negative.txt')),
+      latestContactSheet(jobDir),
+    ]);
+
+    const effectivePrompt = state.status === 'RETRY_REQUIRED' && retryPrompt
+      ? retryPrompt
+      : basePrompt;
+
+    currentJob = {
+      queue: current,
+      job,
+      state,
+      source,
+      effectivePrompt,
+      basePrompt,
+      retryPrompt: retryPrompt ?? null,
+      checklist: checklist ?? null,
+      negativeConstraints: negative ?? null,
+      paths: {
+        jobDirectory: path.relative(projectRoot, jobDir).split(path.sep).join('/'),
+        source: path.relative(projectRoot, path.join(workspaceRoot, current.sourcePath)).split(path.sep).join('/'),
+        videoOutput: path.relative(projectRoot, path.join(workspaceRoot, current.videoOutput)).split(path.sep).join('/'),
+        lastFrameOutput: path.relative(projectRoot, path.join(workspaceRoot, current.lastFrameOutput)).split(path.sep).join('/'),
+        contactSheet: contactSheetAbs
+          ? path.relative(projectRoot, contactSheetAbs).split(path.sep).join('/')
+          : null,
+      },
+    };
+  }
+
+  const completed = jobs.filter((job) => job.status === 'COMPLETE').length;
+  const reviewRequired = jobs.filter((job) => job.status === 'REVIEW_REQUIRED').length;
+  const retryRequired = jobs.filter((job) => job.status === 'RETRY_REQUIRED').length;
+  const runnable = jobs.filter((job) => job.runnable).length;
+
+  let nextAction = 'PROJECT_QUEUE_COMPLETE';
+  if (current) {
+    if (current.status === 'REVIEW_REQUIRED') nextAction = 'REVIEW_CURRENT_JOB';
+    else if (current.status === 'RETRY_REQUIRED' && current.sourceReady) nextAction = 'REGENERATE_CURRENT_JOB';
+    else if (current.status === 'PENDING' && current.sourceReady) nextAction = 'GENERATE_CURRENT_JOB';
+    else if (!current.sourceReady) nextAction = 'WAIT_FOR_SOURCE_FRAME';
+    else nextAction = 'INSPECT_CURRENT_JOB';
+  }
+
+  return {
+    selectedWorkspace: requestedWorkspace,
+    workspacePath: path.relative(projectRoot, workspaceRoot).split(path.sep).join('/'),
+    queueSummary: {
+      projectId: queue.projectId ?? requestedWorkspace,
+      totalJobs: jobs.length,
+      completed,
+      pending: jobs.length - completed,
+      reviewRequired,
+      retryRequired,
+      runnable,
+      currentSequence: current?.sequence ?? null,
+      currentJobId: current?.jobId ?? null,
+    },
+    currentJob,
+    blockedDownstreamJobs: currentIndex >= 0
+      ? jobs.slice(currentIndex + 1).filter((job) => job.status !== 'COMPLETE').map((job) => ({
+          sequence: job.sequence,
+          jobId: job.jobId,
+          status: job.status,
+          sourceReady: job.sourceReady,
+        }))
+      : [],
+    nextAction,
+  };
 }
 
 async function listWorkspaces(projectRoot) {
@@ -175,6 +351,25 @@ export function createBridgeExecutor({
             fireflyWorkspaces: workspaces,
             selectedWorkspace: requestedWorkspace,
             fireflyStatus,
+          };
+          break;
+        }
+
+        case 'supervisor_bundle': {
+          const [gitStatus, diffCheck, gitLog, bundle] = await Promise.all([
+            runProcess(projectRoot, 'git', ['status', '--short', '--branch'], { timeoutMs: 30_000 }),
+            runProcess(projectRoot, 'git', ['diff', '--check'], { timeoutMs: 30_000 }),
+            runProcess(projectRoot, 'git', ['log', '--oneline', '-n', '5'], { timeoutMs: 30_000 }),
+            buildSupervisorBundle(projectRoot, message.workspace),
+          ]);
+
+          result = {
+            projectRoot,
+            policy,
+            gitStatus,
+            diffCheck,
+            gitLog,
+            ...bundle,
           };
           break;
         }
