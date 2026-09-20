@@ -169,6 +169,7 @@ describe('operational visual pipeline presentation', () => {
     const run = useVisualPipelineStore.getState().runs[key];
     expect(run.videoState).toBeUndefined();
     expect(useVisualPipelineStore.getState().errors[key]).toBeTruthy();
+    expect(useVisualPipelineStore.getState().activeVideoJobKey).toBeUndefined();
   });
 
   it('manual video action preserves prompt and official source image', async () => {
