@@ -386,26 +386,7 @@ function buildMcpServer() {
 const handler = createMcpHandler(buildMcpServer);
 const nodeHandler = toNodeHandler(handler);
 
-function rejectBrowserOrigin(req, res) {
-  const origin = req.headers.origin;
-  if (!origin) return false;
-
-  try {
-    const parsed = new URL(origin);
-    const allowed = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '::1';
-    if (allowed) return false;
-  } catch {
-    // Fall through to rejection.
-  }
-
-  res.writeHead(403, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-  res.end(JSON.stringify({ error: 'forbidden_origin' }));
-  return true;
-}
-
 const httpServer = createHttpServer((req, res) => {
-  if (rejectBrowserOrigin(req, res)) return;
-
   const url = new URL(req.url || '/', `http://${req.headers.host || '127.0.0.1'}`);
 
   if (req.method === 'GET' && url.pathname === HEALTH_PATH) {
