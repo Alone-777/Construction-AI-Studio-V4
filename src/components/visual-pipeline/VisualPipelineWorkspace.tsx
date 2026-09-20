@@ -49,6 +49,7 @@ export function VisualPipelineWorkspace() {
   const setInitialImage = useProjectStore(state => state.setInitialImage);
   const pipeline = useVisualPipelineStore();
   const [localError, setLocalError] = useState('');
+  const [initialImageDiscoveryDone, setInitialImageDiscoveryDone] = useState(false);
 
   const scene = project?.scenes.find(candidate => candidate.id === selectedSceneId)
     ?? project?.scenes[0];
@@ -78,8 +79,18 @@ export function VisualPipelineWorkspace() {
   const videoJobBlocked = !!videoJobBlockMessage;
 
   useEffect(() => {
-    if (!project || initialImage) return;
     let active = true;
+    setInitialImageDiscoveryDone(false);
+
+    if (!project) {
+      setInitialImageDiscoveryDone(true);
+      return () => { active = false; };
+    }
+    if (initialImage || initialImageLocked) {
+      setInitialImageDiscoveryDone(true);
+      return () => { active = false; };
+    }
+
     fetchInitialImageFromFolder()
       .then(({ image, warnings }) => {
         if (!active) return;
@@ -88,9 +99,13 @@ export function VisualPipelineWorkspace() {
       })
       .catch(() => {
         // Folder auto-discovery is optional; manual upload remains available.
+      })
+      .finally(() => {
+        if (active) setInitialImageDiscoveryDone(true);
       });
+
     return () => { active = false; };
-  }, [project?.id, !!initialImage, setInitialImage]);
+  }, [project?.id, !!initialImage, initialImageLocked, setInitialImage]);
 
   const handleInitialImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -118,6 +133,10 @@ export function VisualPipelineWorkspace() {
 
   const start = () => {
     if (!project || !scene || !stage) return;
+    if (!initialImageDiscoveryDone) {
+      setLocalError('A verificação da Imagem Inicial ainda não terminou.');
+      return;
+    }
     try {
       setLocalError('');
       pipeline.start(key, createVisualPipelineStartDraft(project, scene, stage));
@@ -220,8 +239,11 @@ export function VisualPipelineWorkspace() {
               O Construction AI mantém a ordem temporal: conclua o JOB anterior antes de iniciar esta etapa.
             </p>
           )}
-          <button type="button" onClick={start} className="btn-primary mt-4" disabled={sequenceBlocked}>
-            {sequenceBlocked ? 'Aguardando JOB anterior' : 'Iniciar pipeline visual'}
+          <button type="button" onClick={start} className="btn-primary mt-4"
+            disabled={sequenceBlocked || !initialImageDiscoveryDone}>
+            {!initialImageDiscoveryDone
+              ? 'Verificando Imagem Inicial…'
+              : sequenceBlocked ? 'Aguardando JOB anterior' : 'Iniciar pipeline visual'}
           </button>
         </section>
       ) : (
