@@ -228,6 +228,11 @@ async function buildSupervisorBundle(projectRoot, workspaceName) {
         contactSheet: contactSheetAbs
           ? path.relative(projectRoot, contactSheetAbs).split(path.sep).join('/')
           : null,
+        incomingDirectory: path.relative(
+          projectRoot,
+          path.join(workspaceRoot, 'incoming'),
+        ).split(path.sep).join('/'),
+        suggestedCandidateFile: `job-${String(current.sequence).padStart(3, '0')}-attempt-${String((state.attempts ?? 0) + 1).padStart(3, '0')}.mp4`,
       },
     };
   }
