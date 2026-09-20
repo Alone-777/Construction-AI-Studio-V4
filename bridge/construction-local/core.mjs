@@ -18,6 +18,7 @@ import {
 
 const READ_OPS = new Set([
   'overview',
+  'supervisor_snapshot',
   'list_directory',
   'read_file',
   'read_files',
@@ -140,6 +141,41 @@ export function createBridgeExecutor({
             listWorkspaces(projectRoot),
           ]);
           result = { projectRoot, policy, gitStatus, latestCommit, fireflyWorkspaces: workspaces };
+          break;
+        }
+
+        case 'supervisor_snapshot': {
+          const workspaces = await listWorkspaces(projectRoot);
+          const requestedWorkspace = typeof message.workspace === 'string' && message.workspace
+            ? normalizeRelativePath(message.workspace)
+            : null;
+
+          if (requestedWorkspace && !workspaces.includes(requestedWorkspace)) {
+            throw new Error(`Unknown Firefly workspace: ${requestedWorkspace}`);
+          }
+
+          const [gitStatus, diffCheck, gitLog] = await Promise.all([
+            runProcess(projectRoot, 'git', ['status', '--short', '--branch'], { timeoutMs: 30_000 }),
+            runProcess(projectRoot, 'git', ['diff', '--check'], { timeoutMs: 30_000 }),
+            runProcess(projectRoot, 'git', ['log', '--oneline', '-n', '5'], { timeoutMs: 30_000 }),
+          ]);
+
+          let fireflyStatus = null;
+          if (requestedWorkspace) {
+            const spec = buildNamedAction('firefly_status', { workspace: requestedWorkspace });
+            fireflyStatus = await runProcess(projectRoot, spec.command, spec.argv, { timeoutMs: spec.timeoutMs });
+          }
+
+          result = {
+            projectRoot,
+            policy,
+            gitStatus,
+            diffCheck,
+            gitLog,
+            fireflyWorkspaces: workspaces,
+            selectedWorkspace: requestedWorkspace,
+            fireflyStatus,
+          };
           break;
         }
 
