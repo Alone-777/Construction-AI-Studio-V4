@@ -10,6 +10,7 @@ import * as z from 'zod/v4';
 import {
   MAX_IMAGE_BYTES,
   MAX_TEXT_BYTES,
+  assertReadablePath,
   assertWritablePath,
   buildNamedAction,
   fileMeta,
@@ -151,6 +152,42 @@ function buildMcpServer() {
   );
 
   server.registerTool(
+    'studio_read_files',
+    {
+      title: 'Read multiple project text files',
+      description: 'Read up to 20 UTF-8 project files in one call. Returns content plus SHA-256 for safe edits. Secret paths are blocked.',
+      inputSchema: z.object({
+        paths: z.array(z.string().min(1)).min(1).max(20),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ paths }) => safeTool(async () => {
+      const results = [];
+      let totalBytes = 0;
+
+      for (const requestedPath of paths) {
+        const { rel, absolute } = await resolveExistingPath(PROJECT_ROOT, requestedPath);
+        const meta = await fileMeta(absolute);
+        if (!meta.isFile) throw new Error(`Requested path is not a file: ${rel}`);
+        if (meta.size > MAX_TEXT_BYTES) throw new Error(`Text file is too large: ${rel} (${meta.size} bytes).`);
+        totalBytes += meta.size;
+        if (totalBytes > MAX_TEXT_BYTES * 2) throw new Error('Combined file payload is too large.');
+
+        const buffer = await readFile(absolute);
+        results.push({
+          path: rel,
+          sha256: sha256(buffer),
+          size: meta.size,
+          modifiedAt: meta.modifiedAt,
+          content: buffer.toString('utf8'),
+        });
+      }
+
+      return textResult({ files: results });
+    })
+  );
+
+  server.registerTool(
     'studio_read_image',
     {
       title: 'Read project image',
@@ -251,6 +288,31 @@ function buildMcpServer() {
       await writeFile(absolute, updated, 'utf8');
       const written = Buffer.from(updated, 'utf8');
       return textResult({ path: rel, replacedOccurrences: occurrences, sha256: sha256(written), bytes: written.length });
+    })
+  );
+
+  server.registerTool(
+    'studio_search_code',
+    {
+      title: 'Search tracked project code',
+      description: 'Search Git-tracked text files with a literal query. Ignored/untracked secrets such as .env are never searched.',
+      inputSchema: z.object({
+        query: z.string().min(1).max(200),
+        paths: z.array(z.string().min(1)).max(30).optional(),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ query, paths }) => safeTool(async () => {
+      const safePaths = (paths ?? []).map((item) => assertReadablePath(item));
+      const argv = ['grep', '-n', '-I', '-F', '--', query];
+      if (safePaths.length) argv.push('--', ...safePaths);
+      const result = await runProcess(PROJECT_ROOT, 'git', argv, { timeoutMs: 30_000 });
+
+      if (result.exitCode === 1 && !result.stderr) {
+        return textResult({ query, matchesFound: false, output: '' });
+      }
+
+      return textResult({ query, matchesFound: result.exitCode === 0, result });
     })
   );
 
