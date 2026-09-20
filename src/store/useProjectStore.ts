@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  Project, ProjectDNA, ProjectConfig, SpatialMap, DependencyGraph,
+  Project, ProjectDNA, ProjectConfig, ProjectInitialImage, SpatialMap, DependencyGraph,
   Scene, Operation, StoryboardEntry, ConstructionComponent, DependencyEdge,
 } from '../core/types';
 import {
@@ -26,6 +26,7 @@ interface ProjectState {
   loadProject: (project: Project) => void;
   closeProject: () => void;
   updateProjectName: (name: string) => void;
+  setInitialImage: (image?: ProjectInitialImage) => void;
   updateVisualEvaluation: (updates: { observations?: string; decision?: VisualEvaluationDecision }) => void;
 
   /* ─── DNA ─── */
@@ -94,6 +95,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   updateProjectName: (name) => set((s) => {
     if (!s.project) return s;
     return { project: { ...s.project, name, updatedAt: Date.now() }, isDirty: true };
+  }),
+
+  setInitialImage: (image) => set((s) => {
+    if (!s.project) return s;
+    return {
+      project: {
+        ...s.project,
+        initialImage: image ? { ...image } : undefined,
+        updatedAt: Date.now(),
+      },
+      isDirty: true,
+    };
   }),
 
   updateVisualEvaluation: (updates) => set((s) => {
