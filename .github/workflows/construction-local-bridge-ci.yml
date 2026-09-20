@@ -1,0 +1,36 @@
+name: construction-local-bridge-ci
+
+on:
+  push:
+    branches:
+      - feature/construction-local-bridge
+    paths:
+      - 'bridge/construction-local/**'
+      - 'tools/firefly-review.mjs'
+      - '.github/workflows/construction-local-bridge-ci.yml'
+  pull_request:
+    paths:
+      - 'bridge/construction-local/**'
+      - 'tools/firefly-review.mjs'
+      - '.github/workflows/construction-local-bridge-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install bridge dependencies
+        working-directory: bridge/construction-local
+        run: npm install
+      - name: Bridge tests
+        working-directory: bridge/construction-local
+        run: npm test
+      - name: Bridge smoke
+        working-directory: bridge/construction-local
+        run: npm run smoke
