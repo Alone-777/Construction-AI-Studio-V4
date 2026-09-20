@@ -15,7 +15,11 @@ import {
   runProcess,
   sha256,
 } from '../../mcp/construction-studio/lib.mjs';
-import { applyExternalRetryDecision } from '../../tools/firefly-review.mjs';
+import {
+  applyExternalPassDecision,
+  applyExternalRetryDecision,
+  ingestFireflyCandidateForExternalReview,
+} from '../../tools/firefly-review.mjs';
 
 const READ_OPS = new Set([
   'overview',
@@ -31,7 +35,9 @@ const READ_OPS = new Set([
 ]);
 
 const WRITE_OPS = new Set([
+  'record_review_pass',
   'record_review_retry',
+  'ingest_review_candidate',
   'write_file',
   'replace_text',
   'git_stage',
@@ -70,7 +76,9 @@ export function safeRequestSummary(message) {
   if (typeof message.workspace === 'string') summary.workspace = message.workspace;
   if (typeof message.jobId === 'string') summary.jobId = message.jobId;
   if (typeof message.expectedAttempts === 'number') summary.expectedAttempts = message.expectedAttempts;
+  if (typeof message.expectedCurrentAttempts === 'number') summary.expectedCurrentAttempts = message.expectedCurrentAttempts;
   if (typeof message.observedStagePercentage === 'number') summary.observedStagePercentage = message.observedStagePercentage;
+  if (typeof message.candidateFile === 'string') summary.candidateFile = message.candidateFile;
   if (typeof message.message === 'string') summary.commitMessageLength = message.message.length;
   if (typeof message.content === 'string') summary.contentBytes = Buffer.byteLength(message.content, 'utf8');
   if (typeof message.search === 'string') summary.searchLength = message.search.length;
@@ -500,6 +508,78 @@ export function createBridgeExecutor({
           result = await buildReviewBundle(projectRoot, message.workspace, {
             includeImages: message.includeImages !== false,
           });
+          break;
+        }
+
+        case 'record_review_pass': {
+          requireWriteMode(policy);
+
+          const workspace = normalizeRelativePath(message.workspace);
+          const workspaces = await listWorkspaces(projectRoot);
+          if (!workspaces.includes(workspace)) {
+            throw new Error(`Unknown Firefly workspace: ${workspace}`);
+          }
+          if (typeof message.jobId !== 'string' || !message.jobId) {
+            throw new Error('jobId is required.');
+          }
+          if (message.confirm !== 'PASS_CURRENT_JOB') {
+            throw new Error('record_review_pass requires confirm=PASS_CURRENT_JOB.');
+          }
+
+          result = await applyExternalPassDecision(
+            path.join(projectRoot, '.firefly', workspace),
+            message.jobId,
+            {
+              expectedAttempts: message.expectedAttempts,
+              expectedContactSheetSha256: message.expectedContactSheetSha256,
+              observedStagePercentage: message.observedStagePercentage,
+              continuity: message.continuity,
+              futureElementsAbsent: message.futureElementsAbsent,
+              requiredEvidenceSatisfied: message.requiredEvidenceSatisfied,
+              terminalFrameValid: message.terminalFrameValid,
+            },
+          );
+          break;
+        }
+
+        case 'ingest_review_candidate': {
+          requireWriteMode(policy);
+
+          const workspace = normalizeRelativePath(message.workspace);
+          const workspaces = await listWorkspaces(projectRoot);
+          if (!workspaces.includes(workspace)) {
+            throw new Error(`Unknown Firefly workspace: ${workspace}`);
+          }
+          if (typeof message.jobId !== 'string' || !message.jobId) {
+            throw new Error('jobId is required.');
+          }
+          if (message.confirm !== 'INGEST_CURRENT_JOB') {
+            throw new Error('ingest_review_candidate requires confirm=INGEST_CURRENT_JOB.');
+          }
+
+          const candidateFile = String(message.candidateFile || '');
+          if (!/^[A-Za-z0-9._-]+\.mp4$/i.test(candidateFile)) {
+            throw new Error('candidateFile must be a simple .mp4 filename.');
+          }
+
+          const incomingRoot = path.join(projectRoot, '.firefly', workspace, 'incoming');
+          await mkdir(incomingRoot, { recursive: true });
+          const candidatePath = path.join(incomingRoot, candidateFile);
+          const candidateReal = await resolveExistingPath(
+            projectRoot,
+            path.relative(projectRoot, candidatePath).split(path.sep).join('/'),
+          );
+          const allowedPrefix = path.relative(projectRoot, incomingRoot).split(path.sep).join('/') + '/';
+          if (!candidateReal.rel.startsWith(allowedPrefix)) {
+            throw new Error('Candidate video must be inside the workspace incoming directory.');
+          }
+
+          result = await ingestFireflyCandidateForExternalReview(
+            path.join(projectRoot, '.firefly', workspace),
+            message.jobId,
+            candidateReal.absolute,
+            { expectedCurrentAttempts: message.expectedCurrentAttempts },
+          );
           break;
         }
 
