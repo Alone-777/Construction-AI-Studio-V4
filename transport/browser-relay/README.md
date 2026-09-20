@@ -63,10 +63,20 @@ It has no content script and no permission to inspect webpages.
 This is intentional. The browser-to-bridge layer is tested separately from any future ChatGPT transport.
 
 
-## Supervisor snapshot
+## Supervisor bundle
 
-The popup also exposes **Supervisor snapshot**. This sends one aggregated read-only request instead of several small calls.
+The popup exposes **Supervisor bundle**. Enter a Firefly workspace name and the bridge returns a single read-only context package containing:
 
-Optionally enter a Firefly workspace name before clicking it. The response bundles Git status, `git diff --check`, the five latest commits, the available Firefly workspaces, and the selected workspace status when provided.
+- Git status, diff check and recent commits
+- queue totals and current job id
+- current job definition and runtime state
+- effective prompt, including retry prompt when applicable
+- source descriptor, checklist and negative constraints
+- source/video/last-frame paths
+- latest available contact-sheet path
+- downstream blocked jobs
+- a deterministic next-action label
 
 Use **Copiar resultado** to copy the JSON response without giving the extension permission to inspect any webpage.
+
+The older `supervisor_snapshot` operation remains available through manual JSON requests for lightweight diagnostics.
