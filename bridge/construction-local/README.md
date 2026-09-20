@@ -331,3 +331,40 @@ It requires:
 The bridge rejects stale review evidence, stale attempt numbers, jobs that are no longer `REVIEW_REQUIRED`, and observations that do not clearly exceed the configured target tolerance.
 
 On success it writes the deterministic retry prompt, stores a `construction-external-review-v1` assessment, marks the current job `RETRY_REQUIRED`, and invalidates downstream generated outputs. Git push remains separately disabled.
+
+
+## Guarded ChatGPT PASS
+
+`record_review_pass` is the symmetric counterpart to `record_review_retry`. It can only mark the currently reviewed job complete when the exact reviewed evidence still matches.
+
+Required gates:
+
+- bridge write mode is `allow`
+- job is still `REVIEW_REQUIRED`
+- attempt number still matches
+- contact-sheet SHA-256 still matches
+- apparent operation progress is within the configured target tolerance
+- worker, environment, geometry and source continuity are all `MATCH`
+- no forbidden future element is visible
+- required visible evidence is satisfied
+- terminal frame is valid for continuation
+- literal confirmation is `PASS_CURRENT_JOB`
+
+On success, the bridge extracts the canonical last frame, stores a `construction-external-review-v1` PASS assessment, marks the job `COMPLETE`, and clears pending retry learning.
+
+## Manual Firefly candidate ingest
+
+Firefly UI automation is intentionally out of scope.
+
+The supervisor bundle exposes a deterministic local drop location:
+
+```text
+currentJob.paths.incomingDirectory
+currentJob.paths.suggestedCandidateFile
+```
+
+Place the manually downloaded MP4 there, then use `ingest_review_candidate`.
+
+The ingest operation is restricted to a simple `.mp4` filename inside that workspace's `incoming/` directory and requires the exact current attempt count plus `confirm=INGEST_CURRENT_JOB`.
+
+It archives the MP4, updates the canonical video slot, builds the chronological 2x2 contact sheet locally with FFmpeg, increments the attempt and sets `REVIEW_REQUIRED`. It does not call any external visual AI provider.
