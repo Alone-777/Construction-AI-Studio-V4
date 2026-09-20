@@ -96,6 +96,47 @@ describe('operational visual pipeline presentation', () => {
     expect(nextVisualPipelineJobKey(first.project, useVisualPipelineStore.getState().runs)).toBe(eligible[1]);
   });
 
+  it('uses the persisted Initial Image as a manual reference and prompt origin', () => {
+    const base = createCabanaDoRiachoProject();
+    const project = {
+      ...base,
+      initialImage: {
+        name: 'referencia-inicial.png',
+        mimeType: 'image/png',
+        size: 1234,
+        dataUrl: 'data:image/png;base64,AAAA',
+        source: 'UPLOAD' as const,
+      },
+    };
+    const pair = project.scenes.flatMap(scene =>
+      scene.stages.map(stage => ({ scene, stage })),
+    ).find(item => item.stage.decision && item.stage.worldStateBefore && item.stage.worldStateAfter);
+    if (!pair) throw new Error('Demo project has no committed stage.');
+
+    const key = visualPipelineKey(project.id, pair.scene.id, String(pair.stage.percentage));
+    useVisualPipelineStore.getState().start(
+      key,
+      createVisualPipelineStartDraft(project, pair.scene, pair.stage),
+    );
+
+    const run = useVisualPipelineStore.getState().runs[key];
+    expect(run.imageState.request.references).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: 'MANUAL_REFERENCE',
+        asset: expect.objectContaining({
+          uri: project.initialImage.dataUrl,
+          mimeType: project.initialImage.mimeType,
+        }),
+      }),
+    ]));
+    expect(run.imageState.request.prompt).toContain('[INITIAL IMAGE REFERENCE]');
+    expect(run.imageState.request.prompt).toContain('OFFICIAL temporal state');
+    expect(run.imageState.request.metadata.attributes).toMatchObject({
+      initialImageName: project.initialImage.name,
+      initialImageSource: 'UPLOAD',
+    });
+  });
+
   it('maps run status to the eight human visual steps', () => {
     const { key, run } = startRun();
     expect(key).toBeTruthy();
