@@ -1,0 +1,16 @@
+{
+  "name": "construction-ai-local-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local authenticated bridge for Construction AI Studio V4",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test *.test.mjs",
+    "smoke": "node smoke.mjs",
+    "token": "node --input-type=module -e \"import { randomBytes } from 'node:crypto'; console.log(randomBytes(32).toString('base64url'))\""
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
