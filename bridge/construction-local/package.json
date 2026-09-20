@@ -9,7 +9,9 @@
     "test": "node --test *.test.mjs",
     "smoke": "node smoke.mjs",
     "token": "node --input-type=module -e \"import { randomBytes } from 'node:crypto'; console.log(randomBytes(32).toString('base64url'))\"",
-    "client": "node client.mjs"
+    "client": "node client.mjs",
+    "share": "node share-server.mjs",
+    "share-token": "node --input-type=module -e \"import { randomBytes } from 'node:crypto'; console.log(randomBytes(32).toString('base64url'))\""
   },
   "dependencies": {
     "ws": "^8.18.0"
