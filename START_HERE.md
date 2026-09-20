@@ -60,23 +60,35 @@ A Imagem Inicial entra como `MANUAL_REFERENCE`. Ela orienta design, proporções
 7. O Construction AI decide o estado operacional do JOB e libera correção ou próximo JOB.
 8. O ChatGPT atua como orquestrador; o Construction AI continua sendo o sistema executor e a fonte do estado operacional.
 
-## Comando de conversa
+## Comandos de conversa
 
-Em qualquer conversa nova deste projeto, use primeiro:
+Em qualquer conversa nova deste projeto, use exatamente um destes comandos em maiúsculas:
 
-### `Construction AI: INICIAR`
+### `CONTINUAR`
 
-Esse é o comando mestre. Ao recebê-lo, o ChatGPT deve:
+Significa: retomar o projeto em andamento.
+
+Ao receber `CONTINUAR`, o ChatGPT deve:
 1. ler este `START_HERE.md` na branch operacional;
-2. verificar conexão com o GitHub e o estado atual da branch;
+2. verificar a conexão com o GitHub e o estado atual da branch;
 3. usar o repositório e o Construction AI como fonte de verdade;
-4. identificar pelo contexto se o trabalho é continuação ou projeto novo;
-5. só pedir uma escolha entre NOVO ou CONTINUAR se isso realmente não puder ser determinado.
+4. identificar o último estado operacional disponível do projeto;
+5. continuar do ponto correto sem criar um novo projeto e sem reconstruir decisões antigas apenas pela memória da conversa;
+6. fazer perguntas somente se faltar uma informação indispensável para prosseguir.
 
-Atalhos opcionais continuam válidos:
-- `Construction AI: CONTINUAR`
-- `Construction AI: NOVO PROJETO`
-- `Construction AI: VERIFICAR`
+### `CRIAR NOVO PROJETO`
+
+Significa: iniciar uma nova construção do zero.
+
+Ao receber `CRIAR NOVO PROJETO`, o ChatGPT deve:
+1. ler este `START_HERE.md`;
+2. verificar GitHub, branch operacional e funcionamento básico do sistema;
+3. tratar o trabalho como um projeto novo, sem reutilizar o estado operacional de uma construção anterior;
+4. verificar ou solicitar a Imagem Inicial;
+5. preparar a nova construção desde o primeiro JOB elegível em ordem temporal;
+6. manter o Construction AI como executor e fonte do estado operacional.
+
+Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
 ## Regra de continuidade
 
