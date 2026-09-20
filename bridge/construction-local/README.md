@@ -309,3 +309,25 @@ cloudflared tunnel --url http://127.0.0.1:8792
 The resulting HTTPS URL can be combined with one of the read-only paths above.
 
 The disposable share token is intentionally different from `CONSTRUCTION_BRIDGE_TOKEN`. Never share the control token.
+
+
+## Guarded ChatGPT review writeback
+
+The bridge now exposes one narrow project mutation:
+
+`record_review_retry`
+
+This is not a generic file write. It can only convert the currently reviewed Firefly job from `REVIEW_REQUIRED` to `RETRY_REQUIRED` for a clear progress overshoot.
+
+It requires:
+
+- `CONSTRUCTION_BRIDGE_WRITE_MODE=allow`
+- exact workspace and job id
+- exact expected attempt number
+- exact SHA-256 of the reviewed contact sheet
+- observed stage percentage
+- literal confirmation `RETRY_CURRENT_JOB`
+
+The bridge rejects stale review evidence, stale attempt numbers, jobs that are no longer `REVIEW_REQUIRED`, and observations that do not clearly exceed the configured target tolerance.
+
+On success it writes the deterministic retry prompt, stores a `construction-external-review-v1` assessment, marks the current job `RETRY_REQUIRED`, and invalidates downstream generated outputs. Git push remains separately disabled.
