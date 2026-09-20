@@ -61,3 +61,12 @@ ws://127.0.0.1:PORT/bridge
 It has no content script and no permission to inspect webpages.
 
 This is intentional. The browser-to-bridge layer is tested separately from any future ChatGPT transport.
+
+
+## Supervisor snapshot
+
+The popup also exposes **Supervisor snapshot**. This sends one aggregated read-only request instead of several small calls.
+
+Optionally enter a Firefly workspace name before clicking it. The response bundles Git status, `git diff --check`, the five latest commits, the available Firefly workspaces, and the selected workspace status when provided.
+
+Use **Copiar resultado** to copy the JSON response without giving the extension permission to inspect any webpage.
