@@ -33,6 +33,105 @@ async function withProject(fn) {
   }
 }
 
+async function writeJson(filePath, value) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
+}
+
+async function createFireflyFixture(root) {
+  const workspaceName = 'fixture_workspace';
+  const workspace = path.join(root, '.firefly', workspaceName);
+  const firstDir = path.join(workspace, 'jobs', '001__job_one');
+  const secondDir = path.join(workspace, 'jobs', '002__job_two');
+
+  await mkdir(path.join(firstDir, 'review', 'attempt-006'), { recursive: true });
+  await mkdir(secondDir, { recursive: true });
+  await mkdir(path.join(workspace, 'inputs', 'keyframes'), { recursive: true });
+  await mkdir(path.join(workspace, 'outputs'), { recursive: true });
+
+  await writeJson(path.join(workspace, 'queue.json'), {
+    projectId: 'fixture-project',
+    totalJobs: 2,
+    jobs: [
+      {
+        sequence: 1,
+        jobId: 'firefly:scene-1:segment-1',
+        sceneId: 'scene-1',
+        model: 'KLING',
+        startStagePercentage: 0,
+        targetStagePercentage: 50,
+        durationSeconds: 15,
+        jobDirectory: 'jobs/001__job_one',
+        sourcePath: 'inputs/keyframes/entry.png',
+        videoOutput: 'outputs/scene-1-segment-1.mp4',
+        lastFrameOutput: 'outputs/scene-1-segment-1.last-frame.png',
+      },
+      {
+        sequence: 2,
+        jobId: 'firefly:scene-1:segment-2',
+        sceneId: 'scene-1',
+        model: 'KLING',
+        startStagePercentage: 50,
+        targetStagePercentage: 100,
+        durationSeconds: 15,
+        jobDirectory: 'jobs/002__job_two',
+        sourcePath: 'outputs/scene-1-segment-1.last-frame.png',
+        videoOutput: 'outputs/scene-1-segment-2.mp4',
+        lastFrameOutput: 'outputs/scene-1-segment-2.last-frame.png',
+      },
+    ],
+  });
+
+  await writeJson(path.join(firstDir, 'job.json'), {
+    id: 'firefly:scene-1:segment-1',
+    sceneId: 'scene-1',
+    startStagePercentage: 0,
+    targetStagePercentage: 50,
+    model: 'KLING',
+    prompt: 'Build half of the visible base.',
+  });
+  await writeJson(path.join(firstDir, 'state.json'), {
+    jobId: 'firefly:scene-1:segment-1',
+    status: 'RETRY_REQUIRED',
+    attempts: 6,
+    lastReview: { verdict: 'RETRY', observedStagePercentage: 88 },
+  });
+  await writeJson(path.join(firstDir, 'source.json'), {
+    kind: 'KEYFRAME',
+    resolvedPath: 'inputs/keyframes/entry.png',
+  });
+  await writeFile(path.join(firstDir, 'prompt.txt'), 'Build half of the visible base.\n', 'utf8');
+  await writeFile(path.join(firstDir, 'retry-prompt.txt'), 'Retry and stop visibly at 50%.\n', 'utf8');
+  await writeFile(path.join(firstDir, 'checklist.txt'), '- [ ] Stop around 50%.\n', 'utf8');
+  await writeFile(path.join(firstDir, 'negative.txt'), 'no future elements\n', 'utf8');
+  await writeFile(path.join(firstDir, 'review', 'attempt-006', 'contact-sheet.png'), 'fake-image', 'utf8');
+
+  await writeJson(path.join(secondDir, 'job.json'), {
+    id: 'firefly:scene-1:segment-2',
+    sceneId: 'scene-1',
+    startStagePercentage: 50,
+    targetStagePercentage: 100,
+    model: 'KLING',
+    prompt: 'Finish the visible base.',
+  });
+  await writeJson(path.join(secondDir, 'state.json'), {
+    jobId: 'firefly:scene-1:segment-2',
+    status: 'PENDING',
+    attempts: 0,
+  });
+  await writeJson(path.join(secondDir, 'source.json'), {
+    kind: 'PREVIOUS_JOB_LAST_FRAME',
+    resolvedPath: 'outputs/scene-1-segment-1.last-frame.png',
+  });
+  await writeFile(path.join(secondDir, 'prompt.txt'), 'Finish the visible base.\n', 'utf8');
+  await writeFile(path.join(secondDir, 'checklist.txt'), '- [ ] Finish base.\n', 'utf8');
+  await writeFile(path.join(secondDir, 'negative.txt'), 'no future elements\n', 'utf8');
+
+  await writeFile(path.join(workspace, 'inputs', 'keyframes', 'entry.png'), 'fake-source', 'utf8');
+
+  return { workspaceName };
+}
+
 test('validateToken accepts only strong URL-safe tokens', () => {
   assert.equal(validateToken('a'.repeat(24)), true);
   assert.equal(validateToken('abc'), false);
@@ -166,6 +265,34 @@ test('supervisor snapshot bundles project state without enabling writes', async 
 
     assert.equal(unknown.ok, false);
     assert.match(unknown.error, /Unknown Firefly workspace/i);
+  });
+});
+
+test('supervisor bundle returns the current Firefly job and latest contact sheet', async () => {
+  await withProject(async (root) => {
+    const { workspaceName } = await createFireflyFixture(root);
+    const executor = createBridgeExecutor({
+      projectRoot: root,
+      policy: { writeMode: 'readonly', allowPush: false },
+      audit: new MemoryAudit(),
+    });
+
+    const response = await executor.execute({
+      id: 'b1',
+      op: 'supervisor_bundle',
+      workspace: workspaceName,
+    });
+
+    assert.equal(response.ok, true);
+    assert.equal(response.result.selectedWorkspace, workspaceName);
+    assert.equal(response.result.queueSummary.currentJobId, 'firefly:scene-1:segment-1');
+    assert.equal(response.result.queueSummary.retryRequired, 1);
+    assert.equal(response.result.nextAction, 'REGENERATE_CURRENT_JOB');
+    assert.equal(response.result.currentJob.state.attempts, 6);
+    assert.equal(response.result.currentJob.effectivePrompt.trim(), 'Retry and stop visibly at 50%.');
+    assert.match(response.result.currentJob.paths.contactSheet, /attempt-006\/contact-sheet\.png$/);
+    assert.equal(response.result.blockedDownstreamJobs.length, 1);
+    assert.equal(response.result.blockedDownstreamJobs[0].jobId, 'firefly:scene-1:segment-2');
   });
 });
 
