@@ -10,32 +10,37 @@ Este arquivo é o ponto permanente de retomada do projeto.
 
 ## Inicialização fácil
 
-Este projeto é usado no WSL/Ubuntu com Windows. Na primeira vez, na raiz do repositório:
+O uso operacional normal é pelo **Operator Panel**. Antes de um projeto novo:
+
+1. coloque a Imagem Inicial em `/home/marcio/Construction-AI-Studio-V4/Imagem Inicial`;
+2. clique no atalho **Construction AI Studio** na Área de Trabalho do Windows;
+3. o atalho abre `http://127.0.0.1:8793`.
+
+Bridge + Relay + Operator Panel são infraestrutura persistente. Eles ficam habilitados no Windows/WSL e não devem ser reconectados a cada projeto.
+
+Instalação/configuração única, na raiz do Studio:
 
 ```bash
 npm install
 npm run instalar-botao
 ```
 
-O instalador detecta o ambiente. No WSL, cria um atalho **Construction AI Studio** na Área de Trabalho do Windows. Em Ubuntu nativo, cria o launcher Linux.
+No WSL, `npm run instalar-botao` delega ao Construction AI Relay e:
+- habilita os serviços locais;
+- instala o runtime oculto no Startup do Windows;
+- cria/substitui o atalho **Construction AI Studio**;
+- faz o atalho relançar o runtime automaticamente se o WSL estiver dormindo;
+- abre somente o Operator Panel em `8793`.
 
-Depois disso, o uso normal é apenas clicar em **Construction AI Studio**. O botão liga backend + painel e o navegador abre automaticamente quando o painel estiver pronto.
-
-Alternativas de terminal:
+Comandos técnicos, apenas para diagnóstico/desenvolvimento:
 
 ```bash
 npm run verificar
 npm run ligar
 ```
 
-- `npm run verificar`: mostra a raiz absoluta do Studio, o caminho absoluto da pasta Imagem Inicial, verifica dependências, .env, branch e imagens encontradas.
-- `npm run ligar`: inicia backend e painel Vite juntos. Ctrl+C encerra os dois.
-
-Na primeira instalação ou depois de trocar dependências:
-
-```bash
-npm install
-```
+- `npm run verificar`: verifica raiz, Imagem Inicial, dependências, branch e imagens.
+- `npm run ligar`: inicia o Vite/backend de desenvolvimento; não é o fluxo operacional diário.
 
 ## Painel operacional preferido
 
@@ -110,7 +115,7 @@ Esses dois comandos substituem o antigo comando genérico `Construction AI: INIC
 
 O ChatGPT não deve exigir, sugerir ou inventar dependências como **Desktop Commander**, "dispositivo conectado", agente local externo ou qualquer outro conector que não esteja explicitamente configurado neste projeto.
 
-O ambiente local oficial é o **Construction AI Studio rodando no Windows + WSL**, iniciado por `npm run ligar` ou pelo atalho **Construction AI Studio**.
+O ambiente local oficial é o **Construction AI Command rodando no Windows + WSL**. No uso normal, o atalho **Construction AI Studio** abre o Operator Panel `8793` e o runtime persistente mantém Bridge + Relay + Panel conectados. `npm run ligar` fica reservado a desenvolvimento/diagnóstico.
 
 Se a conversa não conseguir inspecionar diretamente o computador local:
 - não declarar o dispositivo como offline sem evidência;
