@@ -654,6 +654,207 @@ export async function applyExternalRetryDecision(workspacePath, jobId, decision 
   };
 }
 
+export async function ingestFireflyCandidateForExternalReview(
+  workspacePath,
+  jobId,
+  sourceVideoPath,
+  options = {},
+) {
+  const loaded = await loadWorkspaceJob(workspacePath, jobId);
+
+  if (!['PENDING', 'RETRY_REQUIRED'].includes(loaded.state.status)) {
+    throw new Error(
+      `Candidate ingest requires PENDING or RETRY_REQUIRED state; current state is ${loaded.state.status}.`,
+    );
+  }
+
+  const expectedCurrentAttempts = Number(options.expectedCurrentAttempts);
+  if (!Number.isInteger(expectedCurrentAttempts) || expectedCurrentAttempts < 0) {
+    throw new Error('expectedCurrentAttempts must be a non-negative integer.');
+  }
+  if (Number(loaded.state.attempts ?? 0) !== expectedCurrentAttempts) {
+    throw new Error(
+      `Stale candidate ingest: expected ${expectedCurrentAttempts} attempts, current attempt is ${loaded.state.attempts ?? 0}.`,
+    );
+  }
+
+  const source = path.resolve(sourceVideoPath);
+  if (!(await exists(source))) throw new Error('Source video not found: ' + source);
+
+  const attempt = expectedCurrentAttempts + 1;
+  const canonicalVideo = path.join(loaded.workspace, loaded.item.videoOutput);
+  await mkdir(path.dirname(canonicalVideo), { recursive: true });
+  await copyFile(source, canonicalVideo);
+
+  const archiveDir = path.join(
+    loaded.jobDir,
+    'review',
+    'attempt-' + String(attempt).padStart(3, '0'),
+  );
+  await mkdir(archiveDir, { recursive: true });
+  await copyFile(source, path.join(archiveDir, 'candidate.mp4'));
+  await rm(path.join(loaded.workspace, loaded.item.lastFrameOutput), { force: true });
+
+  const contact = await buildVideoContactSheet(
+    canonicalVideo,
+    archiveDir,
+    loaded.item.durationSeconds,
+  );
+  const candidateBytes = await readFile(canonicalVideo);
+  const candidateVideoSha256 = createHash('sha256').update(candidateBytes).digest('hex');
+  const contactBytes = await readFile(contact.contactSheet);
+  const contactSheetSha256 = createHash('sha256').update(contactBytes).digest('hex');
+
+  const pendingReview = {
+    contract: 'construction-external-review-pending-v1',
+    verdict: 'PENDING_EXTERNAL_REVIEW',
+    reviewSource: 'chatgpt-relay',
+    jobId,
+    reviewedAttempt: attempt,
+    candidateVideoSha256,
+    contactSheet: path.relative(loaded.workspace, contact.contactSheet),
+    contactSheetSha256,
+    ingestedAt: new Date().toISOString(),
+  };
+
+  await writeJson(loaded.statePath, {
+    ...loaded.state,
+    status: 'REVIEW_REQUIRED',
+    attempts: attempt,
+    completedAt: null,
+    lastReview: pendingReview,
+  });
+
+  return {
+    ...pendingReview,
+    sourceVideoPath: source,
+    canonicalVideoPath: canonicalVideo,
+  };
+}
+
+export async function applyExternalPassDecision(workspacePath, jobId, decision = {}) {
+  const loaded = await loadWorkspaceJob(workspacePath, jobId);
+
+  if (loaded.state.status !== 'REVIEW_REQUIRED') {
+    throw new Error(
+      `External pass decision requires REVIEW_REQUIRED state; current state is ${loaded.state.status}.`,
+    );
+  }
+
+  const expectedAttempts = Number(decision.expectedAttempts);
+  if (!Number.isInteger(expectedAttempts) || expectedAttempts < 1) {
+    throw new Error('expectedAttempts must be a positive integer.');
+  }
+  if (Number(loaded.state.attempts ?? 0) !== expectedAttempts) {
+    throw new Error(
+      `Stale review decision: expected attempt ${expectedAttempts}, current attempt is ${loaded.state.attempts ?? 0}.`,
+    );
+  }
+
+  const expectedHash = String(decision.expectedContactSheetSha256 || '').toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(expectedHash)) {
+    throw new Error('expectedContactSheetSha256 must be a SHA-256 hex digest.');
+  }
+
+  const contactSheetRel = loaded.state.lastReview?.contactSheet;
+  if (typeof contactSheetRel !== 'string' || !contactSheetRel) {
+    throw new Error('Current review state has no contact sheet to bind the decision to.');
+  }
+
+  const contactSheetAbs = path.join(loaded.workspace, contactSheetRel);
+  if (!(await exists(contactSheetAbs))) {
+    throw new Error('Current review contact sheet is missing: ' + contactSheetRel);
+  }
+
+  const contactBytes = await readFile(contactSheetAbs);
+  const actualHash = createHash('sha256').update(contactBytes).digest('hex');
+  if (actualHash !== expectedHash) {
+    throw new Error('Stale review decision: contact sheet SHA-256 no longer matches.');
+  }
+
+  const observed = Number(decision.observedStagePercentage);
+  if (!Number.isFinite(observed) || observed < 0 || observed > 100) {
+    throw new Error('observedStagePercentage must be between 0 and 100.');
+  }
+
+  const target = Number(loaded.job.targetStagePercentage);
+  if (Math.abs(observed - target) > DEFAULT_PROGRESS_TOLERANCE) {
+    throw new Error(
+      `External PASS requires progress within ±${DEFAULT_PROGRESS_TOLERANCE}% of target ${target}%.`,
+    );
+  }
+
+  const continuity = decision.continuity ?? {};
+  for (const key of ['worker', 'environment', 'geometry', 'source']) {
+    if (continuity[key] !== 'MATCH') {
+      throw new Error(`External PASS requires continuity.${key}=MATCH.`);
+    }
+  }
+  if (decision.futureElementsAbsent !== true) {
+    throw new Error('External PASS requires futureElementsAbsent=true.');
+  }
+  if (decision.requiredEvidenceSatisfied !== true) {
+    throw new Error('External PASS requires requiredEvidenceSatisfied=true.');
+  }
+  if (decision.terminalFrameValid !== true) {
+    throw new Error('External PASS requires terminalFrameValid=true.');
+  }
+
+  const videoPath = path.join(loaded.workspace, loaded.item.videoOutput);
+  if (!(await exists(videoPath))) {
+    throw new Error('Cannot PASS job: candidate video is missing at ' + loaded.item.videoOutput);
+  }
+
+  const videoBytes = await readFile(videoPath);
+  const candidateVideoSha256 = createHash('sha256').update(videoBytes).digest('hex');
+
+  const lastFramePath = path.join(loaded.workspace, loaded.item.lastFrameOutput);
+  await extractLastFrame(videoPath, lastFramePath);
+  await persistSuccessfulLearning(loaded.workspace, loaded.state.pendingLearning);
+
+  const assessment = {
+    contract: 'construction-external-review-v1',
+    verdict: 'PASS',
+    reviewSource: 'chatgpt-relay',
+    jobId,
+    operationType: resolveOperationType(loaded.job),
+    observedStagePercentage: observed,
+    targetStagePercentage: target,
+    failures: [],
+    warnings: [],
+    blockers: [],
+    continuity,
+    futureElementsAbsent: true,
+    requiredEvidenceSatisfied: true,
+    terminalFrameValid: true,
+    contactSheet: contactSheetRel,
+    contactSheetSha256: actualHash,
+    candidateVideoSha256,
+    reviewedAttempt: expectedAttempts,
+  };
+
+  const reviewDir = path.join(
+    loaded.jobDir,
+    'review',
+    'attempt-' + String(expectedAttempts).padStart(3, '0'),
+  );
+  await mkdir(reviewDir, { recursive: true });
+  await writeJson(path.join(reviewDir, 'chatgpt-assessment.json'), assessment);
+
+  await writeJson(loaded.statePath, {
+    ...loaded.state,
+    status: 'COMPLETE',
+    completedAt: new Date().toISOString(),
+    lastReview: assessment,
+    pendingLearning: null,
+  });
+
+  return {
+    ...assessment,
+    lastFrame: path.relative(loaded.workspace, lastFramePath),
+  };
+}
+
 export async function reviewFireflyJob(workspacePath, jobId, providerId) {
   const loaded = await loadWorkspaceJob(workspacePath, jobId);
   const videoPath = path.join(loaded.workspace, loaded.item.videoOutput);
