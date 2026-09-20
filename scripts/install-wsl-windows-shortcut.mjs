@@ -56,7 +56,7 @@ const ps = [
   `$shortcut = $shell.CreateShortcut($shortcutPath)`,
   `$shortcut.TargetPath = $wt`,
   `$linuxCommand = "cd '$projectPath' && npm run ligar"`,
-  `$shortcut.Arguments = '-w new new-tab -p "' + $profileName + '" --appendCommandLine bash -lic "' + $linuxCommand + '"'`,
+  `$shortcut.Arguments = '-w new new-tab -p "' + $profileName + '" --appendCommandLine run bash -lic "' + $linuxCommand + '"'`,
   `$shortcut.WorkingDirectory = $desktop`,
   `$shortcut.Description = ${psLiteral(description)}`,
   `$shortcut.IconLocation = "$env:SystemRoot\\System32\\wsl.exe,0"`,
@@ -87,5 +87,6 @@ console.log('BOTÃO INSTALADO COM SUCESSO');
 console.log(result.stdout.trim());
 console.log('');
 console.log('O botão usa o perfil Ubuntu/WSL do Windows Terminal, a mesma rota usada pelo Ctrl+Shift+4.');
+console.log('Para launchers Ubuntu legados, o comando é enviado no formato suportado: run <comando>.');
 console.log('Ao abrir, ele entra no projeto, executa npm run ligar e o navegador é aberto quando o painel estiver pronto.');
 console.log('');
