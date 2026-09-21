@@ -3,6 +3,7 @@ import type { PhysicalActionIR } from '../actions/physical-action-ir';
 import { createDeterministicMockImageProvider, type ImageGenerationRequest } from '../image-generation';
 import { approveGeneratedImageAsOfficial, createVisualReferenceMemory } from '../visual-reference';
 import type { VisualStateSnapshot } from '../visual-state/visual-state-snapshot';
+import { ANIMATION_PROMPT_MAX_CHARS } from '../video-generation/animation-prompt-budget';
 import {
   completeManualVideoGeneration,
   createCanonicalAnimationPromptSpec,
@@ -543,6 +544,9 @@ describe('video correction plan and retry policy', () => {
     expect(again.request.requestId).toBe(value.corrected.requestId);
     expect(getVideoGenerationAttemptNumber(value.corrected)).toBe(2);
     expect(value.corrected.renderedPrompt).toContain('VIDEO CORRECTION LAYER');
+    expect(Array.from(value.corrected.renderedPrompt).length).toBeLessThanOrEqual(
+      ANIMATION_PROMPT_MAX_CHARS,
+    );
   });
 
   it('preserves official source, PhysicalActionIR, canonical spec and temporal identity', async () => {
