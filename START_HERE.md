@@ -74,12 +74,13 @@ A Imagem Inicial entra como `MANUAL_REFERENCE`. Ela orienta design, proporções
 
 1. Construction AI determina o próximo JOB pela ordem temporal.
 2. Imagem Inicial e referências oficiais alimentam os prompts.
-3. Apenas um JOB Kling 3.0 de vídeo fica ativo por vez.
-4. O vídeo tem 15 segundos.
-5. O usuário gera o vídeo manualmente no Kling 3.0.
-6. O vídeo volta para validação.
-7. O Construction AI decide o estado operacional do JOB e libera correção ou próximo JOB.
-8. O ChatGPT atua como orquestrador; o Construction AI continua sendo o sistema executor e a fonte do estado operacional.
+3. Apenas um JOB de vídeo fica ativo por vez.
+4. A plataforma manual é **Adobe Firefly**; o modelo selecionado para o JOB é registrado separadamente (atualmente `KLING_3_0`).
+5. O vídeo tem 15 segundos.
+6. O usuário gera o vídeo manualmente no Adobe Firefly com o modelo indicado pelo JOB.
+7. O vídeo volta para validação.
+8. O Construction AI decide o estado operacional do JOB e libera correção ou próximo JOB.
+9. O ChatGPT atua como orquestrador; o Construction AI continua sendo o sistema executor e a fonte do estado operacional.
 
 ## Comandos de conversa
 
@@ -168,7 +169,7 @@ Regras:
 - o ChatGPT só deve responder `APROVADO` depois que a decisão correspondente tiver sido confirmada pelo sistema.
 
 
-## Downloads do Kling
+## Downloads de vídeo
 
 A pasta operacional fixa para downloads de vídeo do Kling é:
 
@@ -176,7 +177,7 @@ A pasta operacional fixa para downloads de vídeo do Kling é:
 /home/marcio/Construction-AI-Downloads
 ```
 
-No uso normal, configure o navegador/Kling para baixar os MP4 diretamente nessa pasta.
+No uso normal, configure o navegador/Adobe Firefly para baixar os MP4 diretamente nessa pasta.
 
 O Operator Panel `8793` monitora essa pasta automaticamente. Quando houver um único JOB atual elegível e um novo MP4 terminar de baixar:
 - o vídeo é associado ao JOB atual;
@@ -190,17 +191,20 @@ O Operator Panel `8793` monitora essa pasta automaticamente. Quando houver um ú
 Não mover manualmente os vídeos para dentro do repositório salvo em caso de diagnóstico.
 
 
-## Política de vídeo atual — Kling 3.0
+## Política de vídeo atual — Adobe Firefly + modelo por JOB
 
 A política operacional vigente para novos JOBs e workspaces migrados é:
 
-- provedor manual: `KLING_3_0_MANUAL`;
-- modelo: `KLING_3_0`;
+- plataforma manual: `ADOBE_FIREFLY`;
+- campo legado de compatibilidade: `provider = KLING_3_0_MANUAL`;
+- modelo atual: `KLING_3_0`;
+- limite de prompt da interface Adobe Firefly: **1800 caracteres**;
 - duração canônica por JOB: **15 segundos**;
 - imagem-para-vídeo em 16:9;
 - um único JOB ativo por vez;
 - o frame final aprovado continua sendo a fonte temporal OFFICIAL do JOB seguinte;
 - IDs de JOBs legados que começam com `firefly:` não são renomeados durante migração, para preservar integridade e histórico;
-- o diretório interno `.firefly` também é mantido por compatibilidade e não indica mais o provedor de geração.
+- o diretório interno `.firefly` é mantido por compatibilidade histórica; neste fluxo ele coincide com a plataforma Adobe Firefly, mas não deve ser usado como fonte de verdade para identificar modelo;
+- plataforma e modelo são conceitos separados: Adobe Firefly hospeda a geração; `modelId` identifica o modelo selecionado para o JOB.
 
 Para migrar um workspace existente, use o script protegido `tools/migrate-video-provider-to-kling30.mjs`. Ele cria backup antes de alterar manifest, fila, prompts, checklist e estado de retry.
