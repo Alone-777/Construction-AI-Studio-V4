@@ -1,5 +1,7 @@
 export const MANUAL_EXECUTION_RECIPE_SCHEMA = 'construction-manual-execution-recipe/1';
-export const MANUAL_KLING_PROMPT_MAX_CHARS = 1400;
+export const ADOBE_FIREFLY_PROMPT_MAX_CHARS = 1800;
+// Backward-compatible alias: the current manual Kling workflow runs inside Adobe Firefly.
+export const MANUAL_KLING_PROMPT_MAX_CHARS = ADOBE_FIREFLY_PROMPT_MAX_CHARS;
 
 function compact(value, maxChars) {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -462,10 +464,10 @@ export function compileManualKlingPrompt({
       ' image-to-video. Source frame is temporal truth.',
     'Operation: ' + compact(operationName, 90) + '.',
     'Worker must physically execute this on screen using ' + tools + '.',
-    renderExecutionDirective(executionRecipe, 610),
+    renderExecutionDirective(executionRecipe, 850),
     Number.isFinite(start) && Number.isFinite(target)
-      ? 'Advance only ' + start + '%→' + target + '%. Final frame must be exactly ' + target +
-        '%' + (incomplete ? ' and visibly incomplete.' : '.')
+      ? 'Advance only ' + start + '%→' + target + '%. Final frame = exactly ' + target +
+        '%' + (incomplete ? ', visibly incomplete.' : '.')
       : 'Advance only the explicit Job target.',
     'Preserve camera, terrain/vegetation, worker identity/clothing and all unchanged objects.',
     'No pantomime: worker/tool movement without persistent physical change is a failure.',
@@ -475,7 +477,7 @@ export function compileManualKlingPrompt({
   if (completed) parts.push('Completed work stays unchanged: ' + completed + '.');
   if (future) parts.push('Do not start future elements: ' + future + '.');
   if (environment) parts.push('Environment identity: ' + compact(environment, 50) + '.');
-  parts.push('Stop at target. Final frame stable for next Job.');
+  parts.push('Stop at the target; never overshoot. Final frame stable for next Job.');
 
   let prompt = parts.join(' ');
   if (count(prompt) > maxChars) {

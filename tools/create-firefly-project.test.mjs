@@ -65,7 +65,7 @@ describe('createFireflyProject', () => {
       );
     }
 
-    expect(Array.from(firstJob.prompt).length).toBeLessThanOrEqual(1400);
+    expect(Array.from(firstJob.prompt).length).toBeLessThanOrEqual(1800);
     expect(firstJob.prompt).toContain('Stop at the target; never overshoot.');
     expect(firstJob.prompt).toContain('Final frame = exactly 25%, visibly incomplete.');
 
