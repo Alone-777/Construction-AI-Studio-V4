@@ -49,6 +49,9 @@ export interface ConstructionIntentV2 {
     preserveComponentIds: string[];
     forbiddenFutureComponentIds: string[];
     preserveZoneIds: string[];
+    /** Zones from which declared material may be physically sourced/carried. */
+    allowedMaterialSourceZoneIds?: string[];
+    /** Zones into which removed/moved material may be deposited. */
     allowedMaterialDestinationZoneIds: string[];
   };
 }
