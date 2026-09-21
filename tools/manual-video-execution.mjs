@@ -466,8 +466,8 @@ export function compileManualKlingPrompt({
     'Worker must physically execute this on screen using ' + tools + '.',
     renderExecutionDirective(executionRecipe, 850),
     Number.isFinite(start) && Number.isFinite(target)
-      ? 'Advance only ' + start + '%→' + target + '%. Final frame must be exactly ' + target +
-        '%' + (incomplete ? ' and visibly incomplete.' : '.')
+      ? 'Advance only ' + start + '%→' + target + '%. Final frame = exactly ' + target +
+        '%' + (incomplete ? ', visibly incomplete.' : '.')
       : 'Advance only the explicit Job target.',
     'Preserve camera, terrain/vegetation, worker identity/clothing and all unchanged objects.',
     'No pantomime: worker/tool movement without persistent physical change is a failure.',
