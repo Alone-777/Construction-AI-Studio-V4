@@ -122,6 +122,22 @@ describe('StagesExecutorStage - PhysicalActionIR integration', () => {
     });
     expect(stage.physicalActionIR?.primaryAction).toBeDefined();
     expect(stage.physicalActionIR).not.toHaveProperty('actions');
+    expect(stage.physicalExecutionV2Error).toBeUndefined();
+    expect(stage.physicalExecutionPlanV2).toMatchObject({
+      metadata: {
+        source: 'LEGACY_PHYSICAL_ACTION_IR',
+        confidence: 'LOW',
+      },
+      intent: {
+        canonicalProgress: {
+          beforePercentage: 0,
+          targetPercentage: 25,
+        },
+      },
+    });
+    expect(stage.physicalExecutionPlanV2?.intent.physicalProgress).toBeUndefined();
+    expect(stage.physicalSimulationV2).toBeDefined();
+    expect(stage.physicalSimulationV2?.commitAvailable).toBe(false);
   });
 
   it('preserves the attempted IR and candidate evidence on a rejected stage', () => {
@@ -134,7 +150,12 @@ describe('StagesExecutorStage - PhysicalActionIR integration', () => {
       rejectedStage.worldStateAfter?.construction.progress,
     );
     expect(rejectedStage.physicalActionIR?.evidence[0]).toBeTruthy();
+    expect(rejectedStage.physicalExecutionPlanV2).toBeDefined();
+    expect(rejectedStage.physicalSimulationV2).toBeDefined();
+    expect(rejectedStage.physicalSimulationV2?.commitAvailable).toBe(false);
+    expect(rejectedStage.physicalExecutionV2Error).toBeUndefined();
     expect(context.worldState).not.toBe(rejectedStage.worldStateAfter);
+    expect(context.worldState).not.toBe(rejectedStage.physicalSimulationV2?.projected?.worldState);
   });
 
   it('does not create fictitious IRs for stages skipped after rejection', () => {
@@ -142,5 +163,9 @@ describe('StagesExecutorStage - PhysicalActionIR integration', () => {
 
     expect(stageAt(context, 75).physicalActionIR).toBeUndefined();
     expect(stageAt(context, 100).physicalActionIR).toBeUndefined();
+    expect(stageAt(context, 75).physicalExecutionPlanV2).toBeUndefined();
+    expect(stageAt(context, 100).physicalExecutionPlanV2).toBeUndefined();
+    expect(stageAt(context, 75).physicalSimulationV2).toBeUndefined();
+    expect(stageAt(context, 100).physicalSimulationV2).toBeUndefined();
   });
 });
