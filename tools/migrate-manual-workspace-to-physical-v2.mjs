@@ -271,6 +271,9 @@ export async function migrateManualWorkspaceToPhysicalV2({
       plan: segment.physicalExecutionPlanV2,
       simulation: segment.physicalSimulationV2,
       providerNeutralPrompt: segment.providerNeutralPromptV2,
+      ...(segment.retryProviderNeutralPromptV2
+        ? { retryProviderNeutralPrompt: segment.retryProviderNeutralPromptV2 }
+        : {}),
     };
     record.job.prompt = segment.prompt;
 
@@ -286,14 +289,26 @@ export async function migrateManualWorkspaceToPhysicalV2({
     );
 
     if (record.state.status === 'RETRY_REQUIRED') {
+      if (!String(segment.retryPrompt || '').trim()) {
+        throw new Error(
+          'Physical Execution V2 migration could not compile a distinct retry prompt for ' +
+          record.job.id + '.',
+        );
+      }
+      if (segment.retryPrompt.trim() === segment.prompt.trim()) {
+        throw new Error(
+          'Physical Execution V2 retry prompt must differ from the base prompt for ' +
+          record.job.id + '.',
+        );
+      }
       record.state.lastReview = {
         ...(record.state.lastReview || {}),
-        retryPrompt: segment.prompt,
+        retryPrompt: segment.retryPrompt,
       };
       await writeJson(record.statePath, record.state);
       await writeFile(
         path.join(workspaceRoot, record.jobDirectory, 'retry-prompt.txt'),
-        segment.prompt + '\n',
+        segment.retryPrompt + '\n',
         'utf8',
       );
     }
@@ -305,6 +320,7 @@ export async function migrateManualWorkspaceToPhysicalV2({
       promptSource: 'PHYSICAL_EXECUTION_V2',
       planId: segment.physicalExecutionPlanV2.planId,
       promptCharacters: segment.promptCharacters,
+      retryPromptCharacters: segment.retryPromptCharacters,
     });
   }
 
