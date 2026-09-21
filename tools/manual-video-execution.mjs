@@ -495,7 +495,7 @@ export function compileManualKlingPrompt({
         : 'Advance only current target.',
       'No pantomime, magic, morphing, teleportation, hidden progress or camera jump.',
       future ? 'No future: ' + compactList(forbiddenFutureElements, 4, 28) + '.' : '',
-      'Preserve camera, terrain, worker identity. Final frame stable.',
+      'Preserve camera, terrain, worker identity. Stop at the target; never overshoot. Final frame stable.',
     ].filter(Boolean);
     prompt = tighter.join(' ');
   }
