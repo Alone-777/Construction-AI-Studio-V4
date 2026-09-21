@@ -73,12 +73,44 @@ const TOOLS: ToolAffordanceV2[] = [
     supportedEffectTypes: ['MATERIAL_APPLIED', 'STATE_CHANGED', 'CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'],
     compatibleMaterialClasses: ['CONCRETE', 'MORTAR', 'CLAY'],
   },
+  {
+    id: 'machete',
+    aliases: ['machete', 'facao', 'facão'],
+    allowedNodeKinds: ['ACQUIRE_TOOL', 'APPROACH', 'GRIP', 'POSITION', 'CONTACT', 'APPLY_FORCE', 'CUT', 'SCRAPE', 'MOVE_MATERIAL', 'PLACE', 'RELEASE', 'INSPECT', 'STOP'],
+    allowedContactModes: ['CUT', 'SCRAPE', 'GRIP', 'PLACE', 'INSPECT'],
+    supportedEffectTypes: ['SURFACE_REMOVED', 'MATERIAL_TRANSFER', 'STATE_CHANGED', 'CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'],
+    compatibleMaterialClasses: ['VEGETATION'],
+  },
+  {
+    id: 'hoe',
+    aliases: ['hoe', 'enxada'],
+    allowedNodeKinds: ['ACQUIRE_TOOL', 'APPROACH', 'GRIP', 'POSITION', 'CONTACT', 'APPLY_FORCE', 'SCRAPE', 'DIG', 'MOVE_MATERIAL', 'PLACE', 'SETTLE', 'INSPECT', 'STOP'],
+    allowedContactModes: ['DIG', 'SCRAPE', 'PRESS', 'GRIP', 'PLACE', 'INSPECT'],
+    supportedEffectTypes: ['SURFACE_REMOVED', 'MATERIAL_TRANSFER', 'MATERIAL_APPLIED', 'STATE_CHANGED', 'CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'],
+    compatibleMaterialClasses: ['SOIL', 'AGGREGATE', 'CLAY', 'MORTAR'],
+  },
+  {
+    id: 'rope',
+    aliases: ['rope', 'corda'],
+    allowedNodeKinds: ['ACQUIRE_TOOL', 'APPROACH', 'GRIP', 'POSITION', 'LIFT', 'MOVE_MATERIAL', 'PLACE', 'RELEASE', 'INSPECT', 'STOP'],
+    allowedContactModes: ['GRIP', 'PLACE', 'INSPECT'],
+    supportedEffectTypes: ['COMPONENT_MOVED', 'STATE_CHANGED', 'CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'],
+    compatibleMaterialClasses: ['WOOD', 'STONE', 'METAL'],
+  },
+  {
+    id: 'axe',
+    aliases: ['axe', 'machado'],
+    allowedNodeKinds: ['ACQUIRE_TOOL', 'APPROACH', 'GRIP', 'POSITION', 'CONTACT', 'APPLY_FORCE', 'CUT', 'MOVE_MATERIAL', 'INSPECT', 'STOP'],
+    allowedContactModes: ['CUT', 'GRIP', 'INSPECT'],
+    supportedEffectTypes: ['SURFACE_REMOVED', 'STATE_CHANGED', 'CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'],
+    compatibleMaterialClasses: ['WOOD', 'VEGETATION'],
+  },
 ];
 
 const MATERIALS: MaterialAffordanceV2[] = [
   {
     materialClass: 'SOIL',
-    aliases: ['soil', 'terra', 'barro'],
+    aliases: ['soil', 'terra', 'barro', 'dirt'],
     supportedEffectTypes: ['SURFACE_REMOVED', 'MATERIAL_TRANSFER', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
     compatibleToolIds: ['shovel', 'hand-tamper'],
   },
