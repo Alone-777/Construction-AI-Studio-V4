@@ -3,7 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { createFireflyProject } from './create-firefly-project.mjs';
+import {
+  ANIMATION_PROMPT_MAX_CHARS,
+  createFireflyProject,
+} from './create-firefly-project.mjs';
 
 describe('createFireflyProject', () => {
   it('creates 15s Kling 3.0 jobs while keeping Initial Image as MANUAL_REFERENCE', async () => {
@@ -40,6 +43,22 @@ describe('createFireflyProject', () => {
     expect(firstJob.model).toBe('KLING_3_0');
     expect(firstJob.sourceImagePrompt).toContain('OFFICIAL');
     expect(firstJob.source.kind).toBe('KEYFRAME');
+
+    for (const queued of queue.jobs) {
+      const job = JSON.parse(
+        await readFile(
+          path.join(workspace, queued.jobDirectory, 'job.json'),
+          'utf8',
+        ),
+      );
+      expect(Array.from(job.prompt).length).toBeLessThanOrEqual(
+        ANIMATION_PROMPT_MAX_CHARS,
+      );
+    }
+
+    expect(Array.from(firstJob.prompt).length).toBeLessThanOrEqual(1400);
+    expect(firstJob.prompt).toContain('Stop at the target; never overshoot.');
+    expect(firstJob.prompt).toContain('Final frame = exactly 25%, visibly incomplete.');
 
     await expect(stat(path.join(workspace, queue.jobs[0].sourcePath))).rejects.toThrow();
     expect((await stat(path.join(workspace, manifest.initialImage.workspacePath))).isFile()).toBe(true);
