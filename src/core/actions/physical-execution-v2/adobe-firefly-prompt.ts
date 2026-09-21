@@ -99,8 +99,9 @@ export function compileAdobeFireflyVideoPromptV2({
     (durationSeconds ? durationSeconds + 's ' : '') +
     aspectRatio + ' ' + model +
     ' image-to-video. Source frame is temporal truth.';
-  const activeZone = artifact.executionBeats.find(beat => beat.zoneId)?.zoneId;
-  const scope = activeZone ? 'Work only in zone ' + activeZone + '.' : '';
+  const scope = artifact.authorizedWorkZoneId
+    ? 'Work only in zone ' + artifact.authorizedWorkZoneId + '.'
+    : '';
 
   const full = [
     header,
