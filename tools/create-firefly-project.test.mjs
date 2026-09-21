@@ -43,6 +43,15 @@ describe('createFireflyProject', () => {
     expect(firstJob.model).toBe('KLING_3_0');
     expect(firstJob.sourceImagePrompt).toContain('OFFICIAL');
     expect(firstJob.source.kind).toBe('KEYFRAME');
+    expect(firstJob.executionRecipe.schema).toBe('construction-manual-execution-recipe/1');
+    expect(firstJob.executionRecipe.tools).toContain('shovel');
+    expect(firstJob.executionRecipe.actorAction).toMatch(/shovel/i);
+    expect(firstJob.executionRecipe.visibleTransformation).toMatch(/exposed, disturbed brown soil/i);
+    expect(firstJob.executionRecipe.terminalEvidence).toMatch(/25%/);
+    expect(firstJob.prompt).toMatch(/Worker must physically execute this on screen using shovel/i);
+    expect(firstJob.prompt).toMatch(/Push the shovel blade/i);
+    expect(firstJob.prompt).toMatch(/VISIBLE CHANGE/i);
+    expect(firstJob.prompt).toMatch(/No pantomime/i);
 
     for (const queued of queue.jobs) {
       const job = JSON.parse(
