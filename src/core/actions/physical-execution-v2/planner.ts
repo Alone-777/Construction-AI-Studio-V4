@@ -703,6 +703,7 @@ export function planPhysicalExecutionV2({
           worldStateBefore.futureComponents.filter(id => id !== targetId),
         ),
         preserveZoneIds: unique(stage.preservedZones),
+        allowedMaterialSourceZoneIds: sourceZone ? [sourceZone] : [],
         allowedMaterialDestinationZoneIds: [zoneId + ':spoil'],
       },
     },
