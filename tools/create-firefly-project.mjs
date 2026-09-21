@@ -3,8 +3,14 @@
 import { access, copyFile, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  MANUAL_KLING_PROMPT_MAX_CHARS,
+  buildManualExecutionRecipe,
+  compileManualKlingPrompt,
+} from './manual-video-execution.mjs';
+
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
-export const ANIMATION_PROMPT_MAX_CHARS = 1400;
+export const ANIMATION_PROMPT_MAX_CHARS = MANUAL_KLING_PROMPT_MAX_CHARS;
 const STAGES = [
   [0, 25],
   [25, 50],
@@ -200,46 +206,29 @@ function assertAnimationPromptLimit(prompt) {
 
 function promptFor({
   environment,
-  materials,
   operation,
   operationIndex,
   operations,
   start,
   target,
+  executionRecipe,
 }) {
   const completed = operations.slice(0, operationIndex).map(item => item[1]);
   const future = operations.slice(operationIndex + 1).map(item => item[1]);
-  const incomplete = target < 100;
 
-  const parts = [
-    '[KLING 3.0 ANIMATION JOB] 15s 16:9 image-to-video. Source frame is temporal truth.',
-    `Operation: ${compactField(operation[1], 110)}. Action: ${compactField(operation[2], 210)}.`,
-    `Advance only ${start}%→${target}%. Final frame = exactly ${target}%${incomplete ? ', visibly incomplete' : ''}.`,
-    'One continuous physically plausible action; show visible worker/tool/material causality. Keep camera locked.',
-    'Preserve worker identity/clothing, terrain, vegetation, lighting, landmarks and all completed work.',
-    'No magic, morphing, teleportation, hidden progress, disappearing work, camera jump or unexplained material movement.',
-  ];
-
-  const completedText = compactList(completed, 5, 44);
-  if (completedText) parts.push(`Completed work stays unchanged: ${completedText}.`);
-
-  const futureText = compactList(future, 6, 44);
-  if (futureText) parts.push(`Do not start future elements: ${futureText}.`);
-
-  const environmentText = compactField(environment, 70);
-  const materialsText = compactList(materials, 5, 36);
-  if (environmentText || materialsText) {
-    parts.push(
-      `Identity: ${environmentText || 'preserve source environment'}` +
-      (materialsText ? `; materials ${materialsText}` : '') + '.',
-    );
-  }
-
-  parts.push(
-    'Stop at the target; never overshoot. If time remains, inspect/reposition without further construction. Final frame stable for next Job.',
-  );
-
-  return assertAnimationPromptLimit(parts.join(' '));
+  return compileManualKlingPrompt({
+    operationName: operation[1],
+    physicalAction: operation[2],
+    executionRecipe,
+    startStagePercentage: start,
+    targetStagePercentage: target,
+    durationSeconds: 15,
+    aspectRatio: '16:9',
+    model: 'KLING_3_0',
+    environment,
+    completedOperations: completed,
+    forbiddenFutureElements: future,
+  }).prompt;
 }
 
 function sourceImagePromptFor({
@@ -395,16 +384,21 @@ export async function createFireflyProject({
         : firstOfficialSourcePath;
 
       const future = operations.slice(operationIndex + 1).map(item => item[1]);
+      const executionRecipe = buildManualExecutionRecipe({
+        operationType: operation[0],
+        operationName: operation[1],
+        physicalAction: operation[2],
+        startStagePercentage: start,
+        targetStagePercentage: target,
+      });
       const prompt = promptFor({
-        description,
         environment,
-        materials,
         operation,
         operationIndex,
         operations,
         start,
         target,
-        initialImageName: initial.name,
+        executionRecipe,
       });
 
       const videoSlot = path.posix.join('outputs', String(sequence).padStart(3, '0') + '.mp4');
@@ -419,6 +413,7 @@ export async function createFireflyProject({
         operationType: operation[0],
         operationName: operation[1],
         physicalAction: operation[2],
+        executionRecipe,
         segmentId: `${operation[0]}:${start}-${target}`,
         segmentIndex: segmentIndex + 1,
         startStagePercentage: start,
@@ -529,6 +524,14 @@ export async function createFireflyProject({
       model: 'Kling 3.0',
       durationSeconds: 15,
       oneActiveJobAtATime: true,
+    },
+    executionPolicy: {
+      schema: 'construction-manual-execution-recipe/1',
+      requireExplicitTools: true,
+      requireActorAction: true,
+      requireVisibleTransformation: true,
+      requireTerminalEvidence: true,
+      rejectPantomimeWithoutPhysicalChange: true,
     },
     operations: operations.map(([id, operationName, physicalAction], index) => ({
       sequence: index + 1,
