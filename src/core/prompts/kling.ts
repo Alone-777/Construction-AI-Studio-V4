@@ -46,10 +46,11 @@ export function generateKlingPrompt(
     physicalState ? compactAnimationPromptField(physicalState, 160) : undefined,
     compactAnimationPromptField(conservation, 190),
     compactAnimationPromptField(final, 180),
-    `Negative: ${compactAnimationPromptList(prohibitions, {
-      maxItems: 8,
-      itemChars: 42,
-    })}`,
+    'Negative: no teleportation, no morphing, no disappearing tools/materials, no camera jump; ' +
+      `project/future: ${compactAnimationPromptList(
+        [...dna.forbiddenElements, ...stage.futureElements.map(element => `no premature ${element}`)],
+        { maxItems: 6, itemChars: 38 },
+      )}`,
   ].filter(Boolean).join('. ');
 
   const text = assertAnimationPromptWithinLimit(
