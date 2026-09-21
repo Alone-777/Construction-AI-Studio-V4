@@ -161,13 +161,28 @@ export function validateGraph(plan: PhysicalExecutionPlanV2): ValidationIssueV2[
 export function validateCausality(plan: PhysicalExecutionPlanV2): ValidationIssueV2[] {
   const issues: ValidationIssueV2[] = [];
   const byId = new Map(plan.nodes.map(node => [node.id, node]));
-  const predecessors = (node: PhysicalActionNodeV2) => plan.edges
+  const predecessorIds = (nodeId: string) => plan.edges
     .filter(edge =>
-      edge.to === node.id
+      edge.to === nodeId
       && (edge.relation === 'SEQUENCE' || edge.relation === 'REQUIRES'),
     )
-    .map(edge => byId.get(edge.from))
+    .map(edge => edge.from);
+  const predecessors = (node: PhysicalActionNodeV2) => predecessorIds(node.id)
+    .map(id => byId.get(id))
     .filter((value): value is PhysicalActionNodeV2 => Boolean(value));
+  const hasAncestorKind = (node: PhysicalActionNodeV2, kinds: PhysicalActionNodeV2['kind'][]) => {
+    const visited = new Set<string>();
+    const queue = [...predecessorIds(node.id)];
+    while (queue.length) {
+      const id = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const candidate = byId.get(id);
+      if (candidate && kinds.includes(candidate.kind)) return true;
+      queue.push(...predecessorIds(id));
+    }
+    return false;
+  };
 
   for (const node of plan.nodes) {
     const matterEffects = node.effects.filter(effectChangesMatter);
@@ -194,8 +209,7 @@ export function validateCausality(plan: PhysicalExecutionPlanV2): ValidationIssu
       }
     }
     if (node.kind === 'FASTEN') {
-      const positioned = predecessors(node)
-        .some(item => item.kind === 'POSITION' || item.kind === 'PLACE');
+      const positioned = hasAncestorKind(node, ['POSITION', 'PLACE']);
       if (!positioned) {
         issues.push(issue('BLOCKER', 'FASTEN_WITHOUT_POSITION', 'FASTEN must depend on POSITION or PLACE.', node.id));
       }
@@ -204,8 +218,7 @@ export function validateCausality(plan: PhysicalExecutionPlanV2): ValidationIssu
       issues.push(issue('BLOCKER', 'LIFT_WITHOUT_SOURCE', 'LIFT requires a source entity.', node.id));
     }
     if (node.kind === 'RELEASE') {
-      const movable = predecessors(node)
-        .some(item => ['LIFT', 'MOVE_MATERIAL', 'PLACE'].includes(item.kind));
+      const movable = hasAncestorKind(node, ['LIFT', 'MOVE_MATERIAL', 'PLACE']);
       if (!movable) {
         issues.push(issue(
           'BLOCKER',
