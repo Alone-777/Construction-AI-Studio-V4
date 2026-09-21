@@ -483,7 +483,7 @@ export function compileManualKlingPrompt({
       '[ANIMATION JOB] ' + durationSeconds + 's ' + aspectRatio + ' ' + model +
         '. Source frame is temporal truth.',
       'Operation: ' + compact(operationName, 72) + '.',
-      'TOOLS: ' + tools + '.',
+      'Worker must physically execute this on screen using ' + tools + '.',
       compact(executionRecipe.actorAction, 145),
       'STEPS: ' + executionRecipe.actionSequence.slice(0, 4)
         .map(step => compact(step, 90)).join(' Then '),
