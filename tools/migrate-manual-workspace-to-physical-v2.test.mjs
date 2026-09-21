@@ -15,8 +15,10 @@ async function createWorkspace({ reviewRequired = false } = {}) {
   const ws = path.join(root, '.firefly', workspace);
   const job1Dir = path.join(ws, 'jobs', '001__preparacao_0_25');
   const job2Dir = path.join(ws, 'jobs', '002__preparacao_25_50');
+  const job3Dir = path.join(ws, 'jobs', '003__pilares_0_25');
   await mkdir(job1Dir, { recursive: true });
   await mkdir(job2Dir, { recursive: true });
+  await mkdir(job3Dir, { recursive: true });
 
   await writeJson(path.join(ws, 'manifest.json'), {
     schemaVersion: 'construction-ai-manual-video/1.2',
@@ -35,7 +37,7 @@ async function createWorkspace({ reviewRequired = false } = {}) {
   });
   await writeJson(path.join(ws, 'queue.json'), {
     projectId: workspace,
-    totalJobs: 2,
+    totalJobs: 3,
     jobs: [
       {
         sequence: 1,
@@ -50,6 +52,13 @@ async function createWorkspace({ reviewRequired = false } = {}) {
         jobDirectory: 'jobs/002__preparacao_25_50',
         startStagePercentage: 25,
         targetStagePercentage: 50,
+      },
+      {
+        sequence: 3,
+        jobId: 'firefly:' + workspace + ':pilares:0-25',
+        jobDirectory: 'jobs/003__pilares_0_25',
+        startStagePercentage: 0,
+        targetStagePercentage: 25,
       },
     ],
   });
@@ -119,7 +128,35 @@ async function createWorkspace({ reviewRequired = false } = {}) {
     lastReview: null,
   });
 
-  return { root, workspace, ws, job1Dir, job2Dir };
+  await writeJson(path.join(job3Dir, 'job.json'), {
+    ...baseJob,
+    id: 'firefly:' + workspace + ':pilares:0-25',
+    sceneId: 'scene:pilares',
+    operationType: 'pilares',
+    operationName: 'Elevação dos pilares',
+    physicalAction: 'posicionar, aprumar e fixar progressivamente os pilares',
+    startStagePercentage: 0,
+    targetStagePercentage: 25,
+    prompt: 'legacy pillar prompt',
+    executionRecipe: {
+      schema: 'construction-manual-execution-recipe/1',
+      operationType: 'pilares',
+      tools: ['level', 'hammer'],
+      actorAction: 'Worker lifts, levels and fixes a pillar.',
+      actionSequence: ['Lift pillar.', 'Check level.', 'Fasten pillar.'],
+      visibleTransformation: 'Pillar remains upright and fixed.',
+      terminalEvidence: 'Visible installed pillar set.',
+    },
+  });
+  await writeFile(path.join(job3Dir, 'prompt.txt'), 'legacy pillar prompt\n', 'utf8');
+  await writeJson(path.join(job3Dir, 'state.json'), {
+    jobId: 'firefly:' + workspace + ':pilares:0-25',
+    status: 'PENDING',
+    attempts: 0,
+    lastReview: null,
+  });
+
+  return { root, workspace, ws, job1Dir, job2Dir, job3Dir };
 }
 
 describe('migrateManualWorkspaceToPhysicalV2', () => {
@@ -145,6 +182,7 @@ describe('migrateManualWorkspaceToPhysicalV2', () => {
     const state1 = JSON.parse(await readFile(path.join(fixture.job1Dir, 'state.json'), 'utf8'));
     const retryPrompt = await readFile(path.join(fixture.job1Dir, 'retry-prompt.txt'), 'utf8');
     const job2 = JSON.parse(await readFile(path.join(fixture.job2Dir, 'job.json'), 'utf8'));
+    const job3 = JSON.parse(await readFile(path.join(fixture.job3Dir, 'job.json'), 'utf8'));
 
     expect(manifest.schemaVersion).toBe('construction-ai-manual-video/1.3');
     expect(manifest.executionPolicy.primarySchema).toBe('construction-physical-execution-plan/2');
@@ -164,6 +202,12 @@ describe('migrateManualWorkspaceToPhysicalV2', () => {
     expect(state1.lastReview.retryPrompt).toBe(job1.prompt);
     expect(retryPrompt.trim()).toBe(job1.prompt);
     expect(job2.promptSource).toBe('PHYSICAL_EXECUTION_V2');
+    expect(job3.promptSource).toBe('PHYSICAL_EXECUTION_V2');
+    expect(job3.executionRecipe.tools).toContain('hammer');
+    expect(job3.executionRecipe.tools).not.toEqual(['level']);
+    expect(job3.physicalExecutionV2.simulation.validation.ok).toBe(true);
+    expect(job3.prompt).toContain('hammer');
+    expect(job3.prompt).not.toContain('Take control of the existing level');
 
     const backupRel = result.backupPath.replace(
       '.firefly/' + fixture.workspace + '/',

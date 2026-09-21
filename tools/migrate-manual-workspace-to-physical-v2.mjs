@@ -167,10 +167,15 @@ export async function migrateManualWorkspaceToPhysicalV2({
     const operationType = String(record.job.operationType || '').trim();
     if (!operationType) throw new Error('JOB sem operationType: ' + record.job.id);
 
-    const tool = firstRecipeTool(record.job);
-    if (tool && !toolOverrides[operationType]) toolOverrides[operationType] = tool;
-
+    // Preserve legacy tool choice only for the live RETRY_REQUIRED operation.
+    // That tool is part of observed retry evidence/corrections. Future PENDING
+    // operations must be re-planned by the native V2 blueprint instead of
+    // inheriting recipe ordering such as ['level', 'hammer'] where the first
+    // item is an inspection tool, not the causal installation tool.
     if (record.state.status === 'RETRY_REQUIRED') {
+      const tool = firstRecipeTool(record.job);
+      if (tool) toolOverrides[operationType] = tool;
+
       retryCorrectionsBySegment[
         segmentKey(
           operationType,
