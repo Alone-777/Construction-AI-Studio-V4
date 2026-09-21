@@ -166,3 +166,25 @@ Regras:
 - em RETRY, permanece no mesmo JOB e mostra o retry prompt;
 - o usuário não deve precisar clicar em Atualizar entre JOBs;
 - o ChatGPT só deve responder `APROVADO` depois que a decisão correspondente tiver sido confirmada pelo sistema.
+
+
+## Downloads do Firefly
+
+A pasta operacional fixa para downloads de vídeo do Firefly é:
+
+```text
+/home/marcio/Construction-AI-Downloads
+```
+
+No uso normal, configure o navegador/Firefly para baixar os MP4 diretamente nessa pasta.
+
+O Operator Panel `8793` monitora essa pasta automaticamente. Quando houver um único JOB atual elegível e um novo MP4 terminar de baixar:
+- o vídeo é associado ao JOB atual;
+- o sistema cria a tentativa canônica no workspace;
+- o JOB passa para `REVIEW_REQUIRED`;
+- o vídeo original permanece intacto na pasta de downloads;
+- o usuário envia o mesmo vídeo no ChatGPT;
+- o ChatGPT analisa e registra PASS ou RETRY pelo Relay;
+- em PASS, o último frame aprovado libera o próximo JOB e o painel troca de prompt automaticamente.
+
+Não mover manualmente os vídeos para dentro do repositório salvo em caso de diagnóstico.
