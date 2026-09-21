@@ -28,6 +28,7 @@ import {
   rejectStageTransaction,
 } from '../../../transactions/stage-transaction';
 import { compilePhysicalActionIR } from '../../../actions/physical-action-ir';
+import { planStagePhysicalExecutionV2, simulatePhysicalExecutionV2 } from '../../../actions/physical-execution-v2';
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
@@ -160,6 +161,25 @@ export class StagesExecutorStage {
           );
           stage.workRoute = plannedStep?.route.length ? plannedStep.route : movement.route;
           stage.preservedZones = unique([...stage.preservedZones, ...context.blueprint!.protectedZoneIds]);
+
+          // Physical Intelligence V2 runs in SHADOW mode only.
+          // It observes the same OFFICIAL 'before' snapshot, but its projection cannot
+          // become candidate/official state and cannot affect the existing Fiscal Gate.
+          const previousStagePercentage = stageIndex > 0
+            ? scene.stages[stageIndex - 1].percentage
+            : 0;
+          stage.physicalExecutionPlanV2 = planStagePhysicalExecutionV2({
+            sceneId: scene.id,
+            operation,
+            stage,
+            worldStateBefore: before,
+            previousStagePercentage,
+            mode: 'SHADOW',
+          });
+          stage.physicalSimulationReceiptV2 = simulatePhysicalExecutionV2({
+            official: before,
+            plan: stage.physicalExecutionPlanV2,
+          });
 
           const isPartial = stage.percentage > 0 && stage.percentage < 100;
           const isComplete = stage.percentage === 100;
