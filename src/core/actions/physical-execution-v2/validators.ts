@@ -335,7 +335,14 @@ export function validateTemporal(
   const forbidden = new Set(
     plan.intent.temporalConstraints.forbiddenFutureComponentIds,
   );
-  const allowedZones = new Set([
+  const workZones = new Set([
+    plan.intent.authorizedZoneId,
+  ]);
+  const sourceZones = new Set([
+    plan.intent.authorizedZoneId,
+    ...(plan.intent.temporalConstraints.allowedMaterialSourceZoneIds ?? []),
+  ]);
+  const destinationZones = new Set([
     plan.intent.authorizedZoneId,
     ...plan.intent.temporalConstraints.allowedMaterialDestinationZoneIds,
   ]);
@@ -343,11 +350,11 @@ export function validateTemporal(
   for (const node of plan.nodes) {
     const actsOnPhysicalTarget =
       node.kind === 'CONTACT' || node.effects.some(effectChangesMatter);
-    if (actsOnPhysicalTarget && !allowedZones.has(node.zoneId)) {
+    if (actsOnPhysicalTarget && !workZones.has(node.zoneId)) {
       issues.push(issue(
         'BLOCKER',
         'NODE_OUTSIDE_AUTHORIZED_ZONE',
-        'Physical target action occurs outside the authorized zone: ' + node.zoneId + '.',
+        'Physical target action occurs outside the authorized work zone: ' + node.zoneId + '.',
         node.id,
       ));
     }
@@ -361,15 +368,42 @@ export function validateTemporal(
           node.id,
         ));
       }
-      for (const zoneId of effectZoneIds(effect)) {
-        if (!allowedZones.has(zoneId)) {
-          issues.push(issue(
-            'BLOCKER',
-            'EFFECT_OUTSIDE_AUTHORIZED_ZONE',
-            'Effect occurs outside authorized zones: ' + zoneId + '.',
-            node.id,
-          ));
-        }
+
+      const targetZone =
+        'zoneId' in effect && effect.zoneId ? effect.zoneId : null;
+      if (targetZone && !workZones.has(targetZone)) {
+        issues.push(issue(
+          'BLOCKER',
+          'EFFECT_OUTSIDE_AUTHORIZED_ZONE',
+          'Physical effect target occurs outside the authorized work zone: ' + targetZone + '.',
+          node.id,
+        ));
+      }
+
+      const sourceZone =
+        ('sourceZoneId' in effect && effect.sourceZoneId)
+        || ('fromZoneId' in effect && effect.fromZoneId)
+        || null;
+      if (sourceZone && !sourceZones.has(sourceZone)) {
+        issues.push(issue(
+          'BLOCKER',
+          'MATERIAL_SOURCE_OUTSIDE_AUTHORIZED_ZONE',
+          'Material source is outside declared source zones: ' + sourceZone + '.',
+          node.id,
+        ));
+      }
+
+      const destinationZone =
+        ('destinationZoneId' in effect && effect.destinationZoneId)
+        || ('toZoneId' in effect && effect.toZoneId)
+        || null;
+      if (destinationZone && !destinationZones.has(destinationZone)) {
+        issues.push(issue(
+          'BLOCKER',
+          'MATERIAL_DESTINATION_OUTSIDE_AUTHORIZED_ZONE',
+          'Material destination is outside declared destination zones: ' + destinationZone + '.',
+          node.id,
+        ));
       }
     }
   }

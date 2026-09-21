@@ -5,9 +5,11 @@ import path from 'node:path';
 
 import {
   MANUAL_KLING_PROMPT_MAX_CHARS,
-  buildManualExecutionRecipe,
-  compileManualKlingPrompt,
 } from './manual-video-execution.mjs';
+import {
+  compileManualVideoProjectV2,
+  executionRecipeFromV2Segment,
+} from './manual-v2-bridge.mjs';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const VIDEO_PLATFORM = 'ADOBE_FIREFLY';
@@ -323,12 +325,33 @@ export async function createFireflyProject({
 
   const resolvedRoot = path.resolve(projectRoot);
   const initial = await findInitialImage(resolvedRoot);
-  const construction = inferConstruction(description);
-  const environment = inferEnvironment(description);
-  const materials = inferMaterials(description, construction);
-  const operations = operationPlan(construction);
+  const inferredConstruction = inferConstruction(description);
+  const inferredEnvironment = inferEnvironment(description);
+  const title = String(name || '').trim() ||
+    `${inferredConstruction.replaceAll('_', ' ')} — ${inferredEnvironment.replaceAll('_', ' ')}`;
+  const v2Project = await compileManualVideoProjectV2({
+    description,
+    name: title,
+  });
+  const construction = v2Project.config.construction || inferredConstruction;
+  const environment = v2Project.config.environment || inferredEnvironment;
+  const materials = v2Project.config.materials?.length
+    ? [...v2Project.config.materials]
+    : inferMaterials(description, construction);
+  const operations = v2Project.operations.map(operation => [
+    operation.id,
+    operation.name,
+    operation.physicalAction,
+  ]);
+  const segmentsByOperation = new Map(
+    operations.map(operation => [
+      operation[0],
+      v2Project.segments
+        .filter(segment => segment.operationType === operation[0])
+        .sort((a, b) => a.startStagePercentage - b.startStagePercentage),
+    ]),
+  );
   const stamp = createdAt.toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
-  const title = String(name || '').trim() || `${construction.replaceAll('_', ' ')} — ${environment.replaceAll('_', ' ')}`;
   const projectId = `${slug(title)}_${stamp}`;
   const workspace = path.join(resolvedRoot, '.firefly', projectId);
 
@@ -364,8 +387,14 @@ export async function createFireflyProject({
 
   for (let operationIndex = 0; operationIndex < operations.length; operationIndex += 1) {
     const operation = operations[operationIndex];
-    for (let segmentIndex = 0; segmentIndex < STAGES.length; segmentIndex += 1) {
-      const [start, target] = STAGES[segmentIndex];
+    const operationSegments = segmentsByOperation.get(operation[0]) || [];
+    if (!operationSegments.length) {
+      throw new Error('Physical Execution V2 produced no segments for operation ' + operation[0] + '.');
+    }
+    for (let segmentIndex = 0; segmentIndex < operationSegments.length; segmentIndex += 1) {
+      const v2Segment = operationSegments[segmentIndex];
+      const start = v2Segment.startStagePercentage;
+      const target = v2Segment.targetStagePercentage;
       sequence += 1;
       const jobId = `firefly:${projectId}:${operation[0]}:${start}-${target}`;
       const jobDirectory = path.join('jobs', jobDirName(sequence, jobId));
@@ -386,22 +415,8 @@ export async function createFireflyProject({
         : firstOfficialSourcePath;
 
       const future = operations.slice(operationIndex + 1).map(item => item[1]);
-      const executionRecipe = buildManualExecutionRecipe({
-        operationType: operation[0],
-        operationName: operation[1],
-        physicalAction: operation[2],
-        startStagePercentage: start,
-        targetStagePercentage: target,
-      });
-      const prompt = promptFor({
-        environment,
-        operation,
-        operationIndex,
-        operations,
-        start,
-        target,
-        executionRecipe,
-      });
+      const executionRecipe = executionRecipeFromV2Segment(v2Segment);
+      const prompt = assertAnimationPromptLimit(v2Segment.prompt);
 
       const videoSlot = path.posix.join('outputs', String(sequence).padStart(3, '0') + '.mp4');
       const lastFrameSlot = path.posix.join('outputs', String(sequence).padStart(3, '0') + '.last-frame.png');
@@ -414,7 +429,14 @@ export async function createFireflyProject({
         sceneNumber: operationIndex + 1,
         operationType: operation[0],
         operationName: operation[1],
-        physicalAction: operation[2],
+        physicalAction: v2Segment.physicalAction || operation[2],
+        promptSource: 'PHYSICAL_EXECUTION_V2',
+        physicalExecutionV2: {
+          schema: 'construction-manual-physical-execution-v2/1',
+          plan: v2Segment.physicalExecutionPlanV2,
+          simulation: v2Segment.physicalSimulationV2,
+          providerNeutralPrompt: v2Segment.providerNeutralPromptV2,
+        },
         executionRecipe,
         segmentId: `${operation[0]}:${start}-${target}`,
         segmentIndex: segmentIndex + 1,
@@ -533,7 +555,10 @@ export async function createFireflyProject({
       oneActiveJobAtATime: true,
     },
     executionPolicy: {
+      primarySchema: 'construction-physical-execution-plan/2',
+      promptSource: 'PHYSICAL_EXECUTION_V2',
       schema: 'construction-manual-execution-recipe/1',
+      compatibilityProjection: true,
       requireExplicitTools: true,
       requireActorAction: true,
       requireVisibleTransformation: true,
@@ -545,6 +570,7 @@ export async function createFireflyProject({
       id,
       name: operationName,
       physicalAction,
+      promptSource: 'PHYSICAL_EXECUTION_V2',
     })),
   };
 
