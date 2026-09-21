@@ -1,5 +1,7 @@
 export const MANUAL_EXECUTION_RECIPE_SCHEMA = 'construction-manual-execution-recipe/1';
-export const MANUAL_KLING_PROMPT_MAX_CHARS = 1400;
+export const ADOBE_FIREFLY_PROMPT_MAX_CHARS = 1800;
+// Backward-compatible alias: the current manual Kling workflow runs inside Adobe Firefly.
+export const MANUAL_KLING_PROMPT_MAX_CHARS = ADOBE_FIREFLY_PROMPT_MAX_CHARS;
 
 function compact(value, maxChars) {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim();
