@@ -242,20 +242,35 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
     expect(skipped.prompts).toBeUndefined();
   });
 
-  it('preserves the existing Kling prompt generator output', () => {
+  it('uses Physical Execution V2 as the preferred animation prompt source when shadow validation succeeds', () => {
+    const context = committedContext(1);
+    const stage = stageAt(context.scenes![0], 50);
+
+    expect(stage.physicalExecutionPlanV2).toBeDefined();
+    expect(stage.physicalSimulationV2?.validation.ok).toBe(true);
+    expect(stage.prompts?.animationSource).toBe('PHYSICAL_EXECUTION_V2');
+    expect(stage.prompts?.kling).toContain('[ADOBE FIREFLY VIDEO JOB]');
+    expect(stage.prompts?.kling).toContain('PHYSICAL EXECUTION:');
+    expect(stage.prompts?.kling).toContain('Stop exactly at the target');
+  });
+
+  it('preserves the legacy Kling prompt as fallback when a stage has no V2 plan', () => {
     const context = committedContext(1);
     const scene = context.scenes![0];
-    const stage = stageAt(scene, 50);
+    const stage = stageAt(scene, 0);
     const expected = generateKlingPrompt(
       scene,
       stage,
       stage.worldStateBefore!,
       context.dna!,
     ).fullText;
+
+    expect(stage.physicalExecutionPlanV2).toBeUndefined();
+    expect(stage.prompts?.animationSource).toBe('LEGACY_KLING');
     expect(stage.prompts?.kling).toBe(expected);
   });
 
-  it('keeps every generated Kling animation prompt within 1400 characters', () => {
+  it('keeps every generated animation prompt within the Adobe Firefly 1800-character budget', () => {
     const context = committedContext(3);
     const executed = context.scenes!
       .flatMap(scene => scene.stages)
