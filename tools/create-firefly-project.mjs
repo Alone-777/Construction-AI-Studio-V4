@@ -10,6 +10,8 @@ import {
 } from './manual-video-execution.mjs';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const VIDEO_PLATFORM = 'ADOBE_FIREFLY';
+const VIDEO_MODEL = 'KLING_3_0';
 export const ANIMATION_PROMPT_MAX_CHARS = MANUAL_KLING_PROMPT_MAX_CHARS;
 const STAGES = [
   [0, 25],
@@ -418,7 +420,8 @@ export async function createFireflyProject({
         segmentIndex: segmentIndex + 1,
         startStagePercentage: start,
         targetStagePercentage: target,
-        model: 'KLING_3_0',
+        platform: VIDEO_PLATFORM,
+        model: VIDEO_MODEL,
         durationSeconds: 15,
         aspectRatio: '16:9',
         resolution: { width: 1920, height: 1080 },
@@ -489,7 +492,8 @@ export async function createFireflyProject({
         sequence,
         jobId,
         sceneId: job.sceneId,
-        model: 'KLING_3_0',
+        platform: VIDEO_PLATFORM,
+        model: VIDEO_MODEL,
         startStagePercentage: start,
         targetStagePercentage: target,
         durationSeconds: 15,
@@ -520,8 +524,11 @@ export async function createFireflyProject({
       temporalAuthority: false,
     },
     videoPolicy: {
+      platform: VIDEO_PLATFORM,
       provider: 'KLING_3_0_MANUAL',
+      modelId: VIDEO_MODEL,
       model: 'Kling 3.0',
+      promptMaxChars: ANIMATION_PROMPT_MAX_CHARS,
       durationSeconds: 15,
       oneActiveJobAtATime: true,
     },
