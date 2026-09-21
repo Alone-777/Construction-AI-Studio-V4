@@ -341,11 +341,13 @@ export function validateTemporal(
   ]);
 
   for (const node of plan.nodes) {
-    if (!allowedZones.has(node.zoneId)) {
+    const actsOnPhysicalTarget =
+      node.kind === 'CONTACT' || node.effects.some(effectChangesMatter);
+    if (actsOnPhysicalTarget && !allowedZones.has(node.zoneId)) {
       issues.push(issue(
         'BLOCKER',
         'NODE_OUTSIDE_AUTHORIZED_ZONE',
-        'Node acts outside the authorized zone: ' + node.zoneId + '.',
+        'Physical target action occurs outside the authorized zone: ' + node.zoneId + '.',
         node.id,
       ));
     }
