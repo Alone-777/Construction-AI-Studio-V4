@@ -4,8 +4,10 @@ import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const WORKSPACE_RE = /^[A-Za-z0-9._-]{1,128}$/;
+const PLATFORM = 'ADOBE_FIREFLY';
 const MODEL = 'KLING_3_0';
 const PROVIDER = 'KLING_3_0_MANUAL';
+const PROMPT_MAX_CHARS = 1800;
 const DURATION_SECONDS = 15;
 
 function parseArgs(argv) {
@@ -109,6 +111,7 @@ export async function migrateWorkspaceToKling30({
     const jobPath = path.join(workspaceRoot, jobDirectory, 'job.json');
     const job = await readJson(jobPath);
 
+    job.platform = PLATFORM;
     job.model = MODEL;
     job.durationSeconds = DURATION_SECONDS;
     job.prompt = transformPromptToKling30(job.prompt);
@@ -147,6 +150,7 @@ export async function migrateWorkspaceToKling30({
       await writeJson(statePath, state);
     }
 
+    queueJob.platform = PLATFORM;
     queueJob.model = MODEL;
     queueJob.durationSeconds = DURATION_SECONDS;
 
@@ -160,8 +164,11 @@ export async function migrateWorkspaceToKling30({
   manifest.schemaVersion = 'construction-ai-manual-video/1.2';
   manifest.videoPolicy = {
     ...(manifest.videoPolicy || {}),
+    platform: PLATFORM,
     provider: PROVIDER,
+    modelId: MODEL,
     model: 'Kling 3.0',
+    promptMaxChars: PROMPT_MAX_CHARS,
     durationSeconds: DURATION_SECONDS,
     oneActiveJobAtATime: true,
   };
@@ -182,8 +189,10 @@ export async function migrateWorkspaceToKling30({
   return {
     ok: true,
     workspace,
+    platform: PLATFORM,
     provider: PROVIDER,
     model: MODEL,
+    promptMaxChars: PROMPT_MAX_CHARS,
     durationSecondsPerJob: DURATION_SECONDS,
     totalJobs: migratedJobs.length,
     totalDurationSeconds: migratedJobs.length * DURATION_SECONDS,
