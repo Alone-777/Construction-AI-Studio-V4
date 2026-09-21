@@ -14,6 +14,7 @@ function artifact(
     schemaVersion: 'construction-provider-neutral-prompt/2',
     sourcePlanId: 'plan:test:0-25',
     officialBeforeRevision: 'world:1:test',
+    authorizedWorkZoneId: 'Z1',
     executionBeats: [
       { id: 'acquire', instruction: 'Pick up the visible shovel and keep it under visible control.', toolId: 'shovel', zoneId: 'Z1' },
       { id: 'contact', instruction: 'Drive the shovel blade into shallow topsoil in the bounded current patch.', toolId: 'shovel', zoneId: 'Z1' },
