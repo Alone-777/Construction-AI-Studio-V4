@@ -490,7 +490,7 @@ export function compileManualKlingPrompt({
       'VISIBLE CHANGE: ' + compact(executionRecipe.visibleTransformation, 155),
       'END EVIDENCE: ' + compact(executionRecipe.terminalEvidence, 150),
       Number.isFinite(start) && Number.isFinite(target)
-        ? 'Advance only ' + start + '%→' + target + '%. End exactly ' + target +
+        ? 'Advance only ' + start + '%→' + target + '%. Final frame = exactly ' + target +
           '%' + (incomplete ? ', visibly incomplete.' : '.')
         : 'Advance only current target.',
       'No pantomime, magic, morphing, teleportation, hidden progress or camera jump.',
