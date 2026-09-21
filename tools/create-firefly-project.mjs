@@ -181,24 +181,24 @@ function promptFor({
     : `advance this operation visibly from ${start}% to exactly ${target}%`;
 
   return [
-    '[OFFICIAL FIREFLY VIDEO JOB]',
-    'Create exactly 8 seconds of realistic 16:9 image-to-video construction timelapse.',
+    '[OFFICIAL KLING 2.5 VIDEO JOB]',
+    'Create exactly 5 seconds of realistic 16:9 image-to-video construction timelapse with Kling 2.5.',
     'The supplied source frame is the temporal truth at the beginning of this JOB; never contradict it.',
     `Project intent: ${description.trim()}.`,
     `Environment identity: ${environment}. Stable materials/design vocabulary: ${materials.join(', ')}.`,
     `Initial visual origin: ${initialImageName}. Preserve its compatible terrain, proportions, lighting logic, material identity and environmental landmarks.`,
     `Current physical operation: ${operation[1]}. Visible action: ${operation[2]}.`,
-    `During this 8-second clip, ${stageVerb}. The terminal frame must represent the canonical ${target}% state of this operation.`,
+    `During this 5-second clip, ${stageVerb}. The terminal frame must represent the canonical ${target}% state of this operation.`,
     completed.length
       ? `Already completed components must remain present and unchanged: ${completed.join('; ')}.`
       : 'No construction component is considered completed before this operation.',
     future.length
       ? `Do not show or anticipate future construction: ${future.join('; ')}.`
       : 'Do not add any construction beyond the current operation.',
-    'Use one continuous physically plausible action. Show material handling and assembly on screen.',
-    'Keep the same worker identity and clothing if a worker is visible. Keep camera position, terrain, vegetation and permanent environmental objects continuous.',
+    'Use one continuous physically plausible action in a single shot. Show material handling and assembly on screen. Keep the camera locked and do not introduce cuts or reframing.',
+    'Preserve the exact same worker identity, face, body, clothing and gear from the source frame if a worker is visible. Keep camera position, terrain, vegetation and permanent environmental objects continuous.',
     'No magical appearance, morphing, teleportation, disappearing completed work, hidden jumps in progress, camera jump, or unexplained material movement.',
-    'The final frame must be stable and usable as the exact source frame of the next JOB.',
+    'Stop exactly at the requested target percentage; do not visually overshoot it. The final frame must be stable and usable as the exact source frame of the next JOB.',
   ].join(' ');
 }
 
@@ -241,7 +241,7 @@ function negativeConstraints(future) {
 
 function checklist({ operationName, start, target, future }) {
   return [
-    'The clip duration is exactly 8 seconds.',
+    'The clip duration is exactly 5 seconds.',
     `The source starts at the canonical ${start}% state for ${operationName}.`,
     `The terminal frame reaches the canonical ${target}% state for ${operationName}.`,
     'Worker identity, clothing, camera, terrain and environmental landmarks remain continuous.',
@@ -383,8 +383,8 @@ export async function createFireflyProject({
         segmentIndex: segmentIndex + 1,
         startStagePercentage: start,
         targetStagePercentage: target,
-        model: 'FIREFLY',
-        durationSeconds: 8,
+        model: 'KLING_2_5',
+        durationSeconds: 5,
         aspectRatio: '16:9',
         resolution: { width: 1920, height: 1080 },
         source,
@@ -454,10 +454,10 @@ export async function createFireflyProject({
         sequence,
         jobId,
         sceneId: job.sceneId,
-        model: 'FIREFLY',
+        model: 'KLING_2_5',
         startStagePercentage: start,
         targetStagePercentage: target,
-        durationSeconds: 8,
+        durationSeconds: 5,
         jobDirectory,
         sourcePath,
         videoOutput: videoSlot,
@@ -469,7 +469,7 @@ export async function createFireflyProject({
   }
 
   const manifest = {
-    schemaVersion: 'construction-ai-firefly-manual/1.0',
+    schemaVersion: 'construction-ai-manual-video/1.1',
     projectId,
     projectName: title,
     createdAt: createdAt.toISOString(),
@@ -485,8 +485,9 @@ export async function createFireflyProject({
       temporalAuthority: false,
     },
     videoPolicy: {
-      provider: 'ADOBE_FIREFLY_MANUAL',
-      durationSeconds: 8,
+      provider: 'KLING_2_5_MANUAL',
+      model: 'Kling 2.5',
+      durationSeconds: 5,
       oneActiveJobAtATime: true,
     },
     operations: operations.map(([id, operationName, physicalAction], index) => ({
@@ -502,7 +503,7 @@ export async function createFireflyProject({
     projectId,
     projectName: title,
     totalJobs: jobs.length,
-    durationSecondsPerJob: 8,
+    durationSecondsPerJob: 5,
     jobs,
   });
 
@@ -515,7 +516,7 @@ export async function createFireflyProject({
     workspace: path.relative(resolvedRoot, workspace).split(path.sep).join('/'),
     workspaceName: projectId,
     totalJobs: jobs.length,
-    totalDurationSeconds: jobs.length * 8,
+    totalDurationSeconds: jobs.length * 5,
     firstJob: {
       ...jobs[0],
       sourceReady: false,
