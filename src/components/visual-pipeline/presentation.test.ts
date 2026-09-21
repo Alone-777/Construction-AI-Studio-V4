@@ -260,11 +260,18 @@ describe('operational visual pipeline presentation', () => {
 
     const second = await imageValidated(1);
     useVisualPipelineStore.getState().approveImage(second.key);
+    expect(
+      useVisualPipelineStore.getState().runs[second.key].currentPhase,
+    ).toBe('IMAGE_APPROVED');
+
     useVisualPipelineStore.getState().prepareVideo(second.key);
 
     expect(useVisualPipelineStore.getState().activeVideoJobKey).toBe(first.key);
     expect(useVisualPipelineStore.getState().runs[second.key].videoState).toBeUndefined();
     expect(useVisualPipelineStore.getState().errors[second.key]).toContain('Outro JOB Firefly');
+    expect(
+      useVisualPipelineStore.getState().runs[second.key].currentPhase,
+    ).toBe('IMAGE_APPROVED');
 
     await useVisualPipelineStore.getState().generateVideo(first.key);
     useVisualPipelineStore.getState().submitVideo(first.key, videoAsset('first'));
