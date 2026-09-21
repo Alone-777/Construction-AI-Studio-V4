@@ -1,4 +1,6 @@
-export const ANIMATION_PROMPT_MAX_CHARS = 1400;
+export const ADOBE_FIREFLY_PROMPT_MAX_CHARS = 1800;
+// Backward-compatible alias for animation prompts entered through Adobe Firefly.
+export const ANIMATION_PROMPT_MAX_CHARS = ADOBE_FIREFLY_PROMPT_MAX_CHARS;
 
 export function countAnimationPromptCharacters(value: string): number {
   return Array.from(String(value ?? '')).length;

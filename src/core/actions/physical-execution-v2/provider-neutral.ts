@@ -30,6 +30,7 @@ export function compileProviderNeutralPromptArtifact(
     schemaVersion: PROVIDER_NEUTRAL_PROMPT_SCHEMA,
     sourcePlanId: plan.planId,
     officialBeforeRevision: plan.officialBefore.revision,
+    authorizedWorkZoneId: plan.intent.authorizedZoneId,
     executionBeats: ordered.map(node => ({
       id: node.id,
       instruction: node.instruction,
