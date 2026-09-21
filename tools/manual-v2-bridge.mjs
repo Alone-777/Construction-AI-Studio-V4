@@ -129,17 +129,37 @@ export async function compileManualVideoProjectV2({
         const corrections = normalizeRetryCorrections(
           retryCorrectionsBySegment[retryKey(key, previous, stage.percentage)],
         );
-        const artifact = physicalModule.compileProviderNeutralPromptArtifact(
+
+        // Base V2 prompt stays independent from review/retry history.
+        // Retry corrections are a sidecar compiled into a distinct prompt so
+        // Critic/learning can compare failed base vs corrective retry honestly.
+        const baseArtifact = physicalModule.compileProviderNeutralPromptArtifact(
           plan,
           simulation,
-          corrections,
+          [],
         );
-        const compiledPrompt = physicalModule.compileAdobeFireflyVideoPromptV2({
-          artifact,
+        const baseCompiledPrompt = physicalModule.compileAdobeFireflyVideoPromptV2({
+          artifact: baseArtifact,
           model: 'KLING_3_0',
           durationSeconds: 15,
           aspectRatio: '16:9',
         });
+
+        let retryArtifact = null;
+        let retryCompiledPrompt = null;
+        if (corrections.length) {
+          retryArtifact = physicalModule.compileProviderNeutralPromptArtifact(
+            plan,
+            simulation,
+            corrections,
+          );
+          retryCompiledPrompt = physicalModule.compileAdobeFireflyVideoPromptV2({
+            artifact: retryArtifact,
+            model: 'KLING_3_0',
+            durationSeconds: 15,
+            aspectRatio: '16:9',
+          });
+        }
 
         segments.push({
           operationType: key,
@@ -150,13 +170,16 @@ export async function compileManualVideoProjectV2({
           targetStagePercentage: stage.percentage,
           activeZone: stage.activeZone,
           tool: stage.tool || null,
-          prompt: compiledPrompt.prompt,
-          promptCharacters: compiledPrompt.characterCount,
-          promptMaxChars: compiledPrompt.maxChars,
+          prompt: baseCompiledPrompt.prompt,
+          promptCharacters: baseCompiledPrompt.characterCount,
+          retryPrompt: retryCompiledPrompt?.prompt ?? null,
+          retryPromptCharacters: retryCompiledPrompt?.characterCount ?? null,
+          promptMaxChars: baseCompiledPrompt.maxChars,
           promptSource: 'PHYSICAL_EXECUTION_V2',
           physicalExecutionPlanV2: clone(plan),
           physicalSimulationV2: clone(simulation),
-          providerNeutralPromptV2: clone(artifact),
+          providerNeutralPromptV2: clone(baseArtifact),
+          retryProviderNeutralPromptV2: retryArtifact ? clone(retryArtifact) : null,
         });
       }
     }
