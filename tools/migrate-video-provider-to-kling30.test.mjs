@@ -75,12 +75,17 @@ describe('migrateWorkspaceToKling30', () => {
     const state = JSON.parse(await readFile(path.join(jobDir, 'state.json'), 'utf8'));
     const retryPrompt = await readFile(path.join(jobDir, 'retry-prompt.txt'), 'utf8');
 
+    expect(manifest.videoPolicy.platform).toBe('ADOBE_FIREFLY');
     expect(manifest.videoPolicy.provider).toBe('KLING_3_0_MANUAL');
+    expect(manifest.videoPolicy.modelId).toBe('KLING_3_0');
+    expect(manifest.videoPolicy.promptMaxChars).toBe(1800);
     expect(manifest.videoPolicy.durationSeconds).toBe(15);
     expect(queue.durationSecondsPerJob).toBe(15);
     expect(queue.jobs[0].jobId).toBe('firefly:' + workspace + ':preparacao:0-25');
+    expect(queue.jobs[0].platform).toBe('ADOBE_FIREFLY');
     expect(queue.jobs[0].model).toBe('KLING_3_0');
     expect(job.id).toBe('firefly:' + workspace + ':preparacao:0-25');
+    expect(job.platform).toBe('ADOBE_FIREFLY');
     expect(job.model).toBe('KLING_3_0');
     expect(job.durationSeconds).toBe(15);
     expect(job.prompt).toContain('KLING 3.0');
