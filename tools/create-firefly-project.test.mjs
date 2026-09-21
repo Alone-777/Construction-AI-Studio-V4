@@ -47,15 +47,20 @@ describe('createFireflyProject', () => {
     expect(firstJob.model).toBe('KLING_3_0');
     expect(firstJob.sourceImagePrompt).toContain('OFFICIAL');
     expect(firstJob.source.kind).toBe('KEYFRAME');
+    expect(manifest.executionPolicy.primarySchema).toBe('construction-physical-execution-plan/2');
+    expect(manifest.executionPolicy.promptSource).toBe('PHYSICAL_EXECUTION_V2');
+    expect(firstJob.promptSource).toBe('PHYSICAL_EXECUTION_V2');
+    expect(firstJob.physicalExecutionV2.schema).toBe('construction-manual-physical-execution-v2/1');
+    expect(firstJob.physicalExecutionV2.plan.schemaVersion).toBe('construction-physical-execution-plan/2');
+    expect(firstJob.physicalExecutionV2.simulation.validation.ok).toBe(true);
+    expect(firstJob.physicalExecutionV2.simulation.commitAvailable).toBe(false);
+    expect(firstJob.physicalExecutionV2.providerNeutralPrompt.schemaVersion).toBe('construction-provider-neutral-prompt/2');
     expect(firstJob.executionRecipe.schema).toBe('construction-manual-execution-recipe/1');
-    expect(firstJob.executionRecipe.tools).toContain('shovel');
-    expect(firstJob.executionRecipe.actorAction).toMatch(/shovel/i);
-    expect(firstJob.executionRecipe.visibleTransformation).toMatch(/exposed, disturbed brown soil/i);
-    expect(firstJob.executionRecipe.terminalEvidence).toMatch(/25%/);
-    expect(firstJob.prompt).toMatch(/Worker must physically execute this on screen using shovel/i);
-    expect(firstJob.prompt).toMatch(/Push the shovel blade/i);
-    expect(firstJob.prompt).toMatch(/VISIBLE CHANGE/i);
-    expect(firstJob.prompt).toMatch(/No pantomime/i);
+    expect(firstJob.executionRecipe.tools.length).toBeGreaterThan(0);
+    expect(firstJob.prompt).toContain('[ADOBE FIREFLY VIDEO JOB]');
+    expect(firstJob.prompt).toContain('PHYSICAL EXECUTION:');
+    expect(firstJob.prompt).toContain(firstJob.executionRecipe.tools[0]);
+    expect(firstJob.prompt).toMatch(/no pantomime/i);
 
     for (const queued of queue.jobs) {
       const job = JSON.parse(
@@ -70,8 +75,8 @@ describe('createFireflyProject', () => {
     }
 
     expect(Array.from(firstJob.prompt).length).toBeLessThanOrEqual(1800);
-    expect(firstJob.prompt).toContain('Stop at the target; never overshoot.');
-    expect(firstJob.prompt).toContain('Final frame = exactly 25%, visibly incomplete.');
+    expect(firstJob.prompt).toContain('Stop exactly at the target; never overshoot.');
+    expect(firstJob.prompt).toContain('0%→25%');
 
     await expect(stat(path.join(workspace, queue.jobs[0].sourcePath))).rejects.toThrow();
     expect((await stat(path.join(workspace, manifest.initialImage.workspacePath))).isFile()).toBe(true);
