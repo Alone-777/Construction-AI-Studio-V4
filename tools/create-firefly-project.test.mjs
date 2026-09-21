@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { createFireflyProject } from './create-firefly-project.mjs';
 
 describe('createFireflyProject', () => {
-  it('creates 5s Kling 2.5 jobs while keeping Initial Image as MANUAL_REFERENCE', async () => {
+  it('creates 15s Kling 3.0 jobs while keeping Initial Image as MANUAL_REFERENCE', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'construction-ai-bootstrap-'));
     const initialRoot = path.join(root, 'Imagem Inicial');
     await mkdir(initialRoot, { recursive: true });
@@ -20,7 +20,7 @@ describe('createFireflyProject', () => {
     });
 
     expect(result.totalJobs).toBe(32);
-    expect(result.firstJob.durationSeconds).toBe(5);
+    expect(result.firstJob.durationSeconds).toBe(15);
     expect(result.firstJob.sourceReady).toBe(false);
     expect(result.firstJob.expectedOfficialSource).toBe('inputs/official/job-001-source.png');
     expect(result.firstJob.sourceImagePrompt).toContain('MANUAL_REFERENCE');
@@ -34,10 +34,10 @@ describe('createFireflyProject', () => {
 
     expect(manifest.initialImage.temporalRole).toBe('MANUAL_REFERENCE');
     expect(manifest.initialImage.temporalAuthority).toBe(false);
-    expect(manifest.videoPolicy.provider).toBe('KLING_2_5_MANUAL');
-    expect(manifest.videoPolicy.durationSeconds).toBe(5);
-    expect(queue.jobs.every(job => job.durationSeconds === 5)).toBe(true);
-    expect(firstJob.model).toBe('KLING_2_5');
+    expect(manifest.videoPolicy.provider).toBe('KLING_3_0_MANUAL');
+    expect(manifest.videoPolicy.durationSeconds).toBe(15);
+    expect(queue.jobs.every(job => job.durationSeconds === 15)).toBe(true);
+    expect(firstJob.model).toBe('KLING_3_0');
     expect(firstJob.sourceImagePrompt).toContain('OFFICIAL');
     expect(firstJob.source.kind).toBe('KEYFRAME');
 
