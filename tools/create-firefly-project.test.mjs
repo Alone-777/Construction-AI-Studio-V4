@@ -37,9 +37,13 @@ describe('createFireflyProject', () => {
 
     expect(manifest.initialImage.temporalRole).toBe('MANUAL_REFERENCE');
     expect(manifest.initialImage.temporalAuthority).toBe(false);
+    expect(manifest.videoPolicy.platform).toBe('ADOBE_FIREFLY');
     expect(manifest.videoPolicy.provider).toBe('KLING_3_0_MANUAL');
+    expect(manifest.videoPolicy.modelId).toBe('KLING_3_0');
+    expect(manifest.videoPolicy.promptMaxChars).toBe(1800);
     expect(manifest.videoPolicy.durationSeconds).toBe(15);
     expect(queue.jobs.every(job => job.durationSeconds === 15)).toBe(true);
+    expect(firstJob.platform).toBe('ADOBE_FIREFLY');
     expect(firstJob.model).toBe('KLING_3_0');
     expect(firstJob.sourceImagePrompt).toContain('OFFICIAL');
     expect(firstJob.source.kind).toBe('KEYFRAME');
