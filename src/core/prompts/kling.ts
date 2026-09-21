@@ -1,4 +1,10 @@
 import { Scene, Stage, WorldState, ProjectDNA, KlingPrompt } from '../types';
+import {
+  ANIMATION_PROMPT_MAX_CHARS,
+  assertAnimationPromptWithinLimit,
+  compactAnimationPromptField,
+  compactAnimationPromptList,
+} from '../video-generation/animation-prompt-budget';
 
 export function generateKlingPrompt(
   scene: Scene,
@@ -29,17 +35,27 @@ export function generateKlingPrompt(
     'no camera jump',
   ];
 
-  const text = [
-    start,
-    `Camera ${stage.cameraId}: ${camera?.framing ?? 'wide'} ${camera?.allowedMovement ?? 'FOLLOW'}, keep spatial orientation stable`,
-    displacement,
-    `Action: ${action}`,
-    transformation,
-    physicalState,
-    conservation,
-    final,
-    `Negative constraints: ${prohibitions.join(', ')}`,
+  const compactText = [
+    compactAnimationPromptField(start, 220),
+    `Camera ${compactAnimationPromptField(stage.cameraId, 30)}: ` +
+      `${compactAnimationPromptField(camera?.framing ?? 'wide', 40)} ` +
+      `${compactAnimationPromptField(camera?.allowedMovement ?? 'FOLLOW', 40)}; preserve orientation`,
+    displacement ? compactAnimationPromptField(displacement, 180) : undefined,
+    `Action: ${compactAnimationPromptField(action, 220)}`,
+    compactAnimationPromptField(transformation, 180),
+    physicalState ? compactAnimationPromptField(physicalState, 160) : undefined,
+    compactAnimationPromptField(conservation, 190),
+    compactAnimationPromptField(final, 180),
+    `Negative: ${compactAnimationPromptList(prohibitions, {
+      maxItems: 8,
+      itemChars: 42,
+    })}`,
   ].filter(Boolean).join('. ');
+
+  const text = assertAnimationPromptWithinLimit(
+    compactText,
+    ANIMATION_PROMPT_MAX_CHARS,
+  );
 
   return {
     start,
