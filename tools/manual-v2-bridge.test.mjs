@@ -48,8 +48,13 @@ describe('manual-v2-bridge', () => {
     expect(first.prompt).toContain('[ADOBE FIREFLY VIDEO JOB]');
     expect(first.prompt).toContain('PHYSICAL EXECUTION:');
     expect(first.prompt).toContain('shovel');
-    expect(first.prompt).toContain('TOOL_ACTION_NOT_EXECUTED');
+    expect(first.prompt).not.toContain('TOOL_ACTION_NOT_EXECUTED');
+    expect(first.retryPrompt).toContain('TOOL_ACTION_NOT_EXECUTED');
+    expect(first.retryPrompt).not.toBe(first.prompt);
+    expect(first.providerNeutralPromptV2.retryCorrections).toEqual([]);
+    expect(first.retryProviderNeutralPromptV2.retryCorrections).toHaveLength(1);
     expect(Array.from(first.prompt).length).toBeLessThanOrEqual(1800);
+    expect(Array.from(first.retryPrompt).length).toBeLessThanOrEqual(1800);
 
     const recipe = executionRecipeFromV2Segment(first);
     expect(recipe.schema).toBe('construction-manual-execution-recipe/1');
