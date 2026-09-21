@@ -28,6 +28,10 @@ import {
   rejectStageTransaction,
 } from '../../../transactions/stage-transaction';
 import { compilePhysicalActionIR } from '../../../actions/physical-action-ir';
+import {
+  legacyPhysicalActionIRToV2Plan,
+  simulatePhysicalExecution,
+} from '../../../actions/physical-execution-v2';
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
@@ -252,6 +256,36 @@ export class StagesExecutorStage {
             worldStateBefore: before,
             candidateState: transaction.candidateState,
           });
+
+          // V2 shadow instrumentation: it observes the same OFFICIAL-before state,
+          // but never replaces candidateState, the fiscals or StageTransaction commit.
+          if (stage.percentage > 0) {
+            try {
+              const previousStagePercentage = stageIndex > 0
+                ? scene.stages[stageIndex - 1].percentage
+                : 0;
+              const physicalExecutionPlanV2 = legacyPhysicalActionIRToV2Plan(
+                stage.physicalActionIR,
+                before,
+                {
+                  beforePercentage: previousStagePercentage,
+                  targetPercentage: stage.percentage,
+                  authorizedZoneId: stage.activeZone,
+                },
+              );
+              stage.physicalExecutionPlanV2 = physicalExecutionPlanV2;
+              stage.physicalSimulationV2 = simulatePhysicalExecution(
+                before,
+                physicalExecutionPlanV2,
+              );
+              stage.physicalExecutionV2Error = undefined;
+            } catch (error) {
+              stage.physicalExecutionPlanV2 = undefined;
+              stage.physicalSimulationV2 = undefined;
+              stage.physicalExecutionV2Error =
+                error instanceof Error ? error.message : String(error);
+            }
+          }
 
           const report = fiscalRunner.runAllFiscals({
             scene,
