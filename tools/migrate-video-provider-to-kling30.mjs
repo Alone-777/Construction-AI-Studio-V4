@@ -112,6 +112,7 @@ export async function migrateWorkspaceToKling30({
     const job = await readJson(jobPath);
 
     job.platform = PLATFORM;
+    job.platform = PLATFORM;
     job.model = MODEL;
     job.durationSeconds = DURATION_SECONDS;
     job.prompt = transformPromptToKling30(job.prompt);
@@ -150,6 +151,7 @@ export async function migrateWorkspaceToKling30({
       await writeJson(statePath, state);
     }
 
+    queueJob.platform = PLATFORM;
     queueJob.platform = PLATFORM;
     queueJob.model = MODEL;
     queueJob.durationSeconds = DURATION_SECONDS;
