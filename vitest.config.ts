@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'server/**/*.test.mjs'],
+    include: ['src/**/*.test.ts', 'server/**/*.test.mjs', 'tools/**/*.test.mjs'],
     environment: 'node',
   },
 });
