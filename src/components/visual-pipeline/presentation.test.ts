@@ -274,8 +274,10 @@ describe('operational visual pipeline presentation', () => {
     expect(useVisualPipelineStore.getState().activeVideoJobKey).toBeUndefined();
 
     useVisualPipelineStore.getState().prepareVideo(second.key);
-    expect(useVisualPipelineStore.getState().activeVideoJobKey).toBe(second.key);
-    expect(useVisualPipelineStore.getState().runs[second.key].currentPhase).toBe('VIDEO_REQUEST_READY');
+    const afterSecondPrepare = useVisualPipelineStore.getState();
+    expect(afterSecondPrepare.errors[second.key]).toBeUndefined();
+    expect(afterSecondPrepare.activeVideoJobKey).toBe(second.key);
+    expect(afterSecondPrepare.runs[second.key].currentPhase).toBe('VIDEO_REQUEST_READY');
   });
 
   it('submits and validates video without accepting it automatically', async () => {
