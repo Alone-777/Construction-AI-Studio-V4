@@ -147,3 +147,22 @@ Se a conversa não conseguir inspecionar diretamente o computador local:
 ## Regra de continuidade
 
 O repositório e os arquivos persistidos no Studio são a fonte durável de verdade. Conversas não devem ser usadas como banco de estado do Construction AI. Em retomadas, conferir o repo e o sistema antes de assumir o estado atual.
+
+
+## Operator Panel como interface principal
+
+Durante a produção, use o painel local:
+
+`http://127.0.0.1:8793`
+
+como console principal do operador.
+
+Regras:
+- o painel mostra o prompt atual em destaque;
+- existe botão direto `COPIAR PROMPT`;
+- o estado do JOB é consultado automaticamente a cada 5 segundos;
+- após um PASS registrado pelo ChatGPT via Relay, o JOB atual vira `COMPLETE`, o último frame é extraído e o próximo JOB é liberado;
+- o painel troca automaticamente para o próximo prompt;
+- em RETRY, permanece no mesmo JOB e mostra o retry prompt;
+- o usuário não deve precisar clicar em Atualizar entre JOBs;
+- o ChatGPT só deve responder `APROVADO` depois que a decisão correspondente tiver sido confirmada pelo sistema.
