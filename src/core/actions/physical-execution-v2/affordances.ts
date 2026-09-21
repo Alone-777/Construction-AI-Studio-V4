@@ -154,7 +154,7 @@ const MATERIALS: MaterialAffordanceV2[] = [
     materialClass: 'CLAY',
     aliases: ['clay', 'argila'],
     supportedEffectTypes: ['MATERIAL_APPLIED', 'MATERIAL_CONSUMED', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['trowel'],
+    compatibleToolIds: ['trowel', 'hoe'],
   },
   {
     materialClass: 'METAL',
