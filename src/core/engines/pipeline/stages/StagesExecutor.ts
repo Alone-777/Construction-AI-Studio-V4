@@ -29,7 +29,7 @@ import {
 } from '../../../transactions/stage-transaction';
 import { compilePhysicalActionIR } from '../../../actions/physical-action-ir';
 import {
-  legacyPhysicalActionIRToV2Plan,
+  planPhysicalExecutionV2,
   simulatePhysicalExecution,
 } from '../../../actions/physical-execution-v2';
 
@@ -165,6 +165,35 @@ export class StagesExecutorStage {
           stage.workRoute = plannedStep?.route.length ? plannedStep.route : movement.route;
           stage.preservedZones = unique([...stage.preservedZones, ...context.blueprint!.protectedZoneIds]);
 
+          // V2 shadow planning happens from OFFICIAL-before + current operation only.
+          // It deliberately runs before candidateState exists and never controls commit.
+          if (stage.percentage > 0) {
+            try {
+              const previousStagePercentage = stageIndex > 0
+                ? scene.stages[stageIndex - 1].percentage
+                : 0;
+              const physicalExecutionPlanV2 = planPhysicalExecutionV2({
+                scene,
+                stage,
+                operation,
+                worldStateBefore: before,
+                beforePercentage: previousStagePercentage,
+                materialUse: specification.materialUse,
+              });
+              stage.physicalExecutionPlanV2 = physicalExecutionPlanV2;
+              stage.physicalSimulationV2 = simulatePhysicalExecution(
+                before,
+                physicalExecutionPlanV2,
+              );
+              stage.physicalExecutionV2Error = undefined;
+            } catch (error) {
+              stage.physicalExecutionPlanV2 = undefined;
+              stage.physicalSimulationV2 = undefined;
+              stage.physicalExecutionV2Error =
+                error instanceof Error ? error.message : String(error);
+            }
+          }
+
           const isPartial = stage.percentage > 0 && stage.percentage < 100;
           const isComplete = stage.percentage === 100;
           const existingComponents = isComplete
@@ -256,36 +285,6 @@ export class StagesExecutorStage {
             worldStateBefore: before,
             candidateState: transaction.candidateState,
           });
-
-          // V2 shadow instrumentation: it observes the same OFFICIAL-before state,
-          // but never replaces candidateState, the fiscals or StageTransaction commit.
-          if (stage.percentage > 0) {
-            try {
-              const previousStagePercentage = stageIndex > 0
-                ? scene.stages[stageIndex - 1].percentage
-                : 0;
-              const physicalExecutionPlanV2 = legacyPhysicalActionIRToV2Plan(
-                stage.physicalActionIR,
-                before,
-                {
-                  beforePercentage: previousStagePercentage,
-                  targetPercentage: stage.percentage,
-                  authorizedZoneId: stage.activeZone,
-                },
-              );
-              stage.physicalExecutionPlanV2 = physicalExecutionPlanV2;
-              stage.physicalSimulationV2 = simulatePhysicalExecution(
-                before,
-                physicalExecutionPlanV2,
-              );
-              stage.physicalExecutionV2Error = undefined;
-            } catch (error) {
-              stage.physicalExecutionPlanV2 = undefined;
-              stage.physicalSimulationV2 = undefined;
-              stage.physicalExecutionV2Error =
-                error instanceof Error ? error.message : String(error);
-            }
-          }
 
           const report = fiscalRunner.runAllFiscals({
             scene,
