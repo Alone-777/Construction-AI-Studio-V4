@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  compileManualVideoProjectV2,
+  executionRecipeFromV2Segment,
+} from './manual-v2-bridge.mjs';
+
+describe('manual-v2-bridge', () => {
+  it('compiles manual video segments from the native Physical Execution V2 core', async () => {
+    const result = await compileManualVideoProjectV2({
+      description: 'Cabana rústica de madeira em uma floresta',
+      name: 'Cabana V2 Bridge',
+      toolOverrides: {
+        preparacao: 'shovel',
+      },
+      retryCorrectionsBySegment: {
+        'preparacao:0-25': [
+          {
+            code: 'TOOL_ACTION_NOT_EXECUTED',
+            correction: 'Show repeated shovel-to-ground contact with persistent visible clearing.',
+          },
+        ],
+      },
+    });
+
+    expect(result.schema).toBe('construction-manual-v2-bridge/1');
+    expect(result.platform).toBe('ADOBE_FIREFLY');
+    expect(result.model).toBe('KLING_3_0');
+    expect(result.promptMaxChars).toBe(1800);
+    expect(result.operations.length).toBe(8);
+    expect(result.segments.length).toBe(32);
+
+    const first = result.segments.find(segment =>
+      segment.operationType === 'preparacao' &&
+      segment.startStagePercentage === 0 &&
+      segment.targetStagePercentage === 25
+    );
+    expect(first).toBeDefined();
+    expect(first.promptSource).toBe('PHYSICAL_EXECUTION_V2');
+    expect(first.physicalExecutionPlanV2.schemaVersion).toBe(
+      'construction-physical-execution-plan/2',
+    );
+    expect(first.physicalSimulationV2.validation.ok).toBe(true);
+    expect(first.physicalSimulationV2.commitAvailable).toBe(false);
+    expect(first.providerNeutralPromptV2.schemaVersion).toBe(
+      'construction-provider-neutral-prompt/2',
+    );
+    expect(first.prompt).toContain('[ADOBE FIREFLY VIDEO JOB]');
+    expect(first.prompt).toContain('PHYSICAL EXECUTION:');
+    expect(first.prompt).toContain('shovel');
+    expect(first.prompt).toContain('TOOL_ACTION_NOT_EXECUTED');
+    expect(Array.from(first.prompt).length).toBeLessThanOrEqual(1800);
+
+    const recipe = executionRecipeFromV2Segment(first);
+    expect(recipe.schema).toBe('construction-manual-execution-recipe/1');
+    expect(recipe.tools).toContain('shovel');
+    expect(recipe.actionSequence.length).toBeGreaterThanOrEqual(2);
+    expect(recipe.terminalEvidence).toBeTruthy();
+  }, 30000);
+});
