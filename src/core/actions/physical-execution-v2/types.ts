@@ -201,6 +201,8 @@ export interface ProviderNeutralPromptArtifactV2 {
   schemaVersion: typeof PROVIDER_NEUTRAL_PROMPT_SCHEMA;
   sourcePlanId: string;
   officialBeforeRevision: string;
+  /** Authoritative construction work zone from ConstructionIntent, not tool pickup/storage zones. */
+  authorizedWorkZoneId: string;
   executionBeats: Array<{
     id: string;
     instruction: string;
