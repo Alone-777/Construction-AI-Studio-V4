@@ -1,6 +1,10 @@
 import type { WorldState, VisualDNA, ConstructionStateSnapshot, ConstructionTimeline, SimulationResult, SimulationEvent, ConstructionDecision, ProjectConfig, ProjectDNA } from '../../../types';
 import { generateKlingPrompt } from '../../../prompts/kling';
 import {
+  compileAdobeFireflyVideoPromptV2,
+  compileProviderNeutralPromptArtifact,
+} from '../../../actions/physical-execution-v2';
+import {
   ANIMATION_PROMPT_MAX_CHARS,
   countAnimationPromptCharacters,
 } from '../../../video-generation/animation-prompt-budget';
@@ -240,6 +244,34 @@ export class PromptsGeneratorStage {
             profile: 'FULL',
           });
 
+          const v2Ready =
+            stage.physicalExecutionPlanV2 &&
+            stage.physicalSimulationV2?.validation.ok === true &&
+            stage.physicalSimulationV2.projected;
+          let animationPrompt: string;
+          let animationSource: 'PHYSICAL_EXECUTION_V2' | 'LEGACY_KLING';
+
+          if (v2Ready) {
+            const artifact = compileProviderNeutralPromptArtifact(
+              stage.physicalExecutionPlanV2!,
+              stage.physicalSimulationV2!,
+            );
+            animationPrompt = compileAdobeFireflyVideoPromptV2({
+              artifact,
+              model: 'KLING_3_0',
+              aspectRatio: '16:9',
+            }).prompt;
+            animationSource = 'PHYSICAL_EXECUTION_V2';
+          } else {
+            animationPrompt = generateKlingPrompt(
+              scene,
+              stage,
+              promptState,
+              context.dna,
+            ).fullText;
+            animationSource = 'LEGACY_KLING';
+          }
+
           stage.prompts = {
             visual: compileVisualScene(
               worldStateToVisualSceneState(promptState),
@@ -249,12 +281,8 @@ export class PromptsGeneratorStage {
 
             nanoBanana: `${nanoBananaOutput.prompt}\n\n${nanoBananaOutput.negativePrompt}`,
 
-            kling: generateKlingPrompt(
-              scene,
-              stage,
-              promptState,
-              context.dna
-            ).fullText,
+            kling: animationPrompt,
+            animationSource,
           };
         }
       }
