@@ -477,7 +477,7 @@ export function compileManualKlingPrompt({
   if (completed) parts.push('Completed work stays unchanged: ' + completed + '.');
   if (future) parts.push('Do not start future elements: ' + future + '.');
   if (environment) parts.push('Environment identity: ' + compact(environment, 50) + '.');
-  parts.push('Stop at target. Final frame stable for next Job.');
+  parts.push('Stop at the target; never overshoot. Final frame stable for next Job.');
 
   let prompt = parts.join(' ');
   if (count(prompt) > maxChars) {
