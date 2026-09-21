@@ -1,0 +1,723 @@
+import type { Operation, Scene, Stage } from '../../types/scene';
+import type { WorldState } from '../../types/world-state';
+import { canonicalToolId, resolveToolAffordance } from './affordances';
+import { deriveOfficialRevision, fingerprintValue } from './simulator';
+import {
+  CONSTRUCTION_INTENT_SCHEMA,
+  PHYSICAL_EXECUTION_PLAN_SCHEMA,
+  type ObservationContract,
+  type PhysicalActionEdgeV2,
+  type PhysicalActionNodeV2,
+  type PhysicalEffect,
+  type PhysicalExecutionPlanV2,
+  type PhysicalNodeKind,
+} from './types';
+
+type MethodKind =
+  | 'CLEAR'
+  | 'EXCAVATE'
+  | 'ASSEMBLE'
+  | 'CUT_AND_ASSEMBLE'
+  | 'POSITION_INSTALL'
+  | 'APPLY'
+  | 'OTHER';
+
+export interface PlanPhysicalExecutionV2Input {
+  scene: Scene;
+  stage: Stage;
+  operation: Operation;
+  worldStateBefore: WorldState;
+  beforePercentage: number;
+  materialUse?: Record<string, number>;
+}
+
+function normalize(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function classifyMethod(
+  operation: Operation,
+  stage: Stage,
+): MethodKind {
+  const text = normalize([
+    operation.type,
+    operation.name,
+    stage.physicalAction,
+  ].join(' '));
+
+  if (
+    text.includes('escav')
+    || text.includes('fundacao')
+    || text.includes('sapata')
+  ) {
+    return 'EXCAVATE';
+  }
+
+  if (
+    text.includes('limpeza')
+    || text.includes('preparacao seletiva')
+    || text.includes('remover')
+    || text.includes('obstaculo')
+  ) {
+    return 'CLEAR';
+  }
+
+  const hasCut = text.includes('cortar') || text.includes('corte');
+  const hasAssemble =
+    text.includes('montar')
+    || text.includes('fixar')
+    || text.includes('encaixar')
+    || text.includes('travar')
+    || text.includes('assentar');
+  if (hasCut && hasAssemble) return 'CUT_AND_ASSEMBLE';
+
+  if (
+    text.includes('aplicar')
+    || text.includes('camada final')
+    || text.includes('regularizar')
+    || text.includes('compactar')
+  ) {
+    return 'APPLY';
+  }
+
+  if (
+    text.includes('elevar')
+    || text.includes('aprumar')
+    || text.includes('posicionar')
+    || text.includes('alinhar')
+    || text.includes('ancoragem')
+  ) {
+    return 'POSITION_INSTALL';
+  }
+
+  if (
+    hasAssemble
+    || text.includes('fechamento')
+    || text.includes('parede')
+    || text.includes('piso')
+    || text.includes('viga')
+    || text.includes('cobertura')
+    || text.includes('porta')
+  ) {
+    return 'ASSEMBLE';
+  }
+
+  return 'OTHER';
+}
+
+function firstMaterial(
+  operation: Operation,
+  materialUse?: Record<string, number>,
+): string | undefined {
+  return Object.keys(materialUse ?? {})[0]
+    ?? operation.visualBasis?.materials?.[0];
+}
+
+function materialSourceZone(
+  world: WorldState,
+  materialId?: string,
+): string | undefined {
+  if (!materialId) return undefined;
+  return world.materials.find(item => item.materialId === materialId)?.location;
+}
+
+function toolLocation(
+  world: WorldState,
+  rawToolId?: string,
+): string | undefined {
+  if (!rawToolId) return undefined;
+  const canonical = canonicalToolId(rawToolId);
+  return world.tools.find(item =>
+    canonicalToolId(item.toolId) === canonical,
+  )?.location;
+}
+
+function contactModeFor(
+  kind: PhysicalNodeKind,
+): NonNullable<PhysicalActionNodeV2['contact']>['mode'] {
+  if (kind === 'CUT') return 'CUT';
+  if (kind === 'SCRAPE') return 'SCRAPE';
+  if (kind === 'DIG') return 'DIG';
+  if (kind === 'FASTEN') return 'FASTEN';
+  if (kind === 'PLACE' || kind === 'POSITION') return 'PLACE';
+  if (kind === 'INSPECT') return 'INSPECT';
+  return 'PRESS';
+}
+
+function methodRelation(method: MethodKind): string {
+  if (method === 'CLEAR') return 'BOUNDED_SURFACE_CLEARING_PERSISTS';
+  if (method === 'EXCAVATE') return 'BOUNDED_EXCAVATION_AND_SPOIL_PERSIST';
+  if (method === 'APPLY') return 'APPLIED_MATERIAL_REMAINS_ON_TARGET';
+  if (method === 'CUT_AND_ASSEMBLE') return 'CUT_PIECE_IS_POSITIONED_AND_REMAINS_ATTACHED';
+  if (method === 'POSITION_INSTALL') return 'POSITIONED_COMPONENT_REMAINS_AT_TARGET';
+  if (method === 'ASSEMBLE') return 'ASSEMBLED_COMPONENT_REMAINS_ATTACHED';
+  return 'PHYSICAL_CHANGE_REMAINS_VISIBLE';
+}
+
+function targetIdFor(operation: Operation): string {
+  return operation.componentId ?? operation.elements?.[0] ?? operation.id;
+}
+
+function effectForMethod(
+  method: MethodKind,
+  targetId: string,
+  zoneId: string,
+  materialId: string | undefined,
+  materialSource: string | undefined,
+  world: WorldState,
+  stageDelta: number,
+  materialUse?: Record<string, number>,
+): PhysicalEffect {
+  if (method === 'CLEAR') {
+    return {
+      type: 'SURFACE_REMOVED',
+      materialId: 'vegetation',
+      zoneId,
+      destinationZoneId: zoneId + ':spoil',
+    };
+  }
+
+  if (method === 'EXCAVATE') {
+    return {
+      type: 'SURFACE_REMOVED',
+      materialId: world.terrain.soil || 'soil',
+      zoneId,
+      destinationZoneId: zoneId + ':spoil',
+    };
+  }
+
+  const totalUse = materialId
+    ? Number(materialUse?.[materialId] ?? NaN)
+    : NaN;
+  const proportionalQuantity =
+    Number.isFinite(totalUse) && totalUse > 0
+      ? totalUse * (stageDelta / 100)
+      : null;
+
+  if (method === 'APPLY' && materialId && proportionalQuantity !== null) {
+    return {
+      type: 'MATERIAL_APPLIED',
+      materialId,
+      quantity: {
+        value: proportionalQuantity,
+        unit: 'blueprint-unit',
+      },
+      targetEntityId: targetId,
+      ...(materialSource ? { fromZoneId: materialSource } : {}),
+      zoneId,
+    };
+  }
+
+  if (
+    method === 'ASSEMBLE'
+    || method === 'CUT_AND_ASSEMBLE'
+    || method === 'POSITION_INSTALL'
+  ) {
+    return {
+      type: 'COMPONENT_ATTACHED',
+      componentId: targetId,
+      targetEntityId: targetId,
+      ...(materialSource ? { sourceZoneId: materialSource } : {}),
+      zoneId,
+    };
+  }
+
+  return {
+    type: 'STATE_CHANGED',
+    entityId: targetId,
+    property: 'physical-operation',
+    to: 'advanced',
+    zoneId,
+  };
+}
+
+function actionKindForMethod(
+  method: MethodKind,
+  toolId?: string,
+): PhysicalNodeKind {
+  if (method === 'CLEAR') {
+    const canonical = canonicalToolId(toolId);
+    return canonical === 'machete' || canonical === 'axe' ? 'CUT' : 'SCRAPE';
+  }
+  if (method === 'EXCAVATE') return 'DIG';
+  if (method === 'APPLY') return 'PLACE';
+  if (method === 'ASSEMBLE') return 'FASTEN';
+  if (method === 'POSITION_INSTALL') return 'PLACE';
+  if (method === 'CUT_AND_ASSEMBLE') return 'CUT';
+  return 'APPLY_FORCE';
+}
+
+function actionInstruction(
+  method: MethodKind,
+  operation: Operation,
+  toolId: string | undefined,
+  targetLabel: string,
+): string {
+  const toolText = toolId ? ' with the ' + toolId : '';
+  if (method === 'CLEAR') {
+    return 'Cut/scrape only the bounded current patch' + toolText
+      + ', visibly remove vegetation/debris, and leave the cleared surface exposed.';
+  }
+  if (method === 'EXCAVATE') {
+    return 'Excavate the bounded current section' + toolText
+      + ', lift removed soil visibly, and place spoil beside the excavation.';
+  }
+  if (method === 'APPLY') {
+    return 'Take the current material from its visible source and apply/regularize it'
+      + toolText + ' only on the bounded target section.';
+  }
+  if (method === 'ASSEMBLE') {
+    return 'Position the current piece on ' + targetLabel + toolText
+      + ' and visibly secure it before moving to the next piece.';
+  }
+  if (method === 'POSITION_INSTALL') {
+    return 'Lift/position the current component on ' + targetLabel + toolText
+      + ' and leave it visibly seated at the intended location.';
+  }
+  if (method === 'CUT_AND_ASSEMBLE') {
+    return 'Cut only the required current piece' + toolText
+      + ' before positioning it on ' + targetLabel + '.';
+  }
+  return operation.name + ': perform one bounded visible physical action' + toolText
+    + ' that leaves a persistent result.';
+}
+
+function cutEffect(
+  targetId: string,
+  zoneId: string,
+  materialId: string | undefined,
+): PhysicalEffect {
+  return {
+    type: 'STATE_CHANGED',
+    entityId: materialId ?? targetId,
+    property: 'cut-state',
+    to: 'prepared-for-current-installation',
+    zoneId,
+  };
+}
+
+export function planPhysicalExecutionV2({
+  scene,
+  stage,
+  operation,
+  worldStateBefore,
+  beforePercentage,
+  materialUse,
+}: PlanPhysicalExecutionV2Input): PhysicalExecutionPlanV2 {
+  if (stage.percentage <= 0) {
+    throw new Error('PhysicalExecutionPlan V2 native planning requires a positive construction stage.');
+  }
+
+  const targetPercentage = stage.percentage;
+  const stageDelta = targetPercentage - beforePercentage;
+  if (stageDelta <= 0) {
+    throw new Error('PhysicalExecutionPlan V2 requires increasing canonical progress.');
+  }
+
+  const method = classifyMethod(operation, stage);
+  const targetId = targetIdFor(operation);
+  const targetLabel = operation.name || targetId;
+  const zoneId = stage.activeZone || worldStateBefore.activeZone;
+  const rawToolId =
+    stage.tool
+    ?? operation.visualBasis?.tools?.[0];
+  const toolId = rawToolId
+    ? canonicalToolId(rawToolId) ?? rawToolId
+    : undefined;
+  const materialId = firstMaterial(operation, materialUse);
+  const sourceZone = materialSourceZone(worldStateBefore, materialId);
+  const officialRevision = deriveOfficialRevision(worldStateBefore);
+  const evidenceId =
+    'v2:evidence:' + scene.id + ':' + operation.id + ':' + targetPercentage;
+
+  const evidence: ObservationContract[] = [{
+    id: evidenceId,
+    entityIds: unique([
+      targetId,
+      ...(materialId ? [materialId] : []),
+    ]),
+    relation: methodRelation(method),
+    metric: 'canonical-stage',
+    expected: {
+      beforePercentage,
+      targetPercentage,
+      terminalDescription:
+        stage.visualEvidence?.[0]
+        ?? ('Visible persistent result for ' + targetLabel),
+    },
+    visibleIn: 'TERMINAL_FRAME',
+    mustPersist: true,
+  }];
+
+  const nodes: PhysicalActionNodeV2[] = [];
+  const edges: PhysicalActionEdgeV2[] = [];
+  const add = (node: PhysicalActionNodeV2) => {
+    const previous = nodes.length ? nodes[nodes.length - 1] : undefined;
+    nodes.push(node);
+    if (previous) {
+      edges.push({
+        from: previous.id,
+        to: node.id,
+        relation: 'SEQUENCE',
+      });
+    }
+  };
+
+  const actorId = worldStateBefore.character.characterId;
+  let actorZone = worldStateBefore.character.currentZone;
+  const rawToolLocation = toolLocation(worldStateBefore, rawToolId);
+
+  if (toolId && rawToolLocation && actorZone !== rawToolLocation) {
+    add({
+      id: evidenceId + ':approach-tool',
+      kind: 'APPROACH',
+      instruction: 'Move continuously to the visible ' + toolId + ' before starting work.',
+      actorId,
+      sourceEntityIds: [],
+      targetEntityIds: [],
+      zoneId: rawToolLocation,
+      effects: [],
+      preconditions: [],
+      postconditions: [{ type: 'ACTOR_IN_ZONE', zoneId: rawToolLocation }],
+      evidenceIds: [],
+    });
+    actorZone = rawToolLocation;
+  }
+
+  if (toolId) {
+    add({
+      id: evidenceId + ':acquire-tool',
+      kind: 'ACQUIRE_TOOL',
+      instruction: 'Take control of the existing ' + toolId + ' before acting on the construction target.',
+      actorId,
+      toolId,
+      sourceEntityIds: [],
+      targetEntityIds: [],
+      zoneId: actorZone,
+      effects: [],
+      preconditions: [
+        { type: 'TOOL_AVAILABLE', toolId },
+        { type: 'ACTOR_IN_ZONE', zoneId: actorZone },
+      ],
+      postconditions: [{ type: 'TOOL_HELD', toolId }],
+      evidenceIds: [],
+    });
+
+    add({
+      id: evidenceId + ':grip-tool',
+      kind: 'GRIP',
+      instruction: 'Grip the ' + toolId + ' securely and keep it under visible control.',
+      actorId,
+      toolId,
+      sourceEntityIds: [],
+      targetEntityIds: [],
+      zoneId: actorZone,
+      contact: {
+        id: evidenceId + ':tool-grip',
+        mode: 'GRIP',
+        required: true,
+        zoneId: actorZone,
+      },
+      effects: [],
+      preconditions: [{ type: 'TOOL_HELD', toolId }],
+      postconditions: [],
+      evidenceIds: [],
+    });
+  }
+
+  if (actorZone !== zoneId) {
+    add({
+      id: evidenceId + ':approach-target',
+      kind: 'APPROACH',
+      instruction: 'Move continuously into the bounded active work zone without changing construction.',
+      actorId,
+      ...(toolId ? { toolId } : {}),
+      sourceEntityIds: [],
+      targetEntityIds: [targetId],
+      zoneId,
+      effects: [],
+      preconditions: toolId ? [{ type: 'TOOL_HELD', toolId }] : [],
+      postconditions: [{ type: 'ACTOR_IN_ZONE', zoneId }],
+      evidenceIds: [],
+    });
+  }
+
+  add({
+    id: evidenceId + ':position',
+    kind: 'POSITION',
+    instruction: 'Position actor, tool and current material at the bounded target section before changing it.',
+    actorId,
+    ...(toolId ? { toolId } : {}),
+    sourceEntityIds: materialId ? [materialId] : [],
+    targetEntityIds: [targetId],
+    zoneId,
+    effects: [],
+    preconditions: toolId ? [{ type: 'TOOL_HELD', toolId }] : [],
+    postconditions: [],
+    evidenceIds: [],
+  });
+
+  const primaryKind = actionKindForMethod(method, toolId);
+
+  if (method === 'CUT_AND_ASSEMBLE') {
+    add({
+      id: evidenceId + ':cut-contact',
+      kind: 'CONTACT',
+      instruction: 'Bring the cutting edge into visible contact with only the current piece.',
+      actorId,
+      ...(toolId ? { toolId } : {}),
+      sourceEntityIds: materialId ? [materialId] : [],
+      targetEntityIds: [targetId],
+      zoneId,
+      contact: {
+        id: evidenceId + ':cut-contact-id',
+        mode: 'CUT',
+        required: true,
+        zoneId,
+        targetEntityId: targetId,
+      },
+      effects: [],
+      preconditions: toolId ? [{ type: 'TOOL_HELD', toolId }] : [],
+      postconditions: [],
+      evidenceIds: [],
+    });
+
+    add({
+      id: evidenceId + ':cut',
+      kind: 'CUT',
+      instruction: actionInstruction(method, operation, toolId, targetLabel),
+      actorId,
+      ...(toolId ? { toolId } : {}),
+      sourceEntityIds: materialId ? [materialId] : [],
+      targetEntityIds: [targetId],
+      zoneId,
+      contact: {
+        id: evidenceId + ':cut-action-contact',
+        mode: 'CUT',
+        required: true,
+        zoneId,
+        targetEntityId: targetId,
+      },
+      effects: [cutEffect(targetId, zoneId, materialId)],
+      preconditions: [{
+        type: 'CONTACT_ESTABLISHED',
+        contactId: evidenceId + ':cut-contact-id',
+      }],
+      postconditions: [],
+      evidenceIds: [evidenceId],
+    });
+
+    add({
+      id: evidenceId + ':place-after-cut',
+      kind: 'PLACE',
+      instruction: 'Lift and place the prepared current piece onto ' + targetLabel
+        + ' by continuous visible hand/tool handling.',
+      actorId,
+      sourceEntityIds: materialId ? [materialId] : [targetId],
+      targetEntityIds: [targetId],
+      zoneId,
+      contact: {
+        id: evidenceId + ':place-after-cut-contact',
+        mode: 'PLACE',
+        required: true,
+        zoneId,
+        targetEntityId: targetId,
+      },
+      effects: [
+        effectForMethod(
+          method,
+          targetId,
+          zoneId,
+          materialId,
+          sourceZone,
+          worldStateBefore,
+          stageDelta,
+          materialUse,
+        ),
+        {
+          type: 'CANONICAL_PROGRESS_ADVANCED',
+          targetId,
+          fromPercentage: beforePercentage,
+          toPercentage: targetPercentage,
+        },
+      ],
+      preconditions: [],
+      postconditions: [{
+        type: 'CANONICAL_PROGRESS_AT',
+        targetId,
+        percentage: targetPercentage,
+      }],
+      evidenceIds: [evidenceId],
+    });
+  } else {
+    add({
+      id: evidenceId + ':target-contact',
+      kind: 'CONTACT',
+      instruction:
+        'Establish visible physical contact with ' + targetLabel
+        + ' before the transformation begins.',
+      actorId,
+      ...(toolId ? { toolId } : {}),
+      sourceEntityIds: materialId ? [materialId] : [],
+      targetEntityIds: [targetId],
+      zoneId,
+      contact: {
+        id: evidenceId + ':target-contact-id',
+        mode: contactModeFor(primaryKind),
+        required: true,
+        zoneId,
+        targetEntityId: targetId,
+      },
+      effects: [],
+      preconditions: toolId ? [{ type: 'TOOL_HELD', toolId }] : [],
+      postconditions: [],
+      evidenceIds: [],
+    });
+
+    add({
+      id: evidenceId + ':primary-action',
+      kind: primaryKind,
+      instruction: actionInstruction(method, operation, toolId, targetLabel),
+      actorId,
+      ...(toolId ? { toolId } : {}),
+      sourceEntityIds: materialId
+        ? [materialId]
+        : method === 'CLEAR' || method === 'EXCAVATE'
+          ? [method === 'CLEAR' ? 'vegetation' : (worldStateBefore.terrain.soil || 'soil')]
+          : [targetId],
+      targetEntityIds: [targetId],
+      zoneId,
+      contact: {
+        id: evidenceId + ':primary-contact',
+        mode: contactModeFor(primaryKind),
+        required: true,
+        zoneId,
+        targetEntityId: targetId,
+      },
+      effects: [
+        effectForMethod(
+          method,
+          targetId,
+          zoneId,
+          materialId,
+          sourceZone,
+          worldStateBefore,
+          stageDelta,
+          materialUse,
+        ),
+        {
+          type: 'CANONICAL_PROGRESS_ADVANCED',
+          targetId,
+          fromPercentage: beforePercentage,
+          toPercentage: targetPercentage,
+        },
+      ],
+      preconditions: [{
+        type: 'CONTACT_ESTABLISHED',
+        contactId: evidenceId + ':target-contact-id',
+      }],
+      postconditions: [{
+        type: 'CANONICAL_PROGRESS_AT',
+        targetId,
+        percentage: targetPercentage,
+      }],
+      evidenceIds: [evidenceId],
+    });
+  }
+
+  add({
+    id: evidenceId + ':inspect',
+    kind: 'INSPECT',
+    instruction:
+      'Keep the changed section visible, show that it persists, and show the remaining unfinished work.',
+    actorId,
+    sourceEntityIds: [],
+    targetEntityIds: [targetId],
+    zoneId,
+    effects: [],
+    preconditions: [{
+      type: 'CANONICAL_PROGRESS_AT',
+      targetId,
+      percentage: targetPercentage,
+    }],
+    postconditions: [],
+    evidenceIds: [evidenceId],
+  });
+
+  add({
+    id: evidenceId + ':stop',
+    kind: 'STOP',
+    instruction:
+      'Stop construction at exactly the canonical '
+      + targetPercentage
+      + '% stage; do not begin any later operation.',
+    actorId,
+    sourceEntityIds: [],
+    targetEntityIds: [targetId],
+    zoneId,
+    effects: [],
+    preconditions: [{
+      type: 'CANONICAL_PROGRESS_AT',
+      targetId,
+      percentage: targetPercentage,
+    }],
+    postconditions: [],
+    evidenceIds: [evidenceId],
+  });
+
+  const limitations = ['PHYSICAL_PROGRESS_MEASURE_NOT_AVAILABLE_FROM_CURRENT_BLUEPRINT'];
+  if (!resolveToolAffordance(toolId)) limitations.push('TOOL_AFFORDANCE_UNKNOWN');
+  if (!materialId && !['CLEAR', 'EXCAVATE', 'OTHER'].includes(method)) {
+    limitations.push('MATERIAL_SOURCE_NOT_DECLARED');
+  }
+
+  return {
+    schemaVersion: PHYSICAL_EXECUTION_PLAN_SCHEMA,
+    planId:
+      'v2:native:' + scene.id + ':' + operation.id + ':'
+      + beforePercentage + '-' + targetPercentage,
+    officialBefore: {
+      revision: officialRevision,
+      timestamp: worldStateBefore.timestamp,
+      snapshotFingerprint: fingerprintValue(worldStateBefore),
+    },
+    intent: {
+      schemaVersion: CONSTRUCTION_INTENT_SCHEMA,
+      operationId: operation.id,
+      targetEntityId: targetId,
+      methodId: 'native:' + method.toLowerCase(),
+      authorizedZoneId: zoneId,
+      officialRevision,
+      canonicalProgress: {
+        beforePercentage,
+        targetPercentage,
+        tolerancePercentage: 0,
+      },
+      temporalConstraints: {
+        preserveComponentIds: unique(worldStateBefore.existingComponents),
+        forbiddenFutureComponentIds: unique(
+          worldStateBefore.futureComponents.filter(id => id !== targetId),
+        ),
+        preserveZoneIds: unique(stage.preservedZones),
+        allowedMaterialDestinationZoneIds: [zoneId + ':spoil'],
+      },
+    },
+    nodes,
+    edges,
+    evidence,
+    constraints: {
+      stopAtTarget: true,
+      requirePersistentEffects: true,
+      maxSubactions: 12,
+    },
+    metadata: {
+      source: 'NATIVE_V2',
+      confidence: limitations.length === 1 ? 'MEDIUM' : 'LOW',
+      limitations,
+    },
+  };
+}
