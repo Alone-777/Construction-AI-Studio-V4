@@ -1,5 +1,9 @@
 import type { WorldState, VisualDNA, ConstructionStateSnapshot, ConstructionTimeline, SimulationResult, SimulationEvent, ConstructionDecision, ProjectConfig, ProjectDNA } from '../../../types';
 import { generateKlingPrompt } from '../../../prompts/kling';
+import {
+  ANIMATION_PROMPT_MAX_CHARS,
+  countAnimationPromptCharacters,
+} from '../../../video-generation/animation-prompt-budget';
 import { worldStateToVisualSceneState } from '../../../visual/VisualSceneState';
 import { compileVisualScene } from '../../../visual/VisualPromptCompiler';
 import { buildStageVisualStateSnapshots } from '../../../visual-state/visual-state-snapshot';
@@ -302,6 +306,18 @@ export class PromptsGeneratorStage {
             success: false,
             error: new Error(
               `Stage ${stage.percentage}% of scene ${scene.id} missing prompts`
+            ),
+          };
+        }
+        const klingPromptChars = countAnimationPromptCharacters(
+          stage.prompts.kling,
+        );
+        if (klingPromptChars > ANIMATION_PROMPT_MAX_CHARS) {
+          return {
+            success: false,
+            error: new Error(
+              `Stage ${stage.percentage}% of scene ${scene.id} has animation prompt ` +
+              `${klingPromptChars}/${ANIMATION_PROMPT_MAX_CHARS} characters`,
             ),
           };
         }
