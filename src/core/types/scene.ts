@@ -4,6 +4,10 @@ import type { WorldState, ExecutionProof } from './world-state';
 import type { QualityScore } from './quality';
 import type { ConstructionDecision } from '../decision/ConstructionDecision';
 import type { PhysicalActionIR } from '../actions/physical-action-ir';
+import type {
+  PhysicalExecutionPlanV2,
+  PhysicalSimulationReceiptV2,
+} from '../actions/physical-execution-v2/types';
 
 export type StagePercentage = 0 | 25 | 50 | 75 | 100;
 export type JumpRisk = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -61,6 +65,12 @@ export interface Stage {
   executionProof?: ExecutionProof;
   /** Ação física primária canônica desta tentativa temporal. */
   physicalActionIR?: PhysicalActionIR;
+  /** Plano V2 shadow: diagnóstico causal, nunca autoridade temporal/commit. */
+  physicalExecutionPlanV2?: PhysicalExecutionPlanV2;
+  /** Recibo V2 shadow: projeção não autoritativa; commitAvailable é sempre false. */
+  physicalSimulationV2?: PhysicalSimulationReceiptV2;
+  /** Falha de shadow instrumentation; nunca bloqueia o pipeline legado. */
+  physicalExecutionV2Error?: string;
   qualityScore?: QualityScore;
   jumpRisk?: JumpRisk;
   /** Artefatos derivados do estágio real, nunca texto de demonstração isolado. */
