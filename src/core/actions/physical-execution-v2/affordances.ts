@@ -112,31 +112,31 @@ const MATERIALS: MaterialAffordanceV2[] = [
     materialClass: 'SOIL',
     aliases: ['soil', 'terra', 'barro', 'dirt'],
     supportedEffectTypes: ['SURFACE_REMOVED', 'MATERIAL_TRANSFER', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['shovel', 'hand-tamper'],
+    compatibleToolIds: ['shovel', 'hand-tamper', 'hoe'],
   },
   {
     materialClass: 'VEGETATION',
     aliases: ['vegetation', 'vegetacao', 'vegetação', 'grass', 'grama'],
     supportedEffectTypes: ['SURFACE_REMOVED', 'MATERIAL_TRANSFER', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['shovel'],
+    compatibleToolIds: ['shovel', 'machete', 'axe'],
   },
   {
     materialClass: 'WOOD',
     aliases: ['wood', 'madeira', 'troncos'],
     supportedEffectTypes: ['COMPONENT_ATTACHED', 'COMPONENT_MOVED', 'MATERIAL_CONSUMED', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['hammer', 'mallet', 'hand-saw'],
+    compatibleToolIds: ['hammer', 'mallet', 'hand-saw', 'axe', 'rope'],
   },
   {
     materialClass: 'STONE',
     aliases: ['stone', 'pedra'],
     supportedEffectTypes: ['COMPONENT_ATTACHED', 'COMPONENT_MOVED', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['mallet'],
+    compatibleToolIds: ['mallet', 'rope'],
   },
   {
     materialClass: 'AGGREGATE',
     aliases: ['aggregate', 'cascalho'],
     supportedEffectTypes: ['MATERIAL_TRANSFER', 'MATERIAL_APPLIED', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['shovel', 'hand-tamper'],
+    compatibleToolIds: ['shovel', 'hand-tamper', 'hoe'],
   },
   {
     materialClass: 'CONCRETE',
@@ -148,7 +148,7 @@ const MATERIALS: MaterialAffordanceV2[] = [
     materialClass: 'MORTAR',
     aliases: ['mortar', 'argamassa'],
     supportedEffectTypes: ['MATERIAL_APPLIED', 'MATERIAL_CONSUMED', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['trowel'],
+    compatibleToolIds: ['trowel', 'hoe'],
   },
   {
     materialClass: 'CLAY',
@@ -160,7 +160,7 @@ const MATERIALS: MaterialAffordanceV2[] = [
     materialClass: 'METAL',
     aliases: ['metal', 'aco', 'aço'],
     supportedEffectTypes: ['COMPONENT_ATTACHED', 'COMPONENT_MOVED', 'STATE_CHANGED', 'PHYSICAL_PROGRESS_ADVANCED'],
-    compatibleToolIds: ['hammer', 'level'],
+    compatibleToolIds: ['hammer', 'level', 'rope'],
   },
 ];
 
