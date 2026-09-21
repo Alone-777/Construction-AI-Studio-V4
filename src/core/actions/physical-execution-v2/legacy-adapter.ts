@@ -124,7 +124,7 @@ export function legacyPhysicalActionIRToV2Plan(
   const nodes: PhysicalActionNodeV2[] = [];
   const edges: PhysicalActionEdgeV2[] = [];
   const add = (node: PhysicalActionNodeV2) => {
-    const previous = nodes.at(-1);
+    const previous = nodes.length ? nodes[nodes.length - 1] : undefined;
     nodes.push(node);
     if (previous) {
       edges.push({
