@@ -464,7 +464,7 @@ export function compileManualKlingPrompt({
       ' image-to-video. Source frame is temporal truth.',
     'Operation: ' + compact(operationName, 90) + '.',
     'Worker must physically execute this on screen using ' + tools + '.',
-    renderExecutionDirective(executionRecipe, 610),
+    renderExecutionDirective(executionRecipe, 850),
     Number.isFinite(start) && Number.isFinite(target)
       ? 'Advance only ' + start + '%→' + target + '%. Final frame must be exactly ' + target +
         '%' + (incomplete ? ' and visibly incomplete.' : '.')
