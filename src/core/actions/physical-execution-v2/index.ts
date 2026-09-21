@@ -3,3 +3,4 @@ export * from './affordances';
 export * from './validators';
 export * from './simulator';
 export * from './provider-neutral';
+export * from './legacy-adapter';
