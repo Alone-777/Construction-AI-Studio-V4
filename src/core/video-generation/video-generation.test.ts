@@ -18,6 +18,7 @@ import {
   evaluateVisualApprovalEligibility,
   validateVisualContinuity,
 } from '../visual-validation';
+import { ANIMATION_PROMPT_MAX_CHARS } from './animation-prompt-budget';
 import {
   completeManualVideoGeneration,
   createCanonicalAnimationPromptSpec,
@@ -430,7 +431,17 @@ describe('CanonicalAnimationPromptSpec', () => {
   it('preserves forbidden future elements in the rendered prompt', async () => {
     const value = await fixture('a');
     expect(value.spec.forbidden.futureElements).toEqual(expect.arrayContaining(['component-b', 'component-roof']));
-    expect(renderCanonicalAnimationPrompt(value.spec)).toContain('Future elements: component-b, component-roof');
+    expect(renderCanonicalAnimationPrompt(value.spec)).toContain('Forbid future elements: component-b, component-roof');
+  });
+
+  it('keeps canonical animation prompts within the 1400 character budget', async () => {
+    const value = await fixture('a');
+    const rendered = renderCanonicalAnimationPrompt(value.spec);
+    expect(Array.from(rendered).length).toBeLessThanOrEqual(
+      ANIMATION_PROMPT_MAX_CHARS,
+    );
+    expect(value.request.renderedPrompt).toBe(rendered);
+    expect(Array.from(value.request.renderedPrompt).length).toBeLessThanOrEqual(1400);
   });
 });
 

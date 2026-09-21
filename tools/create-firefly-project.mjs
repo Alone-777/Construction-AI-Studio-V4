@@ -4,6 +4,7 @@ import { access, copyFile, mkdir, readdir, stat, writeFile } from 'node:fs/promi
 import path from 'node:path';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+export const ANIMATION_PROMPT_MAX_CHARS = 1400;
 const STAGES = [
   [0, 25],
   [25, 50],
@@ -163,8 +164,41 @@ function operationPlan(construction) {
   ];
 }
 
+function countPromptChars(value) {
+  return Array.from(String(value ?? '')).length;
+}
+
+function compactField(value, maxChars) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const chars = Array.from(text);
+  if (chars.length <= maxChars) return text;
+  const sliced = chars.slice(0, Math.max(1, maxChars - 1)).join('');
+  const clean = sliced.replace(/\s+\S*$/, '').trimEnd();
+  return (clean || sliced.trimEnd()) + '…';
+}
+
+function compactList(values, maxItems = 6, itemChars = 48) {
+  const items = unique(values)
+    .map(value => compactField(value, itemChars))
+    .filter(Boolean);
+  if (!items.length) return '';
+  const shown = items.slice(0, maxItems);
+  const extra = items.length - shown.length;
+  return shown.join(', ') + (extra > 0 ? ' +' + extra + ' more' : '');
+}
+
+function assertAnimationPromptLimit(prompt) {
+  const count = countPromptChars(prompt);
+  if (count > ANIMATION_PROMPT_MAX_CHARS) {
+    throw new Error(
+      'Animation prompt exceeds hard limit: ' + count +
+      '/' + ANIMATION_PROMPT_MAX_CHARS + ' characters.',
+    );
+  }
+  return prompt;
+}
+
 function promptFor({
-  description,
   environment,
   materials,
   operation,
@@ -172,34 +206,40 @@ function promptFor({
   operations,
   start,
   target,
-  initialImageName,
 }) {
   const completed = operations.slice(0, operationIndex).map(item => item[1]);
   const future = operations.slice(operationIndex + 1).map(item => item[1]);
-  const stageVerb = target === 100
-    ? 'complete this operation'
-    : `advance this operation visibly from ${start}% to exactly ${target}%`;
+  const incomplete = target < 100;
 
-  return [
-    '[OFFICIAL KLING 3.0 VIDEO JOB]',
-    'Create exactly 15 seconds of realistic 16:9 image-to-video construction timelapse with Kling 3.0.',
-    'The supplied source frame is the temporal truth at the beginning of this JOB; never contradict it.',
-    `Project intent: ${description.trim()}.`,
-    `Environment identity: ${environment}. Stable materials/design vocabulary: ${materials.join(', ')}.`,
-    `Initial visual origin: ${initialImageName}. Preserve its compatible terrain, proportions, lighting logic, material identity and environmental landmarks.`,
-    `Current physical operation: ${operation[1]}. Visible action: ${operation[2]}.`,
-    `During this 15-second clip, ${stageVerb}. The terminal frame must represent the canonical ${target}% state of this operation.`,
-    completed.length
-      ? `Already completed components must remain present and unchanged: ${completed.join('; ')}.`
-      : 'No construction component is considered completed before this operation.',
-    future.length
-      ? `Do not show or anticipate future construction: ${future.join('; ')}.`
-      : 'Do not add any construction beyond the current operation.',
-    'Use one continuous physically plausible action in a single shot. Show material handling and assembly on screen. Keep the camera locked and do not introduce cuts or reframing.',
-    'Preserve the exact same worker identity, face, body, clothing and gear from the source frame if a worker is visible. Keep camera position, terrain, vegetation and permanent environmental objects continuous.',
-    'No magical appearance, morphing, teleportation, disappearing completed work, hidden jumps in progress, camera jump, or unexplained material movement.',
-    'Stop exactly at the requested target percentage; do not visually overshoot it. The final frame must be stable and usable as the exact source frame of the next JOB.',
-  ].join(' ');
+  const parts = [
+    '[KLING 3.0 ANIMATION JOB] 15s 16:9 image-to-video. Source frame is temporal truth.',
+    `Operation: ${compactField(operation[1], 110)}. Action: ${compactField(operation[2], 210)}.`,
+    `Advance only ${start}%→${target}%. Final frame = exactly ${target}%${incomplete ? ', visibly incomplete' : ''}.`,
+    'One continuous physically plausible action; show visible worker/tool/material causality. Keep camera locked.',
+    'Preserve worker identity/clothing, terrain, vegetation, lighting, landmarks and all completed work.',
+    'No magic, morphing, teleportation, hidden progress, disappearing work, camera jump or unexplained material movement.',
+  ];
+
+  const completedText = compactList(completed, 5, 44);
+  if (completedText) parts.push(`Completed work stays unchanged: ${completedText}.`);
+
+  const futureText = compactList(future, 6, 44);
+  if (futureText) parts.push(`Do not start future elements: ${futureText}.`);
+
+  const environmentText = compactField(environment, 70);
+  const materialsText = compactList(materials, 5, 36);
+  if (environmentText || materialsText) {
+    parts.push(
+      `Identity: ${environmentText || 'preserve source environment'}` +
+      (materialsText ? `; materials ${materialsText}` : '') + '.',
+    );
+  }
+
+  parts.push(
+    'Stop at the target; never overshoot. If time remains, inspect/reposition without further construction. Final frame stable for next Job.',
+  );
+
+  return assertAnimationPromptLimit(parts.join(' '));
 }
 
 function sourceImagePromptFor({

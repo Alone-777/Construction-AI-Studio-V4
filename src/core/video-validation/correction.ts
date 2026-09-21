@@ -1,5 +1,9 @@
 import type { ImageMetadataValue } from '../image-generation';
 import {
+  assertAnimationPromptWithinLimit,
+  compactAnimationPromptList,
+} from '../video-generation/animation-prompt-budget';
+import {
   renderCanonicalAnimationPrompt,
   withVideoGenerationPrompt,
   type VideoGenerationRequest,
@@ -300,17 +304,21 @@ function renderCorrectionLayer(
   request: VideoGenerationRequest,
   plan: VideoCorrectionPlan,
 ): string {
-  return [
-    renderCanonicalAnimationPrompt(request.canonicalAnimationSpec),
+  const canonical = renderCanonicalAnimationPrompt(
+    request.canonicalAnimationSpec,
+  );
+  const changes = compactAnimationPromptList(
+    plan.changeInstructions,
+    { maxItems: 4, itemChars: 90 },
+  );
+
+  return assertAnimationPromptWithinLimit([
+    canonical,
     '',
     'VIDEO CORRECTION LAYER',
-    `correction plan: ${plan.correctionPlanId}`,
-    `attempt: ${plan.attemptNumber}`,
-    'CHANGE ONLY:',
-    ...plan.changeInstructions.map(instruction => `- ${instruction}`),
-    'PRESERVE:',
-    ...plan.preserveInstructions.map(instruction => `- ${instruction}`),
-  ].join('\n');
+    `attempt ${plan.attemptNumber}. Change only: ${changes}.`,
+    'Preserve canonical source, character/clothing, environment, construction geometry, materials, camera and temporal identity; change nothing else.',
+  ].join('\n'));
 }
 
 function requiresRevalidation(validation: VideoValidationResult): boolean {

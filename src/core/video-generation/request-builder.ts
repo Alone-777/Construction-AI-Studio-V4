@@ -1,5 +1,6 @@
 import type { ImageMetadataValue } from '../image-generation';
 import { renderCanonicalAnimationPrompt } from './animation-prompt';
+import { assertAnimationPromptWithinLimit } from './animation-prompt-budget';
 import type {
   CanonicalAnimationPromptSpec,
   OfficialVideoSource,
@@ -68,7 +69,8 @@ export function withVideoGenerationPrompt(
   metadata?: Readonly<Record<string, ImageMetadataValue>>,
 ): VideoGenerationRequest {
   if (!renderedPrompt.trim()) throw new Error('Derived video generation prompt is required.');
-  const candidate = { ...clone(request), renderedPrompt };
+  const safePrompt = assertAnimationPromptWithinLimit(renderedPrompt);
+  const candidate = { ...clone(request), renderedPrompt: safePrompt };
   const identity = videoRequestIdentity(candidate);
   const mergedMetadata = { ...(request.metadata ?? {}), ...(metadata ?? {}) };
   return deepFreeze({
