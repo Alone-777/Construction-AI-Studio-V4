@@ -181,14 +181,14 @@ function promptFor({
     : `advance this operation visibly from ${start}% to exactly ${target}%`;
 
   return [
-    '[OFFICIAL KLING 2.5 VIDEO JOB]',
-    'Create exactly 5 seconds of realistic 16:9 image-to-video construction timelapse with Kling 2.5.',
+    '[OFFICIAL KLING 3.0 VIDEO JOB]',
+    'Create exactly 15 seconds of realistic 16:9 image-to-video construction timelapse with Kling 3.0.',
     'The supplied source frame is the temporal truth at the beginning of this JOB; never contradict it.',
     `Project intent: ${description.trim()}.`,
     `Environment identity: ${environment}. Stable materials/design vocabulary: ${materials.join(', ')}.`,
     `Initial visual origin: ${initialImageName}. Preserve its compatible terrain, proportions, lighting logic, material identity and environmental landmarks.`,
     `Current physical operation: ${operation[1]}. Visible action: ${operation[2]}.`,
-    `During this 5-second clip, ${stageVerb}. The terminal frame must represent the canonical ${target}% state of this operation.`,
+    `During this 15-second clip, ${stageVerb}. The terminal frame must represent the canonical ${target}% state of this operation.`,
     completed.length
       ? `Already completed components must remain present and unchanged: ${completed.join('; ')}.`
       : 'No construction component is considered completed before this operation.',
@@ -241,7 +241,7 @@ function negativeConstraints(future) {
 
 function checklist({ operationName, start, target, future }) {
   return [
-    'The clip duration is exactly 5 seconds.',
+    'The clip duration is exactly 15 seconds.',
     `The source starts at the canonical ${start}% state for ${operationName}.`,
     `The terminal frame reaches the canonical ${target}% state for ${operationName}.`,
     'Worker identity, clothing, camera, terrain and environmental landmarks remain continuous.',
@@ -383,8 +383,8 @@ export async function createFireflyProject({
         segmentIndex: segmentIndex + 1,
         startStagePercentage: start,
         targetStagePercentage: target,
-        model: 'KLING_2_5',
-        durationSeconds: 5,
+        model: 'KLING_3_0',
+        durationSeconds: 15,
         aspectRatio: '16:9',
         resolution: { width: 1920, height: 1080 },
         source,
@@ -454,10 +454,10 @@ export async function createFireflyProject({
         sequence,
         jobId,
         sceneId: job.sceneId,
-        model: 'KLING_2_5',
+        model: 'KLING_3_0',
         startStagePercentage: start,
         targetStagePercentage: target,
-        durationSeconds: 5,
+        durationSeconds: 15,
         jobDirectory,
         sourcePath,
         videoOutput: videoSlot,
@@ -469,7 +469,7 @@ export async function createFireflyProject({
   }
 
   const manifest = {
-    schemaVersion: 'construction-ai-manual-video/1.1',
+    schemaVersion: 'construction-ai-manual-video/1.2',
     projectId,
     projectName: title,
     createdAt: createdAt.toISOString(),
@@ -485,9 +485,9 @@ export async function createFireflyProject({
       temporalAuthority: false,
     },
     videoPolicy: {
-      provider: 'KLING_2_5_MANUAL',
-      model: 'Kling 2.5',
-      durationSeconds: 5,
+      provider: 'KLING_3_0_MANUAL',
+      model: 'Kling 3.0',
+      durationSeconds: 15,
       oneActiveJobAtATime: true,
     },
     operations: operations.map(([id, operationName, physicalAction], index) => ({
@@ -503,7 +503,7 @@ export async function createFireflyProject({
     projectId,
     projectName: title,
     totalJobs: jobs.length,
-    durationSecondsPerJob: 5,
+    durationSecondsPerJob: 15,
     jobs,
   });
 
@@ -516,7 +516,7 @@ export async function createFireflyProject({
     workspace: path.relative(resolvedRoot, workspace).split(path.sep).join('/'),
     workspaceName: projectId,
     totalJobs: jobs.length,
-    totalDurationSeconds: jobs.length * 5,
+    totalDurationSeconds: jobs.length * 15,
     firstJob: {
       ...jobs[0],
       sourceReady: false,
