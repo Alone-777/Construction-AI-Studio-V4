@@ -2,6 +2,11 @@ import type { PhysicalActionIR } from '../actions/physical-action-ir';
 import type { ImageGenerationResult } from '../image-generation';
 import type { VisualReferenceRecord } from '../visual-reference';
 import type { VisualStateSnapshot } from '../visual-state/visual-state-snapshot';
+import {
+  assertAnimationPromptWithinLimit,
+  compactAnimationPromptField,
+  compactAnimationPromptList,
+} from './animation-prompt-budget';
 import type {
   CanonicalAnimationPromptSpec,
   CanonicalAnimationPromptSpecResult,
@@ -196,45 +201,52 @@ export function createCanonicalAnimationPromptSpec(
   };
 }
 
-export function renderCanonicalAnimationPrompt(spec: CanonicalAnimationPromptSpec): string {
-  return [
-    'VISUAL SOURCE',
-    `Animate only approved image asset ${spec.identity.sourceImageAssetId}.`,
-    `Temporal point: ${spec.temporal.temporalPoint} / ${spec.temporal.stageOutcome}.`,
-    '',
-    'MOTION',
-    `Primary action: ${spec.motion.primaryAction.description}.`,
-    `Actor: ${spec.motion.subjectMotion.characterId}.`,
-    `Actor zone: ${spec.motion.subjectMotion.zoneBefore} -> ${spec.motion.subjectMotion.zoneAfter}.`,
-    `Target: ${spec.motion.constructionMotion.target.label}.`,
-    `Target transition: ${spec.motion.constructionMotion.targetStatusBefore} -> ${spec.motion.constructionMotion.targetStatusAfter}.`,
-    `Tools: ${list(spec.motion.toolMotion.tools)}.`,
-    `Materials: ${list(spec.motion.materials)}.`,
-    '',
-    'CAMERA',
-    `Mode: ${spec.camera.cameraMode}.`,
-    `Camera: ${spec.camera.viewpointConstraints.cameraId}; framing: ${spec.camera.framing}; movement: ${spec.camera.cameraMovement}.`,
-    'Preserve the canonical viewpoint, orientation and framing.',
-    '',
-    'PRESERVE',
-    `Character: ${spec.continuity.preserveCharacter.characterId} / ${spec.continuity.preserveCharacter.visualIdentityId}.`,
-    `Clothing: ${spec.continuity.preserveClothing}.`,
-    `Environment: ${spec.continuity.preserveEnvironment.preset}; light: ${spec.continuity.preserveEnvironment.light}.`,
-    `Lighting: ${spec.continuity.preserveLighting}.`,
-    `Construction geometry: ${list(spec.continuity.preserveConstructionGeometry)}.`,
-    `Materials: ${list(spec.continuity.preserveMaterials)}.`,
-    '',
-    'FORBID',
-    `Future elements: ${list(spec.forbidden.futureElements)}.`,
-    ...spec.forbidden.forbiddenTransformations.map(value => `- ${value}`),
-    ...spec.forbidden.forbiddenCameraChanges.map(value => `- ${value}`),
-    ...spec.forbidden.forbiddenIdentityChanges.map(value => `- ${value}`),
-    '',
-    'OUTPUT',
-    `Duration: ${spec.output.durationSeconds} seconds.`,
-    `Aspect ratio: ${spec.output.aspectRatio}.`,
-    `Audio: ${spec.output.audio}.`,
-  ].join('\n');
+export function renderCanonicalAnimationPrompt(
+  spec: CanonicalAnimationPromptSpec,
+): string {
+  const future = compactAnimationPromptList(
+    spec.forbidden.futureElements,
+    { maxItems: 8, itemChars: 44 },
+  );
+  const geometry = compactAnimationPromptList(
+    spec.continuity.preserveConstructionGeometry,
+    { maxItems: 6, itemChars: 42 },
+  );
+  const materials = compactAnimationPromptList(
+    spec.motion.materials,
+    { maxItems: 5, itemChars: 36 },
+  );
+  const tools = compactAnimationPromptList(
+    spec.motion.toolMotion.tools,
+    { maxItems: 5, itemChars: 36 },
+  );
+
+  const prompt = [
+    '[CANONICAL ANIMATION]',
+    `${spec.output.durationSeconds}s image-to-video; aspect ${spec.output.aspectRatio}; silent.`,
+    'Approved source image is temporal truth.',
+    `Action: ${compactAnimationPromptField(spec.motion.primaryAction.description, 180)}.`,
+    `Target: ${compactAnimationPromptField(spec.motion.constructionMotion.target.label, 90)}; ` +
+      `${spec.motion.constructionMotion.targetStatusBefore}→${spec.motion.constructionMotion.targetStatusAfter}.`,
+    `Actor: ${compactAnimationPromptField(spec.motion.subjectMotion.characterId, 70)}; ` +
+      `zone ${compactAnimationPromptField(spec.motion.subjectMotion.zoneBefore, 40)}→` +
+      `${compactAnimationPromptField(spec.motion.subjectMotion.zoneAfter, 40)}.`,
+    `Tools: ${tools}. Materials: ${materials}.`,
+    `Camera ${compactAnimationPromptField(spec.camera.viewpointConstraints.cameraId, 40)}; ` +
+      `${compactAnimationPromptField(spec.camera.framing, 40)}; ` +
+      `${compactAnimationPromptField(spec.camera.cameraMovement, 40)}. Preserve exact viewpoint/framing.`,
+    `Preserve character ${compactAnimationPromptField(spec.continuity.preserveCharacter.visualIdentityId, 70)}, ` +
+      `clothing ${compactAnimationPromptField(spec.continuity.preserveClothing, 80)}, ` +
+      `environment ${compactAnimationPromptField(spec.continuity.preserveEnvironment.preset, 70)}/` +
+      `${compactAnimationPromptField(spec.continuity.preserveEnvironment.light, 40)}/` +
+      `${compactAnimationPromptField(spec.continuity.preserveEnvironment.weather, 40)}.`,
+    `Preserve existing geometry: ${geometry}.`,
+    `Forbid future elements: ${future}.`,
+    'No changes beyond the bound physical action; no unrelated completion/removal, invented tools/materials, morphing, teleportation, camera change, identity change or clothing change.',
+    'Final frame must match the canonical state and remain stable for continuation.',
+  ].join(' ');
+
+  return assertAnimationPromptWithinLimit(prompt);
 }
 
 function isOfficialReference(
