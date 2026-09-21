@@ -6,6 +6,7 @@ import {
 import { compileCanonicalImagePromptSpec } from '../../../../image-prompts/canonical-image-prompt-compiler';
 import { adaptCanonicalImagePromptToNanoBanana } from '../../../../image-prompts/nano-banana-prompt-adapter';
 import { generateKlingPrompt } from '../../../../prompts/kling';
+import { ANIMATION_PROMPT_MAX_CHARS } from '../../../../video-generation/animation-prompt-budget';
 import { DEFAULT_VISUAL_DNA, type VisualDNA } from '../../../../types/project';
 import type { Operation, Scene, Stage } from '../../../../types/scene';
 import { compileVisualScene } from '../../../../visual/VisualPromptCompiler';
@@ -252,6 +253,20 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
       context.dna!,
     ).fullText;
     expect(stage.prompts?.kling).toBe(expected);
+  });
+
+  it('keeps every generated Kling animation prompt within 1400 characters', () => {
+    const context = committedContext(3);
+    const executed = context.scenes!
+      .flatMap(scene => scene.stages)
+      .filter(stage => stage.prompts?.kling);
+
+    expect(executed.length).toBeGreaterThan(0);
+    for (const stage of executed) {
+      expect(Array.from(stage.prompts!.kling).length).toBeLessThanOrEqual(
+        ANIMATION_PROMPT_MAX_CHARS,
+      );
+    }
   });
 
   it('preserves the existing visual prompt compiler output', () => {
