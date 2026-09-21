@@ -122,6 +122,15 @@ describe('StagesExecutorStage - PhysicalActionIR integration', () => {
     });
     expect(stage.physicalActionIR?.primaryAction).toBeDefined();
     expect(stage.physicalActionIR).not.toHaveProperty('actions');
+    expect(stage.physicalExecutionPlanV2).toBeDefined();
+    expect(stage.physicalExecutionPlanV2?.metadata.mode).toBe('SHADOW');
+    expect(stage.physicalExecutionPlanV2?.officialBefore.revision).toBe(
+      `world:${stage.worldStateBefore!.timestamp}`,
+    );
+    expect(stage.physicalSimulationReceiptV2).toBeDefined();
+    expect(stage.physicalSimulationReceiptV2?.commitAvailable).toBe(false);
+    expect(stage.physicalSimulationReceiptV2?.officialUnchanged).toBe(true);
+    expect(stage.physicalSimulationReceiptV2?.projectedState).not.toBe(stage.worldStateAfter);
   });
 
   it('preserves the attempted IR and candidate evidence on a rejected stage', () => {
@@ -134,13 +143,19 @@ describe('StagesExecutorStage - PhysicalActionIR integration', () => {
       rejectedStage.worldStateAfter?.construction.progress,
     );
     expect(rejectedStage.physicalActionIR?.evidence[0]).toBeTruthy();
+    expect(rejectedStage.physicalExecutionPlanV2?.metadata.mode).toBe('SHADOW');
+    expect(rejectedStage.physicalSimulationReceiptV2?.commitAvailable).toBe(false);
+    expect(rejectedStage.physicalSimulationReceiptV2?.officialUnchanged).toBe(true);
     expect(context.worldState).not.toBe(rejectedStage.worldStateAfter);
+    expect(context.worldState).not.toBe(rejectedStage.physicalSimulationReceiptV2?.projectedState);
   });
 
   it('does not create fictitious IRs for stages skipped after rejection', () => {
     const context = runRejectedScenario();
 
     expect(stageAt(context, 75).physicalActionIR).toBeUndefined();
+    expect(stageAt(context, 75).physicalExecutionPlanV2).toBeUndefined();
     expect(stageAt(context, 100).physicalActionIR).toBeUndefined();
+    expect(stageAt(context, 100).physicalExecutionPlanV2).toBeUndefined();
   });
 });
