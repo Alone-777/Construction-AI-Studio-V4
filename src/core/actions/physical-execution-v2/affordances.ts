@@ -92,9 +92,9 @@ const TOOLS: ToolAffordanceV2[] = [
   {
     id: 'rope',
     aliases: ['rope', 'corda'],
-    allowedNodeKinds: ['ACQUIRE_TOOL', 'APPROACH', 'GRIP', 'POSITION', 'LIFT', 'MOVE_MATERIAL', 'PLACE', 'RELEASE', 'INSPECT', 'STOP'],
-    allowedContactModes: ['GRIP', 'PLACE', 'INSPECT'],
-    supportedEffectTypes: ['COMPONENT_MOVED', 'STATE_CHANGED', 'CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'],
+    allowedNodeKinds: ['ACQUIRE_TOOL', 'APPROACH', 'GRIP', 'POSITION', 'CONTACT', 'LIFT', 'MOVE_MATERIAL', 'PLACE', 'FASTEN', 'RELEASE', 'INSPECT', 'STOP'],
+    allowedContactModes: ['GRIP', 'PLACE', 'FASTEN', 'INSPECT'],
+    supportedEffectTypes: ['COMPONENT_MOVED', 'COMPONENT_ATTACHED', 'STATE_CHANGED', 'CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'],
     compatibleMaterialClasses: ['WOOD', 'STONE', 'METAL'],
   },
   {
