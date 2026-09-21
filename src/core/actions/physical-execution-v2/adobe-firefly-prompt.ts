@@ -99,14 +99,17 @@ export function compileAdobeFireflyVideoPromptV2({
     (durationSeconds ? durationSeconds + 's ' : '') +
     aspectRatio + ' ' + model +
     ' image-to-video. Source frame is temporal truth.';
+  const activeZone = artifact.executionBeats.find(beat => beat.zoneId)?.zoneId;
+  const scope = activeZone ? 'Work only in zone ' + activeZone + '.' : '';
 
   const full = [
     header,
+    scope,
     causalBeats(artifact, 10, 150),
     progressBlock(artifact),
     evidenceBlock(artifact, 300),
     'Every worker/tool/material action must have visible physical causality and a persistent result.',
-    'No pantomime, magic, morphing, teleportation, hidden progress, disappearing work, camera jump or unexplained material movement.',
+    'Negative: no pantomime, no magic, no morphing, no teleportation, no hidden progress, no disappearing work, no camera jump, no unexplained material movement.',
     futureBlock(artifact),
     'Preserve camera, terrain/environment, worker identity and every unchanged completed component.',
     'Final frame stable and reusable as the next Job source.',
@@ -117,11 +120,12 @@ export function compileAdobeFireflyVideoPromptV2({
   if (countAnimationPromptCharacters(prompt) > maxChars) {
     prompt = [
       header,
+      scope,
       causalBeats(artifact, 7, 115),
       progressBlock(artifact),
       evidenceBlock(artifact, 200),
       'Visible tool/material causality; every work stroke must leave a persistent physical change.',
-      'No pantomime, magic, morphing, teleportation, hidden progress or camera jump.',
+      'Negative: no pantomime, no magic, no morphing, no teleportation, no hidden progress, no camera jump.',
       futureBlock(artifact),
       'Preserve camera, terrain and worker identity. Final frame stable.',
       retryBlock(artifact.retryCorrections, 120),
@@ -131,10 +135,11 @@ export function compileAdobeFireflyVideoPromptV2({
   if (countAnimationPromptCharacters(prompt) > maxChars) {
     prompt = [
       header,
+      scope,
       causalBeats(artifact, 5, 90),
       progressBlock(artifact),
       evidenceBlock(artifact, 140),
-      'No pantomime, magic, morphing, teleportation or hidden progress. Preserve continuity.',
+      'Negative: no pantomime, no magic, no morphing, no teleportation, no hidden progress. Preserve continuity.',
       retryBlock(artifact.retryCorrections, 72),
     ].filter(Boolean).join(' ');
   }
