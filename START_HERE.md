@@ -74,9 +74,9 @@ A Imagem Inicial entra como `MANUAL_REFERENCE`. Ela orienta design, proporções
 
 1. Construction AI determina o próximo JOB pela ordem temporal.
 2. Imagem Inicial e referências oficiais alimentam os prompts.
-3. Apenas um JOB Kling 2.5 de vídeo fica ativo por vez.
-4. O vídeo tem 5 segundos.
-5. O usuário gera o vídeo manualmente no Kling 2.5.
+3. Apenas um JOB Kling 3.0 de vídeo fica ativo por vez.
+4. O vídeo tem 15 segundos.
+5. O usuário gera o vídeo manualmente no Kling 3.0.
 6. O vídeo volta para validação.
 7. O Construction AI decide o estado operacional do JOB e libera correção ou próximo JOB.
 8. O ChatGPT atua como orquestrador; o Construction AI continua sendo o sistema executor e a fonte do estado operacional.
@@ -127,7 +127,7 @@ Formato operacional do Relay:
 }
 ```
 
-O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **5 segundos cada**. A Imagem Inicial é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial; o vídeo só é liberado quando essa fonte temporal existir. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
+O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **115 segundos cada**. A Imagem Inicial é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial; o vídeo só é liberado quando essa fonte temporal existir. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
 
 Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
@@ -160,7 +160,7 @@ como console principal do operador.
 Regras:
 - o painel mostra o prompt atual em destaque;
 - existe botão direto `COPIAR PROMPT`;
-- o estado do JOB é consultado automaticamente a cada 5 segundos;
+- o estado do JOB é consultado automaticamente a cada 15 segundos;
 - após um PASS registrado pelo ChatGPT via Relay, o JOB atual vira `COMPLETE`, o último frame é extraído e o próximo JOB é liberado;
 - o painel troca automaticamente para o próximo prompt;
 - em RETRY, permanece no mesmo JOB e mostra o retry prompt;
@@ -190,17 +190,17 @@ O Operator Panel `8793` monitora essa pasta automaticamente. Quando houver um ú
 Não mover manualmente os vídeos para dentro do repositório salvo em caso de diagnóstico.
 
 
-## Política de vídeo atual — Kling 2.5
+## Política de vídeo atual — Kling 3.0
 
 A política operacional vigente para novos JOBs e workspaces migrados é:
 
-- provedor manual: `KLING_2_5_MANUAL`;
-- modelo: `KLING_2_5`;
-- duração canônica por JOB: **5 segundos**;
+- provedor manual: `KLING_3_0_MANUAL`;
+- modelo: `KLING_3_0`;
+- duração canônica por JOB: **15 segundos**;
 - imagem-para-vídeo em 16:9;
 - um único JOB ativo por vez;
 - o frame final aprovado continua sendo a fonte temporal OFFICIAL do JOB seguinte;
 - IDs de JOBs legados que começam com `firefly:` não são renomeados durante migração, para preservar integridade e histórico;
 - o diretório interno `.firefly` também é mantido por compatibilidade e não indica mais o provedor de geração.
 
-Para migrar um workspace existente, use o script protegido `tools/migrate-video-provider-to-kling25.mjs`. Ele cria backup antes de alterar manifest, fila, prompts, checklist e estado de retry.
+Para migrar um workspace existente, use o script protegido `tools/migrate-video-provider-to-kling30.mjs`. Ele cria backup antes de alterar manifest, fila, prompts, checklist e estado de retry.
