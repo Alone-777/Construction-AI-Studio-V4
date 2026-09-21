@@ -48,6 +48,7 @@ describe('migrateWorkspaceToKling30', () => {
     }, null, 2));
 
     await writeFile(path.join(jobDir, 'prompt.txt'), '[OFFICIAL FIREFLY VIDEO JOB] Create exactly 8 seconds of realistic 16:9 image-to-video construction timelapse.\n');
+    await writeFile(path.join(jobDir, 'retry-prompt.txt'), '[OFFICIAL FIREFLY VIDEO JOB] Create exactly 8 seconds of realistic 16:9 image-to-video construction timelapse. During this 8-second clip, stop at 25%.\n');
     await writeFile(path.join(jobDir, 'checklist.txt'), '- [ ] The clip duration is exactly 8 seconds.\n');
     await writeFile(path.join(jobDir, 'state.json'), JSON.stringify({
       jobId: 'firefly:' + workspace + ':preparacao:0-25',
@@ -72,6 +73,7 @@ describe('migrateWorkspaceToKling30', () => {
     const queue = JSON.parse(await readFile(path.join(ws, 'queue.json'), 'utf8'));
     const job = JSON.parse(await readFile(path.join(jobDir, 'job.json'), 'utf8'));
     const state = JSON.parse(await readFile(path.join(jobDir, 'state.json'), 'utf8'));
+    const retryPrompt = await readFile(path.join(jobDir, 'retry-prompt.txt'), 'utf8');
 
     expect(manifest.videoPolicy.provider).toBe('KLING_3_0_MANUAL');
     expect(manifest.videoPolicy.durationSeconds).toBe(15);
@@ -87,8 +89,11 @@ describe('migrateWorkspaceToKling30', () => {
     expect(state.attempts).toBe(2);
     expect(state.lastReview.retryPrompt).toContain('KLING 3.0');
     expect(state.lastReview.retryPrompt).toContain('15 seconds');
+    expect(retryPrompt).toContain('KLING 3.0');
+    expect(retryPrompt).toContain('15 seconds');
 
     const backupRel = result.backupPath.replace('.firefly/' + workspace + '/', '');
     expect((await stat(path.join(ws, backupRel, 'manifest.json'))).isFile()).toBe(true);
+    expect((await stat(path.join(ws, backupRel, 'jobs/001__legacy/retry-prompt.txt'))).isFile()).toBe(true);
   });
 });

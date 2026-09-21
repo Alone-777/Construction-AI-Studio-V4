@@ -102,7 +102,7 @@ export async function migrateWorkspaceToKling30({
     const jobDirectory = String(queueJob.jobDirectory || '');
     if (!jobDirectory) throw new Error('JOB sem jobDirectory.');
 
-    for (const file of ['job.json', 'prompt.txt', 'checklist.txt', 'state.json']) {
+    for (const file of ['job.json', 'prompt.txt', 'retry-prompt.txt', 'checklist.txt', 'state.json']) {
       await backupFile(workspaceRoot, backupRoot, path.posix.join(jobDirectory, file));
     }
 
@@ -127,6 +127,15 @@ export async function migrateWorkspaceToKling30({
     const checklistPath = path.join(workspaceRoot, jobDirectory, 'checklist.txt');
     if (await exists(checklistPath)) {
       await writeFile(checklistPath, transformPromptToKling30(await readFile(checklistPath, 'utf8')), 'utf8');
+    }
+
+    const retryPromptPath = path.join(workspaceRoot, jobDirectory, 'retry-prompt.txt');
+    if (await exists(retryPromptPath)) {
+      await writeFile(
+        retryPromptPath,
+        transformPromptToKling30(await readFile(retryPromptPath, 'utf8')),
+        'utf8',
+      );
     }
 
     const statePath = path.join(workspaceRoot, jobDirectory, 'state.json');
