@@ -125,8 +125,7 @@ describe('StagesExecutorStage - PhysicalActionIR integration', () => {
     expect(stage.physicalExecutionV2Error).toBeUndefined();
     expect(stage.physicalExecutionPlanV2).toMatchObject({
       metadata: {
-        source: 'LEGACY_PHYSICAL_ACTION_IR',
-        confidence: 'LOW',
+        source: 'NATIVE_V2',
       },
       intent: {
         canonicalProgress: {
@@ -136,6 +135,8 @@ describe('StagesExecutorStage - PhysicalActionIR integration', () => {
       },
     });
     expect(stage.physicalExecutionPlanV2?.intent.physicalProgress).toBeUndefined();
+    expect(stage.physicalExecutionPlanV2?.metadata.limitations)
+      .toContain('PHYSICAL_PROGRESS_MEASURE_NOT_AVAILABLE_FROM_CURRENT_BLUEPRINT');
     expect(stage.physicalSimulationV2).toBeDefined();
     expect(stage.physicalSimulationV2?.commitAvailable).toBe(false);
   });
