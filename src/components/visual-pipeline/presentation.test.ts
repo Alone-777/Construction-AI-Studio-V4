@@ -258,7 +258,9 @@ describe('operational visual pipeline presentation', () => {
     expect(useVisualPipelineStore.getState().activeVideoJobKey).toBe(first.key);
     expect(useVisualPipelineStore.getState().runs[first.key].currentPhase).toBe('VIDEO_REQUEST_READY');
 
-    const second = await imageValidated(1);
+    const second = await imageValidatedIndependent(
+      first.project.id + '-firefly-lock-second',
+    );
     useVisualPipelineStore.getState().approveImage(second.key);
     expect(
       useVisualPipelineStore.getState().runs[second.key].currentPhase,
@@ -404,6 +406,37 @@ async function imageValidated(index = 0) {
   const value = await imageSubmitted(index);
   await useVisualPipelineStore.getState().validateImage(value.key, IMAGE_OK);
   return value;
+}
+
+async function imageValidatedIndependent(projectId: string) {
+  const base = createCabanaDoRiachoProject();
+  const project = { ...base, id: projectId };
+  const pair = project.scenes
+    .flatMap(scene => scene.stages.map(stage => ({ scene, stage })))
+    .find(item =>
+      item.stage.decision &&
+      item.stage.worldStateBefore &&
+      item.stage.worldStateAfter
+    );
+  if (!pair) throw new Error('Independent project has no committed stage.');
+
+  const key = visualPipelineKey(
+    project.id,
+    pair.scene.id,
+    String(pair.stage.percentage),
+  );
+  useVisualPipelineStore.getState().start(
+    key,
+    createVisualPipelineStartDraft(project, pair.scene, pair.stage),
+  );
+  await useVisualPipelineStore.getState().generateImage(key);
+  useVisualPipelineStore.getState().submitImage(
+    key,
+    imageAsset('independent-firefly-lock'),
+  );
+  await useVisualPipelineStore.getState().validateImage(key, IMAGE_OK);
+
+  return { project, key, run: useVisualPipelineStore.getState().runs[key] };
 }
 
 async function videoManualReady() {
