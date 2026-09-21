@@ -77,6 +77,8 @@ export interface Stage {
   prompts?: {visual: string;
     nanoBanana: string;
     kling: string;
+    /** Identifies whether animation text came from causal V2 or the compatibility generator. */
+    animationSource?: 'PHYSICAL_EXECUTION_V2' | 'LEGACY_KLING';
   };
   /** Status do estágio após fiscalização: 'approved' | 'rejected' | undefined */
   status?: 'approved' | 'rejected';
