@@ -21,15 +21,18 @@ import {
   type VisualEvaluationCategory,
 } from '../evaluation/visual-evaluation';
 
-export interface VisualReconstructionRequest {
-  imageData: string;
-  mimeType: string;
+export interface VisualBlueprintRequest {
   userContext?: string;
   name?: string;
-  imageName?: string;
-  imageSize?: number;
   environment?: EnvironmentPreset;
   construction?: string;
+}
+
+export interface VisualReconstructionRequest extends VisualBlueprintRequest {
+  imageData: string;
+  mimeType: string;
+  imageName?: string;
+  imageSize?: number;
   providerModel?: string;
   evaluationCategory?: VisualEvaluationCategory;
 }
@@ -64,7 +67,7 @@ function claimNarrative(analysis: NormalizedVisualAnalysis): string {
 
 export function interpretVisualAnalysis(
   analysis: NormalizedVisualAnalysis,
-  request: VisualReconstructionRequest,
+  request: VisualBlueprintRequest,
 ): ProjectDescriptionInput {
   if (!analysis.summary.trim()) throw new Error('A interpretação visual não possui resumo verificável.');
   const materials = claimValue(analysis.claims.apparentMaterials) ?? [];
@@ -103,7 +106,7 @@ function defaultEvaluationCategory(construction: string): VisualEvaluationCatego
 function compileReviewedAnalysisToBlueprint(
   analysis: NormalizedVisualAnalysis,
   reviewedClaims: ReviewedVisualClaims,
-  request: VisualReconstructionRequest,
+  request: VisualBlueprintRequest,
 ): VisualBlueprintResult {
   const compiled = compileDescriptionToBlueprint(interpretVisualAnalysis(analysis, request));
   const operationEvidence: Record<string, NonNullable<BlueprintOperation['visualBasis']>> = {};
@@ -143,7 +146,7 @@ function compileReviewedAnalysisToBlueprint(
 
 export function compileVisualReviewToBlueprint(
   session: VisualReviewSession,
-  request: VisualReconstructionRequest,
+  request: VisualBlueprintRequest,
 ): VisualBlueprintResult {
   return compileReviewedAnalysisToBlueprint(
     toNormalizedReviewedAnalysis(session),
@@ -154,7 +157,7 @@ export function compileVisualReviewToBlueprint(
 
 export function compileVisualAnalysisToBlueprint(
   analysis: NormalizedVisualAnalysis,
-  request: VisualReconstructionRequest,
+  request: VisualBlueprintRequest,
 ): VisualBlueprintResult {
   return compileVisualReviewToBlueprint(createVisualReviewSession(analysis), request);
 }
