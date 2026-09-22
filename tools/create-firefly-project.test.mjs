@@ -24,7 +24,7 @@ describe('createFireflyProject', () => {
       createdAt: new Date('2026-09-20T20:00:00.000Z'),
     });
 
-    expect(result.totalJobs).toBe(32);
+    expect(result.totalJobs).toBe(36);
     expect(result.firstJob.durationSeconds).toBe(15);
     expect(result.firstJob.sourceReady).toBe(false);
     expect(result.firstJob.expectedOfficialSource).toBe('inputs/official/job-001-source.png');
@@ -48,6 +48,9 @@ describe('createFireflyProject', () => {
     expect(firstJob.platform).toBe('ADOBE_FIREFLY');
     expect(firstJob.model).toBe('KLING_3_0');
     expect(firstJob.sourceImagePrompt).toContain('OFFICIAL');
+    expect(firstJob.sourceImagePrompt).toContain('Show exactly one primary worker');
+    expect(firstJob.operationType).toBe('marcacao');
+    expect(firstJob.operationName).toBe('Marcação da implantação');
     expect(firstJob.source.kind).toBe('KEYFRAME');
     expect(manifest.executionPolicy.primarySchema).toBe('construction-physical-execution-plan/2');
     expect(manifest.executionPolicy.promptSource).toBe('PHYSICAL_EXECUTION_V2');
