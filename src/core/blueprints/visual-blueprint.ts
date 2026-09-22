@@ -93,7 +93,7 @@ function sourceClaimForOperation(
   if (/parede|fechamento|conten[cç][aã]o/.test(type)) return { field: 'walls', claim: claims.walls };
   if (/cobertura|telhado/.test(type)) return { field: 'roof', claim: claims.roof };
   if (/porta|janela|acesso/.test(type)) return { field: 'openings', claim: claims.openings };
-  if (/limpeza|escava[cç][aã]o|prepara[cç][aã]o/.test(type)) return { field: 'terrain', claim: claims.terrain };
+  if (/marca[cç][aã]o|limpeza|escava[cç][aã]o|prepara[cç][aã]o/.test(type)) return { field: 'terrain', claim: claims.terrain };
   return { field: 'structure', claim: claims.structure };
 }
 
