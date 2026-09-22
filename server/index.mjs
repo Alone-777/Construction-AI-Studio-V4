@@ -2,12 +2,6 @@ import { createServer } from 'node:http';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  ProviderResponseError,
-  ProviderUnavailableError,
-} from './providers/provider-utils.mjs';
-import { VisualSchemaValidationError } from '../shared/visual-schema.mjs';
-import { recordSafeVisualDiagnostic } from './visual-diagnostics.mjs';
 
 const PORT = Number(process.env.CONSTRUCTION_AI_PORT || 8787);
 const HOST = process.env.CONSTRUCTION_AI_HOST || '127.0.0.1';
@@ -21,9 +15,6 @@ const initialImageMimeTypes = new Map([
   ['.png', 'image/png'],
   ['.webp', 'image/webp'],
 ]);
-// External visual providers are intentionally disabled in the operational runtime.
-// Initial-image interpretation is performed by ChatGPT through the guarded Relay flow.
-const providers = [];
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -59,16 +50,6 @@ async function readJsonBody(request) {
   } catch {
     throw new Error('Corpo JSON inválido.');
   }
-}
-
-function providerDescriptors() {
-  return providers.map(provider => ({
-    id: provider.id,
-    name: provider.name,
-    kind: provider.kind,
-    configured: provider.configured,
-    model: provider.model,
-  }));
 }
 
 async function readInitialImage() {
@@ -115,32 +96,6 @@ async function readInitialImage() {
   };
 }
 
-function providerErrorResponse(error) {
-  if (error instanceof ProviderUnavailableError) {
-    return { status: 503, body: { error: error.message, code: error.code } };
-  }
-  if (error instanceof VisualSchemaValidationError) {
-    return {
-      status: 422,
-      body: {
-        error: 'O provider retornou dados incompatíveis com o schema visual.',
-        code: 'SCHEMA_INCOMPATIBLE',
-        issues: error.issues,
-      },
-    };
-  }
-  if (error instanceof ProviderResponseError) {
-    return { status: error.httpStatus || 502, body: { error: error.message, code: error.code } };
-  }
-  return {
-    status: 400,
-    body: {
-      error: error instanceof Error ? error.message : 'Requisição visual inválida.',
-      code: 'INVALID_REQUEST',
-    },
-  };
-}
-
 async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/visual/initial-image') {
     try {
@@ -151,17 +106,6 @@ async function handleApi(request, response, pathname) {
         code: 'INITIAL_IMAGE_ERROR',
       });
     }
-    return true;
-  }
-  if (request.method === 'GET' && pathname === '/api/visual/providers') {
-    json(response, 200, { providers: providerDescriptors() });
-    return true;
-  }
-  if (request.method === 'POST' && pathname === '/api/visual/analyze') {
-    json(response, 410, {
-      error: 'Providers visuais externos foram removidos do fluxo operacional. Use o intake da Imagem Inicial pelo Operator Panel + Relay.',
-      code: 'EXTERNAL_VISUAL_PROVIDERS_DISABLED',
-    });
     return true;
   }
   return pathname.startsWith('/api/');
@@ -208,6 +152,5 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(PORT, HOST, () => {
-  const configured = providerDescriptors().filter(provider => provider.configured).map(provider => provider.id);
-  console.log(`[construction-ai] http://${HOST}:${PORT} | providers: ${configured.join(', ') || 'nenhum configurado'}`);
+  console.log(`[construction-ai] http://${HOST}:${PORT} | visual intake: relay/chatgpt`);
 });
