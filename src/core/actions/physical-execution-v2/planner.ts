@@ -289,7 +289,7 @@ function actionInstruction(
       + ', adjust the line by hand, and leave a clear aligned perimeter visibly marked on the ground.';
   }
   if (method === 'CLEAR') {
-    return 'Use short repeated cut/scrape contacts only inside the marked footprint' + toolText
+    return 'Cut/scrape only the bounded current patch inside the marked footprint using short repeated contacts' + toolText
       + '; after each contact pull or move cut vegetation aside, progressively expose the ground, keep the marking stakes and rope visible, and leave all vegetation outside the marked perimeter untouched.';
   }
   if (method === 'EXCAVATE') {
