@@ -136,7 +136,8 @@ function inferMaterials(description, construction) {
 function operationPlan(construction) {
   if (construction === 'ponte') {
     return [
-      ['preparacao', 'Preparação seletiva do local', 'delimitar a implantação e remover somente obstáculos autorizados'],
+      ['marcacao', 'Marcação da implantação', 'medir o perímetro, posicionar estacas visíveis e tensionar corda entre elas'],
+      ['limpeza', 'Limpeza seletiva da área marcada', 'remover somente vegetação e obstáculos dentro da implantação marcada, preservando estacas, cordas e área externa'],
       ['apoios', 'Execução dos apoios', 'escavar e consolidar os apoios estruturais'],
       ['vigas', 'Montagem das vigas longitudinais', 'posicionar, alinhar e travar as vigas entre os apoios'],
       ['tabuleiro', 'Montagem do tabuleiro', 'fixar sequencialmente os módulos do tabuleiro'],
@@ -146,7 +147,8 @@ function operationPlan(construction) {
 
   if (construction === 'piscina_natural') {
     return [
-      ['preparacao', 'Preparação seletiva do local', 'delimitar a implantação e remover somente obstáculos autorizados'],
+      ['marcacao', 'Marcação da implantação', 'medir o perímetro, posicionar estacas visíveis e tensionar corda entre elas'],
+      ['limpeza', 'Limpeza seletiva da área marcada', 'remover somente vegetação e obstáculos dentro da implantação marcada, preservando estacas, cordas e área externa'],
       ['escavacao', 'Escavação controlada', 'escavar o volume por setores e manter o solo fisicamente rastreável'],
       ['base', 'Regularização da base', 'regularizar e compactar a base progressivamente'],
       ['contencao', 'Construção da contenção', 'assentar a contenção por trechos visíveis'],
@@ -156,7 +158,8 @@ function operationPlan(construction) {
 
   if (construction === 'torre') {
     return [
-      ['preparacao', 'Preparação seletiva do local', 'delimitar a implantação e remover somente obstáculos autorizados'],
+      ['marcacao', 'Marcação da implantação', 'medir o perímetro, posicionar estacas visíveis e tensionar corda entre elas'],
+      ['limpeza', 'Limpeza seletiva da área marcada', 'remover somente vegetação e obstáculos dentro da implantação marcada, preservando estacas, cordas e área externa'],
       ['fundacao', 'Execução das fundações', 'escavar e consolidar cada fundação'],
       ['pilares', 'Elevação dos pilares', 'elevar, aprumar, escorar e fixar os pilares'],
       ['travamento', 'Montagem dos travamentos', 'fixar travessas e contraventamentos'],
@@ -166,7 +169,8 @@ function operationPlan(construction) {
   }
 
   return [
-    ['preparacao', 'Preparação seletiva do local', 'delimitar a implantação e remover somente obstáculos autorizados'],
+    ['marcacao', 'Marcação da implantação', 'medir o perímetro, posicionar estacas visíveis e tensionar corda entre elas'],
+    ['limpeza', 'Limpeza seletiva da área marcada', 'remover somente vegetação e obstáculos dentro da implantação marcada, preservando estacas, cordas e área externa'],
     ['fundacao', 'Execução das fundações', 'escavar e assentar progressivamente as fundações'],
     ['base', 'Montagem da base e piso', 'montar e fixar progressivamente a base e o piso'],
     ['pilares', 'Elevação dos pilares', 'posicionar, aprumar e fixar progressivamente os pilares'],
@@ -282,7 +286,9 @@ function sourceImagePromptFor({
     'This image must represent the moment immediately BEFORE that operation starts.',
     'Show the preserved site, terrain and environment consistently, but no completed construction, no foundations, no floor, no pillars, no walls, no roof and no future components unless they are explicitly part of the true preconstruction environment.',
     'Keep one stable wide camera position suitable for the entire timelapse.',
-    'If a worker is visible, keep a single consistent worker identity and clothing ready to begin work.',
+    'Show exactly one primary worker in the frame with a stable, reusable identity, consistent face, body, hair and clothing for the whole project.',
+    'Place the worker naturally near the work area, ready to begin the first operation but not already performing it; keep the full body or most of the body readable for later continuity.',
+    'Only show tools or compact staging items that are physically justified for the first operation; do not preload future construction components.',
     'No magical objects, no premature construction, no temporal contradiction.',
     'The result becomes OFFICIAL temporal source for JOB 1 only after it is reviewed/accepted.',
   ].filter(Boolean).join(' ');
