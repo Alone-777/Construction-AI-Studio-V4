@@ -23,6 +23,7 @@ O agente é opt-in e permanece desativado enquanto nenhum provider estiver confi
 Fallback pago automático fica desligado por padrão. O roteador mantém cache por conteúdo/contexto/modelo, health score e circuit breaker sem persistir chaves ou dados base64 no arquivo de saúde.
 
 As variáveis aceitas estão documentadas em `.env.example`. Chaves reais nunca devem ser commitadas.
+O Operator Panel lê apenas as variáveis `VISUAL_FISCAL_*` do arquivo local `.env` do Studio ao iniciar cada análise; os valores não são exibidos no painel nem gravados nos relatórios.
 
 ## Contrato de execução
 
