@@ -205,10 +205,8 @@ export function VisualPipelineWorkspace() {
             </p>
           )}
           <button type="button" onClick={start} className="btn-primary mt-4"
-            disabled={sequenceBlocked || !initialImageDiscoveryDone}>
-            {!initialImageDiscoveryDone
-              ? 'Verificando Imagem Inicial…'
-              : sequenceBlocked ? 'Aguardando JOB anterior' : 'Iniciar pipeline visual'}
+            disabled={sequenceBlocked}>
+            {sequenceBlocked ? 'Aguardando JOB anterior' : 'Iniciar pipeline visual'}
           </button>
         </section>
       ) : (
