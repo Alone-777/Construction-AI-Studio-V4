@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
-import { access, copyFile, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { access, copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+
+import { validateAndNormalizeVisualAnalysis } from '../shared/visual-schema.mjs';
 
 import {
   MANUAL_KLING_PROMPT_MAX_CHARS,
@@ -293,6 +296,28 @@ async function writeJson(filePath, value) {
   await writeFile(filePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
 }
 
+async function readApprovedInitialReview(filePath, initialImagePath) {
+  if (!filePath) return null;
+  const raw = JSON.parse(await readFile(path.resolve(filePath), 'utf8'));
+  if (raw?.verdict !== 'APPROVED') {
+    throw new Error('A revisão da Imagem Inicial não está APPROVED.');
+  }
+  const bytes = await readFile(initialImagePath);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  if (String(raw.imageSha256 || '').toLowerCase() !== sha256) {
+    throw new Error('A revisão aprovada não corresponde à Imagem Inicial atual.');
+  }
+  if (!raw.analysis || typeof raw.analysis !== 'object' || Array.isArray(raw.analysis)) {
+    throw new Error('A revisão aprovada não contém análise visual estruturada.');
+  }
+  const visualAnalysis = validateAndNormalizeVisualAnalysis(raw.analysis, 'chatgpt-relay');
+  return {
+    review: raw,
+    visualAnalysis,
+    imageSha256: sha256,
+  };
+}
+
 async function findInitialImage(projectRoot) {
   const root = path.join(projectRoot, 'Imagem Inicial');
   const entries = await readdir(root, { withFileTypes: true });
@@ -318,6 +343,7 @@ export async function createFireflyProject({
   projectRoot,
   description,
   name,
+  initialReviewFile,
   createdAt = new Date(),
 }) {
   if (!projectRoot) throw new Error('projectRoot é obrigatório.');
@@ -325,6 +351,7 @@ export async function createFireflyProject({
 
   const resolvedRoot = path.resolve(projectRoot);
   const initial = await findInitialImage(resolvedRoot);
+  const reviewedInitial = await readApprovedInitialReview(initialReviewFile, initial.absolute);
   const inferredConstruction = inferConstruction(description);
   const inferredEnvironment = inferEnvironment(description);
   const title = String(name || '').trim() ||
@@ -332,6 +359,7 @@ export async function createFireflyProject({
   const v2Project = await compileManualVideoProjectV2({
     description,
     name: title,
+    visualAnalysis: reviewedInitial?.visualAnalysis ?? null,
   });
   const construction = v2Project.config.construction || inferredConstruction;
   const environment = v2Project.config.environment || inferredEnvironment;
@@ -342,6 +370,7 @@ export async function createFireflyProject({
     operation.id,
     operation.name,
     operation.physicalAction,
+    operation.visualBasis ?? null,
   ]);
   const segmentsByOperation = new Map(
     operations.map(operation => [
@@ -380,6 +409,7 @@ export async function createFireflyProject({
     initialImageName: initial.name,
     firstOperation: operations[0],
   });
+  const reviewedVisualSummary = reviewedInitial?.visualAnalysis?.summary || null;
 
   const jobs = [];
   let previousJob = null;
@@ -430,6 +460,8 @@ export async function createFireflyProject({
         operationType: operation[0],
         operationName: operation[1],
         physicalAction: v2Segment.physicalAction || operation[2],
+        visualBasis: operation[3] ?? null,
+        planningSource: v2Project.planningSource,
         promptSource: 'PHYSICAL_EXECUTION_V2',
         physicalExecutionV2: {
           schema: 'construction-manual-physical-execution-v2/1',
@@ -536,6 +568,16 @@ export async function createFireflyProject({
     projectName: title,
     createdAt: createdAt.toISOString(),
     description: String(description).trim(),
+    planningSource: v2Project.planningSource,
+    visualAnalysis: reviewedInitial ? {
+      providerId: reviewedInitial.visualAnalysis.providerId,
+      schemaVersion: reviewedInitial.visualAnalysis.schemaVersion,
+      summary: reviewedVisualSummary,
+      imageSha256: reviewedInitial.imageSha256,
+      claims: reviewedInitial.visualAnalysis.claims,
+      uncertainties: reviewedInitial.visualAnalysis.uncertainties,
+      technicalUnknowns: reviewedInitial.visualAnalysis.technicalUnknowns,
+    } : null,
     construction,
     environment,
     materials,
@@ -566,11 +608,12 @@ export async function createFireflyProject({
       requireTerminalEvidence: true,
       rejectPantomimeWithoutPhysicalChange: true,
     },
-    operations: operations.map(([id, operationName, physicalAction], index) => ({
+    operations: operations.map(([id, operationName, physicalAction, visualBasis], index) => ({
       sequence: index + 1,
       id,
       name: operationName,
       physicalAction,
+      visualBasis,
       promptSource: 'PHYSICAL_EXECUTION_V2',
     })),
   };
@@ -603,6 +646,8 @@ export async function createFireflyProject({
     initialImage: {
       name: initial.name,
       size: initialInfo.size,
+      sha256: reviewedInitial?.imageSha256 ?? null,
+      reviewVerdict: reviewedInitial?.review?.verdict ?? null,
     },
   };
 }
@@ -613,6 +658,7 @@ async function main() {
     projectRoot: args['project-root'],
     description: args.description,
     name: args.name,
+    initialReviewFile: args['initial-review-file'],
   });
   process.stdout.write(JSON.stringify(result) + '\n');
 }
