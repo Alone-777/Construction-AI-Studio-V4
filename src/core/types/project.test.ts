@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createCabanaDoRiachoProject } from '../demo/cabana-do-riacho';
+import { createGenericConstructionProject } from '../__tests__/fixtures/generic-construction-project';
 import {
   DEFAULT_VISUAL_ASPECT_RATIO,
   upgradeLegacyDefaultVisualAspectRatio,
 } from './project';
 
 function legacyDefaultProject() {
-  const project = structuredClone(createCabanaDoRiachoProject());
+  const project = structuredClone(createGenericConstructionProject());
   const legacyAspectRatio = 16 / 9;
   project.visualDNA.camera.defaultConfig.aspectRatio = legacyAspectRatio;
   project.visualDNA.camera.cameraA.aspectRatio = legacyAspectRatio;
