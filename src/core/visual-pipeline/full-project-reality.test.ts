@@ -22,7 +22,7 @@ import {
   createVisualValidationRequest,
   type VisualObservationProvider,
 } from '../visual-validation';
-import { createCabanaDoRiachoProject } from '../demo/cabana-do-riacho';
+import { createGenericConstructionProject } from '../__tests__/fixtures/generic-construction-project';
 import type { Project, Scene, Stage } from '../types';
 import {
   createVisualPipelineOrchestrator,
@@ -54,7 +54,7 @@ const VIDEO_WRONG_ACTION = 'reality-video-wrong-action';
 
 describe('full project visual reality hardening', () => {
   it('runs eight ordered stages with continuity, retries and no physical mutation', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const beforeProject = structuredClone(project);
     const stages = orderedCommittedStages(project).slice(0, 8);
     expect(stages).toHaveLength(8);
@@ -156,7 +156,7 @@ describe('full project visual reality hardening', () => {
   });
 
   it('blocks cross-stage submissions, evidence, correction plans and video assets', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const stages = orderedCommittedStages(project).slice(0, 8);
     const manualFlow = realityFlow({ manualGeneration: true });
     let runA = unwrap(manualFlow.start(startInput(project, stages[0], createVisualReferenceMemory(), true)));
@@ -202,8 +202,8 @@ describe('full project visual reality hardening', () => {
   });
 
   it('blocks cross-project references, submissions and validation evidence', async () => {
-    const projectA = createCabanaDoRiachoProject();
-    const projectB: Project = { ...createCabanaDoRiachoProject(), id: 'reality-project-b' };
+    const projectA = createGenericConstructionProject();
+    const projectB: Project = { ...createGenericConstructionProject(), id: 'reality-project-b' };
     const stageA = orderedCommittedStages(projectA)[0];
     const stageB = orderedCommittedStages(projectB)[0];
     const mockFlow = realityFlow();
@@ -249,7 +249,7 @@ describe('full project visual reality hardening', () => {
   });
 
   it('keeps duplicate commands idempotent and preserves manual pause/resume', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const entry = orderedCommittedStages(project)[1];
     const flow = realityFlow({ manualGeneration: true });
     let run = unwrap(flow.start(startInput(project, entry, createVisualReferenceMemory(), true)));
@@ -291,7 +291,7 @@ describe('full project visual reality hardening', () => {
   });
 
   it('stops image and video retries at maxAttempts without approval or temporal advance', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const entry = orderedCommittedStages(project)[2];
     const before = structuredClone(project);
     const flow = realityFlow({ maxImageAttempts: 3, maxVideoAttempts: 3 });
@@ -328,7 +328,7 @@ describe('full project visual reality hardening', () => {
   });
 
   it('rejects a wrong future action and creates a narrowly bound correction plan', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const entry = orderedCommittedStages(project)
       .find(item => item.scene.operationId === 'op_vigas' && item.stage.percentage > 0)!;
     const flow = realityFlow();
@@ -353,7 +353,7 @@ describe('full project visual reality hardening', () => {
   });
 
   it('completes the actual first and last project stages without invented references', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const before = structuredClone(project);
     const stages = orderedCommittedStages(project);
     const first = stages[0];
@@ -397,7 +397,7 @@ describe('full project visual reality hardening', () => {
   });
 
   it('keeps 120 synthetic stages ordered, deterministic and free of future references', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const base = startInput(
       project,
       orderedCommittedStages(project)[0],
@@ -431,7 +431,7 @@ describe('full project visual reality hardening', () => {
   });
 
   it('keeps UI adapters human-readable across operational and failure states', async () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const entry = orderedCommittedStages(project)[0];
     const flow = realityFlow({ manualGeneration: true });
     let run = unwrap(flow.start(startInput(project, entry, createVisualReferenceMemory(), true)));
