@@ -75,6 +75,10 @@ Regras:
 - `APPROVED` libera a criação do projeto;
 - trocar a imagem invalida a revisão anterior.
 
+Para `APPROVED`, a revisão deve conter análise visual estruturada `schemaVersion=1.0.0`. Cada claim usa `FACT`, `HYPOTHESIS` ou `UNKNOWN` e mantém evidência/confiança. O conjunto canônico cobre: tipo de construção, ambiente, terreno, curso d'água, vegetação, componentes visíveis, materiais aparentes, estrutura, fundação, piso, paredes, cobertura, aberturas, áreas externas, caminhos, drenagem, relações espaciais, elementos naturais, itens de preservação e grau aparente de conclusão.
+
+Essa análise estruturada alimenta diretamente o compilador visual do blueprint. A descrição textual é contexto complementar; não é mais a única fonte do mapa da obra.
+
 A Imagem Inicial continua sendo `MANUAL_REFERENCE`: orienta design, proporções, materiais, terreno, ambiente e identidade, mas nunca substitui o estado temporal OFFICIAL e nunca autoriza elementos futuros.
 
 O runtime operacional não depende de Gemini, OpenAI API, Groq ou provider visual externo para essa análise.
