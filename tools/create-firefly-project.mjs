@@ -244,14 +244,40 @@ function sourceImagePromptFor({
   materials,
   initialImageName,
   firstOperation,
+  visualAnalysis,
+  sourcePreparation,
 }) {
+  const factFields = [
+    'environment',
+    'terrain',
+    'vegetation',
+    'spatialRelations',
+    'naturalElements',
+    'preservationElements',
+  ];
+  const verifiedContext = visualAnalysis
+    ? factFields
+        .map(field => [field, visualAnalysis.claims?.[field]])
+        .filter(([, claim]) => claim?.classification === 'FACT' && claim.value !== null)
+        .map(([field, claim]) => `${field}=${Array.isArray(claim.value) ? claim.value.join(', ') : claim.value}`)
+    : [];
+  const logistics = sourcePreparation?.candidateImageInstruction
+    ? String(sourcePreparation.candidateImageInstruction)
+        .replace('[SHADOW SOURCE PREPARATION PROPOSAL]', '')
+        .replace(/Requires review before becoming an OFFICIAL source; this instruction changes no image\/state\./gi, '')
+        .trim()
+    : '';
+
   return [
     '[OFFICIAL SOURCE IMAGE PREPARATION]',
     'Create a photorealistic 16:9 still image for the canonical START state of JOB 1.',
     `Project intent: ${description.trim()}.`,
+    visualAnalysis ? `Approved visual reading: ${compactField(visualAnalysis.summary, 420)}.` : '',
+    verifiedContext.length ? `Preserve verified reference facts: ${compactList(verifiedContext, 6, 120)}.` : '',
     `Use ${initialImageName} strictly as MANUAL_REFERENCE for compatible design identity, proportions, materials, terrain, vegetation, environmental landmarks and lighting logic.`,
     'The MANUAL_REFERENCE is not temporal authority. Do not copy any construction component that belongs to a future state.',
     `Environment identity: ${environment}. Material/design vocabulary: ${materials.join(', ')}.`,
+    logistics ? `Initial logistics preparation: ${compactField(logistics, 650)}` : '',
     `The upcoming first physical operation is: ${firstOperation[1]} — ${firstOperation[2]}.`,
     'This image must represent the moment immediately BEFORE that operation starts.',
     'Show the preserved site, terrain and environment consistently, but no completed construction, no foundations, no floor, no pillars, no walls, no roof and no future components unless they are explicitly part of the true preconstruction environment.',
@@ -259,7 +285,7 @@ function sourceImagePromptFor({
     'If a worker is visible, keep a single consistent worker identity and clothing ready to begin work.',
     'No magical objects, no premature construction, no temporal contradiction.',
     'The result becomes OFFICIAL temporal source for JOB 1 only after it is reviewed/accepted.',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 function negativeConstraints(future) {
@@ -408,6 +434,8 @@ export async function createFireflyProject({
     materials,
     initialImageName: initial.name,
     firstOperation: operations[0],
+    visualAnalysis: reviewedInitial?.visualAnalysis ?? null,
+    sourcePreparation: v2Project.segments[0]?.logisticsShadow?.sourcePreparation ?? null,
   });
   const reviewedVisualSummary = reviewedInitial?.visualAnalysis?.summary || null;
 
