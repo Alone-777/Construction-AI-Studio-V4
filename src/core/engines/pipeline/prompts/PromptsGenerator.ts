@@ -12,14 +12,14 @@ import { worldStateToVisualSceneState } from '../../../visual/VisualSceneState';
 import { compileVisualScene } from '../../../visual/VisualPromptCompiler';
 import { buildStageVisualStateSnapshots } from '../../../visual-state/visual-state-snapshot';
 import { compileCanonicalImagePromptSpec } from '../../../image-prompts/canonical-image-prompt-compiler';
-import { adaptCanonicalImagePromptToNanoBanana } from '../../../image-prompts/nano-banana-prompt-adapter';
+import { adaptCanonicalImagePromptToProviderNeutral } from '../../../image-prompts/provider-neutral-image-prompt-adapter';
 import type { PipelineContext, StageResult } from '../types';
 import type { Camera } from '../../../types/camera';
 import type { LightingConfig, CameraConfig, LensConfig, SceneMetadata } from '../../../visual/VisualSceneState';
 
 /**
  * Stage 8: Prompts Generation
- * Generates Visual, NanoBanana and Kling prompts for each stage
+ * Generates visual, provider-neutral image and Kling prompts for each stage
  */
 export class PromptsGeneratorStage {
   name = 'prompts';
@@ -188,7 +188,7 @@ export class PromptsGeneratorStage {
             return {
               success: false,
               error: new Error(
-                `Missing worldStateAfter for executed stage ${stage.percentage}% of scene ${scene.id}. Canonical Nano Banana prompt cannot be generated.`
+                `Missing worldStateAfter for executed stage ${stage.percentage}% of scene ${scene.id}. Canonical image prompt cannot be generated.`
               ),
             };
           }
@@ -196,7 +196,7 @@ export class PromptsGeneratorStage {
             return {
               success: false,
               error: new Error(
-                `Missing PhysicalActionIR for executed stage ${stage.percentage}% of scene ${scene.id}. Legacy Nano Banana fallback is disabled.`
+                `Missing PhysicalActionIR for executed stage ${stage.percentage}% of scene ${scene.id}. Legacy provider-specific image fallback is disabled.`
               ),
             };
           }
@@ -204,7 +204,7 @@ export class PromptsGeneratorStage {
             return {
               success: false,
               error: new Error(
-                `Missing committed decision for executed stage ${stage.percentage}% of scene ${scene.id}. Official Nano Banana prompt cannot be generated.`
+                `Missing committed decision for executed stage ${stage.percentage}% of scene ${scene.id}. Official image prompt cannot be generated.`
               ),
             };
           }
@@ -239,7 +239,7 @@ export class PromptsGeneratorStage {
               ),
             };
           }
-          const nanoBananaOutput = adaptCanonicalImagePromptToNanoBanana(canonicalSpec, {
+          const imagePromptOutput = adaptCanonicalImagePromptToProviderNeutral(canonicalSpec, {
             mode: 'GENERATE',
             profile: 'FULL',
           });
@@ -279,7 +279,7 @@ export class PromptsGeneratorStage {
               context.project?.constructionState
             ).prompt,
 
-            nanoBanana: `${nanoBananaOutput.prompt}\n\n${nanoBananaOutput.negativePrompt}`,
+            image: `${imagePromptOutput.prompt}\n\n${imagePromptOutput.negativePrompt}`,
 
             kling: animationPrompt,
             animationSource,
@@ -315,11 +315,11 @@ export class PromptsGeneratorStage {
         const unexecuted = !stage.worldStateBefore && !stage.worldStateAfter &&
           !stage.physicalActionIR && !stage.decision;
         if (stage.status === 'rejected' || unexecuted) {
-          if (stage.prompts?.nanoBanana) {
+          if (stage.prompts?.image) {
             return {
               success: false,
               error: new Error(
-                `Stage ${stage.percentage}% of scene ${scene.id} must not have an official Nano Banana prompt`
+                `Stage ${stage.percentage}% of scene ${scene.id} must not have an official image prompt`
               ),
             };
           }
@@ -327,7 +327,7 @@ export class PromptsGeneratorStage {
         }
         if (
           !stage.prompts?.visual ||
-          !stage.prompts?.nanoBanana ||
+          !stage.prompts?.image ||
           !stage.prompts?.kling
         ) {
           return {
