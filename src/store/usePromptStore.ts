@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  PromptPlatform, GeneratedPrompt, NanoBananaPrompt, KlingPrompt, PromptConfig,
+  PromptPlatform, GeneratedPrompt, ProviderNeutralImagePrompt, KlingPrompt, PromptConfig,
 } from '../core/types';
 
 interface PromptState {
@@ -8,7 +8,7 @@ interface PromptState {
   config: PromptConfig;
 
   /* ─── Prompts gerados ─── */
-  nanoBananaPrompt: NanoBananaPrompt | null;
+  imagePrompt: ProviderNeutralImagePrompt | null;
   klingPrompt: KlingPrompt | null;
   generatedPrompts: GeneratedPrompt[];
 
@@ -18,7 +18,7 @@ interface PromptState {
 
   /* ─── Ações ─── */
   setConfig: (config: Partial<PromptConfig>) => void;
-  setNanoBananaPrompt: (prompt: NanoBananaPrompt) => void;
+  setProviderNeutralImagePrompt: (prompt: ProviderNeutralImagePrompt) => void;
   setKlingPrompt: (prompt: KlingPrompt) => void;
   addGeneratedPrompt: (prompt: GeneratedPrompt) => void;
   clearPrompts: () => void;
@@ -34,7 +34,7 @@ export const usePromptStore = create<PromptState>((set) => ({
     maxCharacters: 1400,
     autoOptimize: false,
   },
-  nanoBananaPrompt: null,
+  imagePrompt: null,
   klingPrompt: null,
   generatedPrompts: [],
   editedText: '',
@@ -44,7 +44,7 @@ export const usePromptStore = create<PromptState>((set) => ({
     config: { ...s.config, ...updates },
   })),
 
-  setNanoBananaPrompt: (prompt) => set({ nanoBananaPrompt: prompt }),
+  setProviderNeutralImagePrompt: (prompt) => set({ imagePrompt: prompt }),
   setKlingPrompt: (prompt) => set({ klingPrompt: prompt }),
 
   addGeneratedPrompt: (prompt) => set((s) => ({
@@ -52,7 +52,7 @@ export const usePromptStore = create<PromptState>((set) => ({
   })),
 
   clearPrompts: () => set({
-    nanoBananaPrompt: null,
+    imagePrompt: null,
     klingPrompt: null,
     generatedPrompts: [],
     editedText: '',
