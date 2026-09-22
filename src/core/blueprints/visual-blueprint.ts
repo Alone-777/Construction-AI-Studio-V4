@@ -6,11 +6,6 @@ import {
 } from './description-blueprint';
 import { createProjectFromBlueprint, type BlueprintOperation } from '../engines/pipeline';
 import type {
-  VisualAnalysisRequest,
-  VisualAnalysisResult,
-  VisualProvider,
-} from '../providers/visual-provider';
-import type {
   NormalizedVisualAnalysis,
   VisualClaim,
   VisualClaims,
@@ -26,7 +21,10 @@ import {
   type VisualEvaluationCategory,
 } from '../evaluation/visual-evaluation';
 
-export interface VisualReconstructionRequest extends VisualAnalysisRequest {
+export interface VisualReconstructionRequest {
+  imageData: string;
+  mimeType: string;
+  userContext?: string;
   name?: string;
   imageName?: string;
   imageSize?: number;
@@ -65,7 +63,7 @@ function claimNarrative(analysis: NormalizedVisualAnalysis): string {
 }
 
 export function interpretVisualAnalysis(
-  analysis: VisualAnalysisResult,
+  analysis: NormalizedVisualAnalysis,
   request: VisualReconstructionRequest,
 ): ProjectDescriptionInput {
   if (!analysis.summary.trim()) throw new Error('A interpretação visual não possui resumo verificável.');
@@ -221,17 +219,3 @@ export function createProjectFromVisualAnalysis(
   return createProjectFromVisualReview(createVisualReviewSession(analysis), request);
 }
 
-/** Pipeline image → provider → schema → blueprint genérico → orquestrador. */
-export async function createProjectFromVisualProvider(
-  provider: VisualProvider,
-  request: VisualReconstructionRequest,
-): Promise<Project> {
-  if (!provider.descriptor.configured) {
-    throw new Error(`Provider visual '${provider.descriptor.id}' não está configurado.`);
-  }
-  const analysis = await provider.analyze(request);
-  return createProjectFromVisualAnalysis(analysis, {
-    ...request,
-    providerModel: request.providerModel ?? provider.descriptor.model,
-  });
-}
