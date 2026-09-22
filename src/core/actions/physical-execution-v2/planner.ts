@@ -16,6 +16,7 @@ import {
 } from './types';
 
 type MethodKind =
+  | 'MARK'
   | 'CLEAR'
   | 'EXCAVATE'
   | 'ASSEMBLE'
@@ -51,6 +52,15 @@ function classifyMethod(
     operation.name,
     stage.physicalAction,
   ].join(' '));
+
+  if (
+    text.includes('marcacao')
+    || text.includes('marcar')
+    || text.includes('perimetro')
+    || text.includes('estaca')
+  ) {
+    return 'MARK';
+  }
 
   if (
     text.includes('escav')
@@ -152,6 +162,7 @@ function contactModeFor(
 }
 
 function methodRelation(method: MethodKind): string {
+  if (method === 'MARK') return 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED';
   if (method === 'CLEAR') return 'BOUNDED_SURFACE_CLEARING_PERSISTS';
   if (method === 'EXCAVATE') return 'BOUNDED_EXCAVATION_AND_SPOIL_PERSIST';
   if (method === 'APPLY') return 'APPLIED_MATERIAL_REMAINS_ON_TARGET';
@@ -175,6 +186,16 @@ function effectForMethod(
   stageDelta: number,
   materialUse?: Record<string, number>,
 ): PhysicalEffect {
+  if (method === 'MARK') {
+    return {
+      type: 'STATE_CHANGED',
+      entityId: targetId,
+      property: 'site-marking',
+      to: 'visible-aligned-perimeter',
+      zoneId,
+    };
+  }
+
   if (method === 'CLEAR') {
     return {
       type: 'SURFACE_REMOVED',
@@ -242,6 +263,7 @@ function actionKindForMethod(
   method: MethodKind,
   toolId?: string,
 ): PhysicalNodeKind {
+  if (method === 'MARK') return 'PLACE';
   if (method === 'CLEAR') {
     const canonical = canonicalToolId(toolId);
     return canonical === 'machete' || canonical === 'axe' ? 'CUT' : 'SCRAPE';
@@ -261,9 +283,14 @@ function actionInstruction(
   targetLabel: string,
 ): string {
   const toolText = toolId ? ' with the ' + toolId : '';
+  if (method === 'MARK') {
+    return 'Measure the bounded footprint, place visible corner stakes one by one, pull the rope taut between them'
+      + toolText
+      + ', adjust the line by hand, and leave a clear aligned perimeter visibly marked on the ground.';
+  }
   if (method === 'CLEAR') {
-    return 'Cut/scrape only the bounded current patch' + toolText
-      + ', visibly remove vegetation/debris, and leave the cleared surface exposed.';
+    return 'Use short repeated cut/scrape contacts only inside the marked footprint' + toolText
+      + '; after each contact pull or move cut vegetation aside, progressively expose the ground, keep the marking stakes and rope visible, and leave all vegetation outside the marked perimeter untouched.';
   }
   if (method === 'EXCAVATE') {
     return 'Excavate the bounded current section' + toolText
@@ -675,7 +702,7 @@ export function planPhysicalExecutionV2({
 
   const limitations = ['PHYSICAL_PROGRESS_MEASURE_NOT_AVAILABLE_FROM_CURRENT_BLUEPRINT'];
   if (!resolveToolAffordance(toolId)) limitations.push('TOOL_AFFORDANCE_UNKNOWN');
-  if (!materialId && !['CLEAR', 'EXCAVATE', 'OTHER'].includes(method)) {
+  if (!materialId && !['MARK', 'CLEAR', 'EXCAVATE', 'OTHER'].includes(method)) {
     limitations.push('MATERIAL_SOURCE_NOT_DECLARED');
   }
 
