@@ -20,6 +20,16 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
     expect(compiled.blueprint.components.some((component: any) => component.id === 'sapatas_pedra')).toBe(false);
   });
 
+  it('inicia toda construção com marcação e depois limpeza seletiva', () => {
+    expect(compiled.blueprint.operations[0]?.id).toBe('op_marcacao');
+    expect(compiled.blueprint.operations[0]?.name).toBe('Marcação da implantação');
+    expect(compiled.blueprint.operations[1]?.id).toBe('op_limpeza');
+    expect(compiled.blueprint.operations[1]?.name).toBe('Limpeza seletiva da área marcada');
+    expect(compiled.blueprint.components[1]?.dependencies).toEqual(['component_marcacao']);
+    expect(compiled.blueprint.operations[0]?.tool).toBe('corda');
+    expect(compiled.blueprint.operations[1]?.tool).toBe('facao');
+  });
+
   it('gera projeto completo com origem e hipóteses rastreáveis', () => {
     expect(project.planning?.source).toBe('description');
     expect(project.planning?.sourceDescription).toBe(description);
