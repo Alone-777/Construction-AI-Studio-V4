@@ -4,7 +4,7 @@ import {
   createProjectFromDescription,
 } from '../../../../blueprints/description-blueprint';
 import { compileCanonicalImagePromptSpec } from '../../../../image-prompts/canonical-image-prompt-compiler';
-import { adaptCanonicalImagePromptToNanoBanana } from '../../../../image-prompts/nano-banana-prompt-adapter';
+import { adaptCanonicalImagePromptToProviderNeutral } from '../../../../image-prompts/provider-neutral-image-prompt-adapter';
 import { generateKlingPrompt } from '../../../../prompts/kling';
 import { ANIMATION_PROMPT_MAX_CHARS } from '../../../../video-generation/animation-prompt-budget';
 import { DEFAULT_VISUAL_DNA, type VisualDNA } from '../../../../types/project';
@@ -138,15 +138,15 @@ function positivePrompt(fullText: string): string {
   return fullText.split('[TEMPORAL AND SCOPE FORBIDDEN]')[0];
 }
 
-describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
-  it('gives a committed stage a canonical Nano Banana prompt', () => {
+describe('PromptsGeneratorStage - canonical provider-neutral image integration', () => {
+  it('gives a committed stage a canonical provider-neutral image prompt', () => {
     const context = committedContext(1);
     const stage = stageAt(context.scenes![0], 100);
-    expect(stage.prompts?.nanoBanana).toContain('[TEMPORAL STATE — HIGHEST PRIORITY]');
-    expect(stage.prompts?.nanoBanana).toContain('OFFICIAL TIMELINE IMAGE');
+    expect(stage.prompts?.image).toContain('[TEMPORAL STATE — HIGHEST PRIORITY]');
+    expect(stage.prompts?.image).toContain('OFFICIAL TIMELINE IMAGE');
   });
 
-  it('derives stage.prompts.nanoBanana exactly from the official VisualStateSnapshot', () => {
+  it('derives stage.prompts.image exactly from the official VisualStateSnapshot', () => {
     const context = committedContext(1);
     const scene = context.scenes![0];
     const stage = stageAt(scene, 100);
@@ -164,36 +164,36 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
       mode: 'GENERATE',
       profile: 'FULL',
     });
-    expect(stage.prompts?.nanoBanana).toBe(`${adapted.prompt}\n\n${adapted.negativePrompt}`);
+    expect(stage.prompts?.image).toBe(`${adapted.prompt}\n\n${adapted.negativePrompt}`);
   });
 
   it('includes the primary PhysicalActionIR action', () => {
     const context = committedContext(1);
     const stage = stageAt(context.scenes![0], 50);
-    expect(stage.prompts?.nanoBanana).toContain(stage.physicalActionIR!.primaryAction.description);
-    expect(stage.prompts?.nanoBanana).toContain('[ONE PRIMARY PHYSICAL ACTION]');
+    expect(stage.prompts?.image).toContain(stage.physicalActionIR!.primaryAction.description);
+    expect(stage.prompts?.image).toContain('[ONE PRIMARY PHYSICAL ACTION]');
   });
 
   it('preserves the PhysicalActionIR target', () => {
     const context = committedContext(1);
     const stage = stageAt(context.scenes![0], 50);
     const target = stage.physicalActionIR!.target;
-    expect(stage.prompts?.nanoBanana).toContain(`target: ${target.label} (${target.id})`);
+    expect(stage.prompts?.image).toContain(`target: ${target.label} (${target.id})`);
   });
 
   it('includes observable completion evidence', () => {
     const context = committedContext(1);
     const stage = stageAt(context.scenes![0], 50);
     expect(stage.physicalActionIR!.evidence.length).toBeGreaterThan(0);
-    expect(stage.prompts?.nanoBanana).toContain(stage.physicalActionIR!.evidence[0]);
-    expect(stage.prompts?.nanoBanana).toContain('[COMPLETION EVIDENCE — MUST BE VISIBLE]');
+    expect(stage.prompts?.image).toContain(stage.physicalActionIR!.evidence[0]);
+    expect(stage.prompts?.image).toContain('[COMPLETION EVIDENCE — MUST BE VISIBLE]');
   });
 
   it('places future B/C components in the forbidden section after A', () => {
     const context = committedContext(3);
     const [operationA, operationB, operationC] = context.operations!;
     const sceneA = context.scenes!.find(scene => scene.operationId === operationA.id)!;
-    const promptAfterA = stageAt(sceneA, 100).prompts!.nanoBanana;
+    const promptAfterA = stageAt(sceneA, 100).prompts!.image;
     expect(promptAfterA).toContain(`no future or not-yet-built component: ${operationB.componentId}`);
     expect(promptAfterA).toContain(`no future or not-yet-built component: ${operationC.componentId}`);
   });
@@ -203,8 +203,8 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
     const [operationA, operationB, operationC] = context.operations!;
     const sceneA = context.scenes!.find(scene => scene.operationId === operationA.id)!;
     const sceneB = context.scenes!.find(scene => scene.operationId === operationB.id)!;
-    const afterA = positivePrompt(stageAt(sceneA, 100).prompts!.nanoBanana);
-    const afterB = positivePrompt(stageAt(sceneB, 100).prompts!.nanoBanana);
+    const afterA = positivePrompt(stageAt(sceneA, 100).prompts!.image);
+    const afterB = positivePrompt(stageAt(sceneB, 100).prompts!.image);
 
     expect(afterA).toContain(`present components: ${operationA.componentId}`);
     expect(afterA).not.toContain(operationB.componentId);
@@ -212,12 +212,12 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
     expect(afterB).toContain(operationA.componentId);
     expect(afterB).toContain(operationB.componentId);
     expect(afterB).not.toContain(operationC.componentId);
-    expect(stageAt(sceneB, 100).prompts!.nanoBanana).toContain(
+    expect(stageAt(sceneB, 100).prompts!.image).toContain(
       `no future or not-yet-built component: ${operationC.componentId}`,
     );
   });
 
-  it('does not give a rejected stage an official Nano Banana prompt', () => {
+  it('does not give a rejected stage an official provider-neutral image prompt', () => {
     const context = createContext(1);
     executeStages(context, stage => stage.percentage !== 50);
     const result = new PromptsGeneratorStage().execute(context);
@@ -227,7 +227,7 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
     expect(rejected.status).toBe('rejected');
     expect(rejected.physicalActionIR).toBeDefined();
     expect(rejected.worldStateAfter).toBeDefined();
-    expect(rejected.prompts?.nanoBanana).toBeUndefined();
+    expect(rejected.prompts?.image).toBeUndefined();
   });
 
   it('does not give a skipped stage a fake prompt', () => {
@@ -295,24 +295,24 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
     expect(stage.prompts?.visual).toBe(expected);
   });
 
-  it('produces the same Nano Banana prompt for the same temporal state', () => {
+  it('produces the same provider-neutral image prompt for the same temporal state', () => {
     const first = committedContext(1);
     const second = committedContext(1);
-    expect(stageAt(first.scenes![0], 50).prompts?.nanoBanana).toBe(
-      stageAt(second.scenes![0], 50).prompts?.nanoBanana,
+    expect(stageAt(first.scenes![0], 50).prompts?.image).toBe(
+      stageAt(second.scenes![0], 50).prompts?.image,
     );
   });
 
   it('uses GENERATE mode when no image reference is supplied', () => {
     const context = committedContext(1);
-    const prompt = stageAt(context.scenes![0], 50).prompts!.nanoBanana;
+    const prompt = stageAt(context.scenes![0], 50).prompts!.image;
     expect(prompt).toContain('[GENERATE DIRECTIVE]');
     expect(prompt).toContain('Generate a new image');
     expect(prompt).not.toContain('[EDIT DIRECTIVE]');
     expect(prompt).not.toContain('[REFERENCE GUIDANCE]');
   });
 
-  it('fails clearly instead of silently using the legacy Nano Banana fallback', () => {
+  it('fails clearly instead of silently using the legacy provider-neutral image fallback', () => {
     const context = createContext(1);
     executeStages(context, () => true);
     const stage = stageAt(context.scenes![0], 50);
@@ -322,11 +322,11 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toContain('Missing PhysicalActionIR');
-    expect(result.error?.message).toContain('Legacy Nano Banana fallback is disabled');
-    expect(stage.prompts?.nanoBanana).toBeUndefined();
+    expect(result.error?.message).toContain('Legacy provider-neutral image fallback is disabled');
+    expect(stage.prompts?.image).toBeUndefined();
   });
 
-  it('runs the canonical Nano Banana path through the complete project pipeline', () => {
+  it('runs the canonical provider-neutral image path through the complete project pipeline', () => {
     const project = createProjectFromDescription({
       description: 'Abrigo simples de madeira em uma clareira.',
       name: 'Canonical Pipeline End to End',
@@ -334,7 +334,7 @@ describe('PromptsGeneratorStage - canonical Nano Banana integration', () => {
     const stages = project.scenes.flatMap(scene => scene.stages);
 
     expect(stages.length).toBeGreaterThan(0);
-    expect(stages.every(stage => stage.prompts?.nanoBanana.includes('OFFICIAL TIMELINE IMAGE'))).toBe(true);
+    expect(stages.every(stage => stage.prompts?.image.includes('OFFICIAL TIMELINE IMAGE'))).toBe(true);
     expect(stages.every(stage => stage.prompts?.visual && stage.prompts?.kling)).toBe(true);
   });
 });
