@@ -123,7 +123,7 @@ Ao receber `CRIAR NOVO PROJETO`, o ChatGPT deve:
 9. continuar pelo primeiro JOB elegível em ordem temporal;
 10. manter o Construction AI como executor e fonte do estado operacional.
 
-Formato operacional do Relay:
+Formato final de criação no Relay, depois da análise aprovada:
 
 ```json
 {
@@ -131,12 +131,12 @@ Formato operacional do Relay:
   "requestId": "<id-unico>",
   "operation": {
     "op": "create_project",
-    "description": "<descrição da construção>",
-    "name": "<nome opcional>",
     "confirm": "CREATE_NEW_PROJECT"
   }
 }
 ```
+
+A descrição e o nome podem vir diretamente da revisão aprovada da Imagem Inicial; o usuário não precisa repeti-los.
 
 O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **15 segundos cada**. A Imagem Inicial é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial; o vídeo só é liberado quando essa fonte temporal existir. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
 
