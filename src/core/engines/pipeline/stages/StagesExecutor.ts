@@ -179,6 +179,13 @@ export class StagesExecutorStage {
                 worldStateBefore: before,
                 beforePercentage: previousStagePercentage,
                 materialUse: specification.materialUse,
+                logisticsContext: {
+                  workerCount: context.config.workerCount,
+                  spatialMap: context.spatialMap,
+                  handling: specification.handling,
+                  handlingByMaterial: specification.handlingByMaterial,
+                  area: context.blueprint.logisticsArea,
+                },
               });
               stage.physicalExecutionPlanV2 = physicalExecutionPlanV2;
               stage.physicalSimulationV2 = simulatePhysicalExecution(

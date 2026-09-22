@@ -2,6 +2,8 @@ import type { Operation, Scene, Stage } from '../../types/scene';
 import type { WorldState } from '../../types/world-state';
 import { canonicalToolId, resolveToolAffordance } from './affordances';
 import { deriveOfficialRevision, fingerprintValue } from './simulator';
+import { planEquipmentLogistics } from './logistics';
+import type { LogisticsPlanningContext } from './logistics-types';
 import {
   CONSTRUCTION_INTENT_SCHEMA,
   PHYSICAL_EXECUTION_PLAN_SCHEMA,
@@ -29,6 +31,7 @@ export interface PlanPhysicalExecutionV2Input {
   worldStateBefore: WorldState;
   beforePercentage: number;
   materialUse?: Record<string, number>;
+  logisticsContext?: LogisticsPlanningContext;
 }
 
 function normalize(value: string): string {
@@ -307,6 +310,7 @@ export function planPhysicalExecutionV2({
   worldStateBefore,
   beforePercentage,
   materialUse,
+  logisticsContext,
 }: PlanPhysicalExecutionV2Input): PhysicalExecutionPlanV2 {
   if (stage.percentage <= 0) {
     throw new Error('PhysicalExecutionPlan V2 native planning requires a positive construction stage.');
@@ -675,7 +679,7 @@ export function planPhysicalExecutionV2({
     limitations.push('MATERIAL_SOURCE_NOT_DECLARED');
   }
 
-  return {
+  const plan: PhysicalExecutionPlanV2 = {
     schemaVersion: PHYSICAL_EXECUTION_PLAN_SCHEMA,
     planId:
       'v2:native:' + scene.id + ':' + operation.id + ':'
@@ -721,4 +725,13 @@ export function planPhysicalExecutionV2({
       limitations,
     },
   };
+  // Child contract only. Do not alter the operational graph or its prompt yet.
+  try {
+    plan.equipmentLogisticsPlan = planEquipmentLogistics(
+      plan, worldStateBefore, operation, materialUse, scene.duration, logisticsContext,
+    );
+  } catch (error) {
+    plan.logisticsError = error instanceof Error ? error.message : String(error);
+  }
+  return plan;
 }

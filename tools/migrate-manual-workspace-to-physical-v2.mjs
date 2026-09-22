@@ -271,6 +271,7 @@ export async function migrateManualWorkspaceToPhysicalV2({
       plan: segment.physicalExecutionPlanV2,
       simulation: segment.physicalSimulationV2,
       providerNeutralPrompt: segment.providerNeutralPromptV2,
+      logisticsShadow: segment.logisticsShadow,
       ...(segment.retryProviderNeutralPromptV2
         ? { retryProviderNeutralPrompt: segment.retryProviderNeutralPromptV2 }
         : {}),

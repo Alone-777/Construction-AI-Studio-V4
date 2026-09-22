@@ -6,6 +6,50 @@ import {
   countAnimationPromptCharacters,
 } from '../../video-generation/animation-prompt-budget';
 import type { ProviderNeutralPromptArtifactV2 } from './types';
+import { evaluateLogisticsPreflight } from './logistics-preflight';
+
+/** Diagnostic preview only; the normal compiler below deliberately ignores logisticsShadow. */
+export function compileLogisticsShadowPrompt(
+  artifact: ProviderNeutralPromptArtifactV2,
+  maxChars = ADOBE_FIREFLY_PROMPT_MAX_CHARS,
+): { mode: 'SHADOW'; generationAuthorized: false; prompt: string | null; characterCount: number; reason?: string } {
+  const shadow = artifact.logisticsShadow;
+  if (!shadow) return { mode: 'SHADOW', generationAuthorized: false, prompt: null, characterCount: 0, reason: 'LOGISTICS_NOT_AVAILABLE' };
+  // Recompute: never trust a caller-modified/stale READY flag.
+  const preflight = evaluateLogisticsPreflight(shadow.plan);
+  if (preflight.status !== 'READY' || shadow.preflight.status !== 'READY') {
+    return { mode: 'SHADOW', generationAuthorized: false, prompt: null, characterCount: 0, reason: preflight.status === 'READY' ? shadow.preflight.status : preflight.status };
+  }
+  const movements = shadow.plan.movements.map(movement => {
+    const resource = shadow.plan.resources.find(item => item.key === movement.resourceKey)!;
+    const equipment = movement.equipmentKeys.length ? ' using ' + movement.equipmentKeys.join(', ') : '';
+    const handoff = resource.kind === 'MATERIAL'
+      ? (movement.transportMethod === 'CART' ? 'rig and guide; no manual heavy lifting → hoist onto cart → roll cart' : 'grip → lift → carry')
+        + (movement.method === 'HOIST' ? ' → hoist at destination' : '') + ' → position on support → take staged tool and fasten/seat → return tool → release'
+      : movement.method === 'ALREADY_HELD'
+        ? 'retain the already held tool; no duplicate pickup' + (movement.steps.some(s => s.kind === 'PLACE') ? '; set it on a reachable support before carrying material or switching tools' : '')
+        : 'pick up → carry → place on reachable support → release';
+    return `${resource.id} from ${resource.sourceZoneId} to ${movement.destinationZoneId}: ${movement.requiredWorkers} worker(s), transport ${movement.transportMethod}, placement ${movement.method}${equipment}; ${handoff}.`;
+  });
+  const prompt = [
+    '[SHADOW LOGISTICS PREVIEW — NOT AN OFFICIAL JOB]',
+    `${shadow.plan.durationSeconds}s 16:9 image-to-video. Source frame is temporal truth.`,
+    ...shadow.plan.workerArrivalRoutes.filter(r => r.route.length > 1).map(r => `Worker ${r.workerId} walks continuously along ${r.route.join(' → ')} before work.`),
+    ...movements,
+    ...artifact.executionBeats.filter(beat => beat.changesMatter).map(beat => beat.instruction),
+    progressBlock(artifact),
+    'Show stock pickup, continuous contact, transport, supported placement and attachment before release; no floating, teleportation or hidden progress.',
+    'Preserve camera, terrain, workers and completed geometry. Stable terminal frame.',
+    artifact.forbiddenFutureComponentIds.length ? 'Do not create: ' + artifact.forbiddenFutureComponentIds.join(', ') + '.' : '',
+    ...artifact.retryCorrections.map(item => `RETRY ${item.code}: ${item.correction}`),
+  ].filter(Boolean).join(' ');
+  const count = countAnimationPromptCharacters(prompt);
+  // Never slice a handling chain or discard a retry. A split is a proposal, not an inserted Job.
+  if (count > Math.min(maxChars, ADOBE_FIREFLY_PROMPT_MAX_CHARS)) {
+    return { mode: 'SHADOW', generationAuthorized: false, prompt: null, characterCount: count, reason: 'LOGISTICS_PROMPT_REQUIRES_SPLIT' };
+  }
+  return { mode: 'SHADOW', generationAuthorized: false, prompt, characterCount: count };
+}
 
 export interface CompileAdobeFireflyVideoPromptV2Input {
   artifact: ProviderNeutralPromptArtifactV2;

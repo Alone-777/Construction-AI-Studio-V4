@@ -436,6 +436,7 @@ export async function createFireflyProject({
           plan: v2Segment.physicalExecutionPlanV2,
           simulation: v2Segment.physicalSimulationV2,
           providerNeutralPrompt: v2Segment.providerNeutralPromptV2,
+          logisticsShadow: v2Segment.logisticsShadow,
         },
         executionRecipe,
         segmentId: `${operation[0]}:${start}-${target}`,

@@ -52,6 +52,17 @@ describe('manual-v2-bridge', () => {
     expect(first.retryPrompt).toContain('TOOL_ACTION_NOT_EXECUTED');
     expect(first.retryPrompt).not.toBe(first.prompt);
     expect(first.providerNeutralPromptV2.retryCorrections).toEqual([]);
+    expect(first.logisticsShadow.mode).toBe('SHADOW');
+    expect(first.logisticsShadow.generationAuthorized).toBe(false);
+    expect(first.logisticsShadow.preflight.status).not.toBe('READY');
+    expect(first.logisticsShadow.preview.prompt).toBeNull();
+    expect(first.logisticsShadow.sourcePreparation.phase).toBe('INITIAL_SOURCE');
+    expect(first.logisticsShadow.sourcePreparation.candidateImageInstruction).toContain('small organized stock/tool point');
+    expect(result.segments.slice(1).every(segment =>
+      segment.logisticsShadow.sourcePreparation.phase === 'CONTINUATION'
+      && segment.logisticsShadow.sourcePreparation.candidateImageInstruction === null
+    )).toBe(true);
+    expect(result.segments.every(segment => segment.physicalSimulationV2.commitAvailable === false)).toBe(true);
     expect(first.retryProviderNeutralPromptV2.retryCorrections).toHaveLength(1);
     expect(Array.from(first.prompt).length).toBeLessThanOrEqual(1800);
     expect(Array.from(first.retryPrompt).length).toBeLessThanOrEqual(1800);
@@ -61,5 +72,12 @@ describe('manual-v2-bridge', () => {
     expect(recipe.tools).toContain('shovel');
     expect(recipe.actionSequence.length).toBeGreaterThanOrEqual(2);
     expect(recipe.terminalEvidence).toBeTruthy();
+  }, 30000);
+
+  it('uses existing workerCount without creating another crew authority', async () => {
+    const result = await compileManualVideoProjectV2({ description: 'Cabana de madeira', workerCount: 3 });
+    expect(result.config.workerCount).toBe(3);
+    expect(result.segments.every(segment => segment.physicalExecutionPlanV2.equipmentLogisticsPlan.configuredWorkers === 3)).toBe(true);
+    expect(result.segments.every(segment => segment.logisticsShadow.preflight.status !== 'READY')).toBe(true);
   }, 30000);
 });

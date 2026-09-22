@@ -54,6 +54,11 @@ describe('createFireflyProject', () => {
     expect(firstJob.physicalExecutionV2.plan.schemaVersion).toBe('construction-physical-execution-plan/2');
     expect(firstJob.physicalExecutionV2.simulation.validation.ok).toBe(true);
     expect(firstJob.physicalExecutionV2.simulation.commitAvailable).toBe(false);
+    expect(firstJob.physicalExecutionV2.logisticsShadow.mode).toBe('SHADOW');
+    expect(firstJob.physicalExecutionV2.logisticsShadow.generationAuthorized).toBe(false);
+    expect(firstJob.physicalExecutionV2.simulation.logisticsPreflight.commitAvailable).toBe(false);
+    expect(firstJob.prompt).not.toContain('SHADOW');
+    expect(firstJob.sourceImagePrompt).not.toContain('SHADOW');
     expect(firstJob.physicalExecutionV2.providerNeutralPrompt.schemaVersion).toBe('construction-provider-neutral-prompt/2');
     expect(firstJob.executionRecipe.schema).toBe('construction-manual-execution-recipe/1');
     expect(firstJob.executionRecipe.tools.length).toBeGreaterThan(0);

@@ -11,6 +11,22 @@ import type {
 import { SIMULATION_RECEIPT_SCHEMA } from './types';
 import { validatePhysicalExecutionPlan } from './validators';
 import { resolveToolAffordance } from './affordances';
+import { evaluateLogisticsPreflight, failedLogisticsPreflight } from './logistics-preflight';
+
+function shadowLogistics(official: WorldState, plan: PhysicalExecutionPlanV2) {
+  if (plan.logisticsError) return failedLogisticsPreflight('LOGISTICS_INSTRUMENTATION_ERROR', plan.logisticsError);
+  const logistics = plan.equipmentLogisticsPlan;
+  if (!logistics) return undefined; // Legacy plans keep exactly their old behavior.
+  try {
+    if (logistics.officialFingerprint !== fingerprintValue(official)
+      || logistics.officialRevision !== deriveOfficialRevision(official)) {
+      return failedLogisticsPreflight('LOGISTICS_STALE_OFFICIAL', 'Inventory/crew/tool state changed; recompute shadow logistics from the current source.');
+    }
+    return evaluateLogisticsPreflight(logistics);
+  } catch (error) {
+    return failedLogisticsPreflight('LOGISTICS_INSTRUMENTATION_ERROR', error instanceof Error ? error.message : String(error));
+  }
+}
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -290,6 +306,7 @@ export function simulatePhysicalExecution(
   plan: PhysicalExecutionPlanV2,
 ): PhysicalSimulationReceiptV2 {
   const officialRevision = deriveOfficialRevision(official);
+  const logisticsPreflight = shadowLogistics(official, plan);
   const validation = validatePhysicalExecutionPlan(
     plan,
     official,
@@ -306,6 +323,7 @@ export function simulatePhysicalExecution(
       appliedEffects: [],
       validation,
       commitAvailable: false,
+      ...(logisticsPreflight ? { logisticsPreflight } : {}),
     };
   }
 
@@ -386,5 +404,6 @@ export function simulatePhysicalExecution(
     appliedEffects: combinedValidation.ok ? appliedEffects : [],
     validation: combinedValidation,
     commitAvailable: false,
+    ...(logisticsPreflight ? { logisticsPreflight } : {}),
   };
 }

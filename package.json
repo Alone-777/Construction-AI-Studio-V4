@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:logistics": "vitest run src/core/actions/physical-execution-v2 src/core/engines/pipeline/stages/stages-executor.commit-integrity.test.ts tools/manual-v2-bridge.test.mjs tools/create-firefly-project.test.mjs tools/migrate-manual-workspace-to-physical-v2.test.mjs",
+    "examples:logistics": "node tools/examples-logistics-shadow.mjs",
     "test:accept": "vitest run --reporter=verbose src/core/__tests__/acceptance",
     "instalar-atalho": "node scripts/install-launcher.mjs",
     "instalar-botao": "node scripts/install-launcher.mjs",

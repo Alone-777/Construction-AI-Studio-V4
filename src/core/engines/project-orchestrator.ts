@@ -5,17 +5,21 @@ import type {
   Operation,
   Residue,
 } from '../types';
+import type { HandlingProfile, LogisticsEquipment } from '../types/materials';
+import type { LogisticsArea } from '../actions/physical-execution-v2/logistics-types';
 
 export interface BlueprintMaterialStock {
   materialId: string;
   quantity: number;
   location: string;
   origin: string;
+  handling?: HandlingProfile;
 }
 
 export interface BlueprintToolStock {
   toolId: string;
   location: string;
+  equipment?: LogisticsEquipment;
 }
 
 export interface BlueprintOperation {
@@ -30,6 +34,8 @@ export interface BlueprintOperation {
   materialUse?: Record<string, number>;
   residue?: Omit<Residue, 'id' | 'location'>;
   visualBasis?: NonNullable<Operation['visualBasis']>;
+  handling?: HandlingProfile;
+  handlingByMaterial?: Record<string, HandlingProfile>;
 }
 
 export interface ConstructionBlueprint {
@@ -44,4 +50,6 @@ export interface ConstructionBlueprint {
   permanentObjects: string[];
   forbiddenElements: string[];
   rules: ConstructionRule[];
+  /** Describes a compact stock point in an existing zone; does not move OFFICIAL stock. */
+  logisticsArea?: LogisticsArea;
 }

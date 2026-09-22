@@ -277,6 +277,13 @@ export function compileDescriptionToBlueprint(input: ProjectDescriptionInput): D
       tool: definition.tool,
       physicalAction: definition.physicalAction,
       materialUse,
+      // Conservative shadow hints, not measurements or authorization to add gear.
+      ...(definition.material ? { handling: {
+        loadClass: 'UNKNOWN' as const,
+        sizeClass: ['vigas', 'pilares', 'estrutura', 'travamento'].includes(definition.key) ? 'LONG' as const : 'UNKNOWN' as const,
+        heightClass: ['vigas', 'pilares', 'estrutura', 'cobertura', 'travamento'].includes(definition.key) ? 'ELEVATED' as const : 'UNKNOWN' as const,
+        evidence: 'INFERRED' as const,
+      } } : {}),
       residue: definition.residue ? {
         source: definition.residue.source,
         materialId: definition.residue.materialId,
@@ -296,6 +303,10 @@ export function compileDescriptionToBlueprint(input: ProjectDescriptionInput): D
 
   const blueprint: ConstructionBlueprint = {
     id: `blueprint_${slug(name)}`,
+    logisticsArea: {
+      zoneId: 'Z1', layout: 'COMPACT_STAGING_POINT',
+      description: 'Small organized tool rack and material stock at the edge of Z1, clear of the work footprint; proposal pending source-image review.',
+    },
     map: {
       id: `map_${slug(environment)}`,
       width: 120,

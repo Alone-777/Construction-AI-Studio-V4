@@ -1,4 +1,7 @@
 export * from './types';
+export * from './logistics-types';
+export * from './logistics';
+export * from './logistics-preflight';
 export * from './affordances';
 export * from './validators';
 export * from './simulator';

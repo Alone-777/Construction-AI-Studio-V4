@@ -1,5 +1,30 @@
-import type { CanonicalImagePromptSpec } from './canonical-image-prompt-spec';
+import type { CanonicalImagePromptSpec, LogisticsSourcePreparationSpec } from './canonical-image-prompt-spec';
+import type { EquipmentLogisticsPlan, LogisticsPreflight } from '../actions/physical-execution-v2/logistics-types';
 import type { VisualStateSnapshot } from '../visual-state/visual-state-snapshot';
+
+/** A proposal alongside the canonical image flow. It never replaces a source asset. */
+export function compileLogisticsSourcePreparation(
+  plan: EquipmentLogisticsPlan,
+  preflight: LogisticsPreflight,
+  phase: LogisticsSourcePreparationSpec['phase'],
+): LogisticsSourcePreparationSpec {
+  const registered = plan.resources.filter(resource => resource.registered && resource.available
+    && resource.origin.trim() && resource.sourceZoneId.trim());
+  const area = plan.area;
+  const staged = registered.filter(resource => resource.sourceZoneId === area?.zoneId);
+  return {
+    mode: 'SHADOW', phase, requiresReview: true, changesOfficial: false,
+    resourceKeys: registered.map(resource => resource.key),
+    candidateImageInstruction: phase === 'INITIAL_SOURCE' && area && staged.length
+      ? '[SHADOW SOURCE PREPARATION PROPOSAL] Before accepting the first OFFICIAL source, depict a small organized stock/tool point within ' + area.zoneId
+        + '. Keep the existing registered placements: ' + staged.map(resource => resource.id).join(', ')
+        + '. Do not scatter stock, clear extra terrain or preassemble future components. Preserve design identity, terrain, camera and zero construction progress. Do not relocate stock from other zones. Do not add undeclared workers or equipment. Requires review before becoming an OFFICIAL source; this instruction changes no image/state.'
+      : null,
+    actions: phase === 'CONTINUATION'
+      ? ['Retain the exact last approved frame. Propose continuous retrieval/delivery/equipment setup in the existing reviewed workflow; never paint new stock into OFFICIAL.', ...preflight.preparation.instructions]
+      : [...preflight.preparation.instructions],
+  };
+}
 
 function uniqueSorted(values: Array<string | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => !!value))].sort();

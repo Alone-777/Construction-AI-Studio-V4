@@ -4,6 +4,27 @@ export type MaterialStatus = 'disponivel' | 'armazenado' | 'carregado' | 'em_uso
 
 export type ToolStatus = 'em_uso' | 'armazenada' | 'abandonada' | 'indisponivel';
 
+/** Visual-plausibility metadata, NOT an engineering/safe-lifting calculation. */
+export interface HandlingProfile {
+  loadClass?: 'LIGHT' | 'TEAM' | 'HEAVY' | 'UNKNOWN';
+  sizeClass?: 'COMPACT' | 'LONG' | 'OVERSIZE' | 'UNKNOWN';
+  /** Per handled piece/batch, never the entire blueprint stock. */
+  massKg?: number;
+  lengthM?: number;
+  targetHeightM?: number;
+  heightClass?: 'GROUND' | 'ELEVATED' | 'UNKNOWN';
+  minimumWorkers?: number;
+  evidence?: 'DECLARED' | 'INFERRED';
+}
+
+export interface LogisticsEquipment {
+  kind: 'CART' | 'HOIST' | 'RIGGING' | 'WORK_PLATFORM';
+  ready: boolean;
+  capacityKg?: number;
+  reachM?: number;
+  anchored?: boolean;
+}
+
 export interface Material {
   id: MaterialId;
   name: string;
@@ -22,6 +43,7 @@ export interface MaterialInstance {
   status: MaterialStatus;
   location: string;
   origin: string;
+  handling?: HandlingProfile;
 }
 
 export interface Tool {
@@ -38,6 +60,7 @@ export interface ToolInstance {
   location: string;
   carrier?: string;
   inUse: boolean;
+  equipment?: LogisticsEquipment;
 }
 
 export interface Residue {

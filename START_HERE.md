@@ -208,3 +208,16 @@ A política operacional vigente para novos JOBs e workspaces migrados é:
 - plataforma e modelo são conceitos separados: Adobe Firefly hospeda a geração; `modelId` identifica o modelo selecionado para o JOB.
 
 Para migrar um workspace existente, use o script protegido `tools/migrate-video-provider-to-kling30.mjs`. Ele cria backup antes de alterar manifest, fila, prompts, checklist e estado de retry.
+
+## Logística física V2 — shadow mode
+
+O `PhysicalExecutionPlan V2` inclui um `equipmentLogisticsPlan` de diagnóstico: origem de ferramentas/materiais, transporte, peso/tamanho, trabalhadores, içamento e preparação visual da fonte. O simulador emite `logisticsPreflight` com `READY`, `PREP_REQUIRED` ou `WOULD_BLOCK`.
+
+Nesta fase, o diagnóstico não bloqueia a geração, não troca os prompts operacionais e não avança `OFFICIAL`. `StageTransaction` e os fiscais continuam sendo a autoridade. Novos JOBs persistem os diagnósticos V2; workspaces existentes não são migrados automaticamente. Inventário não comprova visibilidade: sem observações vinculadas à fonte atual, o sistema registra pendências.
+
+Documentação, limites e exemplos: [PHYSICAL_LOGISTICS_SHADOW.md](PHYSICAL_LOGISTICS_SHADOW.md).
+
+```bash
+npm run test:logistics
+npm run examples:logistics
+```

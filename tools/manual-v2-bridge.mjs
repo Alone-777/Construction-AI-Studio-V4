@@ -63,6 +63,7 @@ function normalizeRetryCorrections(value) {
 export async function compileManualVideoProjectV2({
   description,
   name,
+  workerCount,
   toolOverrides = {},
   retryCorrectionsBySegment = {},
   studioRoot = STUDIO_ROOT,
@@ -77,7 +78,8 @@ export async function compileManualVideoProjectV2({
     configFile: false,
     appType: 'custom',
     logLevel: 'error',
-    server: { middlewareMode: true },
+    optimizeDeps: { noDiscovery: true, include: [] },
+    server: { middlewareMode: true, hmr: false },
   });
 
   try {
@@ -90,11 +92,15 @@ export async function compileManualVideoProjectV2({
     const physicalModule = await server.ssrLoadModule(
       '/src/core/actions/physical-execution-v2/index.ts',
     );
+    const imagePromptModule = await server.ssrLoadModule(
+      '/src/core/image-prompts/canonical-image-prompt-compiler.ts',
+    );
 
     const compiled = descriptionModule.compileDescriptionToBlueprint({
       description: String(description).trim(),
       ...(String(name || '').trim() ? { name: String(name).trim() } : {}),
       sceneDuration: 15,
+      ...(workerCount !== undefined ? { workerCount } : {}),
     });
 
     const config = clone(compiled.config);
@@ -161,6 +167,26 @@ export async function compileManualVideoProjectV2({
           });
         }
 
+        let logisticsShadow = null;
+        try {
+          if (plan.equipmentLogisticsPlan && simulation.logisticsPreflight) {
+            logisticsShadow = {
+              mode: 'SHADOW',
+              generationAuthorized: false,
+              preflight: clone(simulation.logisticsPreflight),
+              preview: physicalModule.compileLogisticsShadowPrompt(baseArtifact),
+              retryPreview: retryArtifact ? physicalModule.compileLogisticsShadowPrompt(retryArtifact) : null,
+              sourcePreparation: imagePromptModule.compileLogisticsSourcePreparation(
+                plan.equipmentLogisticsPlan, simulation.logisticsPreflight,
+                segments.length === 0 ? 'INITIAL_SOURCE' : 'CONTINUATION',
+              ),
+            };
+          }
+        } catch (error) {
+          // A diagnostic failure cannot change the active prompt or legacy approval gates.
+          logisticsShadow = { mode: 'SHADOW', generationAuthorized: false, error: String(error) };
+        }
+
         segments.push({
           operationType: key,
           operationId: operation.id,
@@ -180,6 +206,7 @@ export async function compileManualVideoProjectV2({
           physicalSimulationV2: clone(simulation),
           providerNeutralPromptV2: clone(baseArtifact),
           retryProviderNeutralPromptV2: retryArtifact ? clone(retryArtifact) : null,
+          logisticsShadow,
         });
       }
     }
@@ -210,6 +237,7 @@ export async function compileManualVideoProjectV2({
         construction: config.construction,
         environment: config.environment,
         materials: clone(config.materials),
+        workerCount: config.workerCount,
       },
     };
   } finally {

@@ -1,4 +1,5 @@
 import type { WorldState } from '../../types/world-state';
+import type { EquipmentLogisticsPlan, LogisticsPreflight } from './logistics-types';
 
 export const PHYSICAL_EXECUTION_PLAN_SCHEMA = 'construction-physical-execution-plan/2' as const;
 export const CONSTRUCTION_INTENT_SCHEMA = 'construction-intent/2' as const;
@@ -139,6 +140,9 @@ export interface PhysicalExecutionPlanV2 {
   nodes: PhysicalActionNodeV2[];
   edges: PhysicalActionEdgeV2[];
   evidence: ObservationContract[];
+  /** Shadow child contract. It cannot replace the operational nodes/commit gate. */
+  equipmentLogisticsPlan?: EquipmentLogisticsPlan;
+  logisticsError?: string;
   constraints: {
     stopAtTarget: boolean;
     requirePersistentEffects: boolean;
@@ -198,6 +202,8 @@ export interface PhysicalSimulationReceiptV2 {
   appliedEffects: Array<{ nodeId: string; effect: PhysicalEffect }>;
   validation: ValidationReportV2;
   commitAvailable: false;
+  /** Separate diagnostics: must never be merged into the legacy fiscal verdict. */
+  logisticsPreflight?: LogisticsPreflight;
 }
 
 export interface ProviderNeutralPromptArtifactV2 {
@@ -211,6 +217,8 @@ export interface ProviderNeutralPromptArtifactV2 {
     instruction: string;
     toolId?: string;
     zoneId: string;
+    kind?: PhysicalNodeKind;
+    changesMatter?: boolean;
   }>;
   transformationEffects: PhysicalEffect[];
   evidence: ObservationContract[];
@@ -218,4 +226,8 @@ export interface ProviderNeutralPromptArtifactV2 {
   physicalProgress?: PhysicalProgressContract;
   forbiddenFutureComponentIds: string[];
   retryCorrections: Array<{ code: string; correction: string }>;
+  logisticsShadow?: {
+    plan: EquipmentLogisticsPlan;
+    preflight: LogisticsPreflight;
+  };
 }

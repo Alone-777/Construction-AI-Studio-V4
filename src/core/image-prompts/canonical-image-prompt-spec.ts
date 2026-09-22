@@ -1,6 +1,16 @@
 import type { PhysicalActionIR, PhysicalTargetStatus } from '../actions/physical-action-ir';
 import type { VisualStateSnapshot } from '../visual-state/visual-state-snapshot';
 
+export interface LogisticsSourcePreparationSpec {
+  mode: 'SHADOW';
+  phase: 'INITIAL_SOURCE' | 'CONTINUATION';
+  requiresReview: true;
+  changesOfficial: false;
+  resourceKeys: string[];
+  candidateImageInstruction: string | null;
+  actions: string[];
+}
+
 export interface CanonicalImagePromptSpec {
   id: string;
   identity: {

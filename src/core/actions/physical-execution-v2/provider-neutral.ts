@@ -36,6 +36,8 @@ export function compileProviderNeutralPromptArtifact(
       instruction: node.instruction,
       ...(node.toolId ? { toolId: node.toolId } : {}),
       zoneId: node.zoneId,
+      kind: node.kind,
+      changesMatter: node.effects.some(effect => !['CANONICAL_PROGRESS_ADVANCED', 'PHYSICAL_PROGRESS_ADVANCED'].includes(effect.type)),
     })),
     transformationEffects: ordered.flatMap(node => node.effects),
     evidence: plan.evidence,
@@ -51,5 +53,11 @@ export function compileProviderNeutralPromptArtifact(
         code: item.code.trim(),
         correction: item.correction.trim(),
       })),
+    ...(plan.equipmentLogisticsPlan && simulation.logisticsPreflight ? {
+      logisticsShadow: {
+        plan: structuredClone(plan.equipmentLogisticsPlan),
+        preflight: structuredClone(simulation.logisticsPreflight),
+      },
+    } : {}),
   };
 }

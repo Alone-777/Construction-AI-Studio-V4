@@ -11,6 +11,7 @@ import { SpatialBuilderStage } from '../spatial/SpatialBuilder';
 import type { PipelineContext } from '../types';
 import { WorldBuilderStage } from '../world/WorldBuilder';
 import { StagesExecutorStage } from './StagesExecutor';
+import * as logistics from '../../../actions/physical-execution-v2/logistics';
 
 function createContext(operationCount: number): PipelineContext {
   const compiled = compileDescriptionToBlueprint({
@@ -108,6 +109,30 @@ function runRejectedScenario() {
 }
 
 describe('StagesExecutorStage - commit integrity', () => {
+  it('keeps fiscal approval authoritative even when logistics would block generation', () => {
+    const context = createContext(1);
+    const fiscal = vi.fn(() => fiscalResult(true));
+    context.fiscalRunner = { runAllFiscals: fiscal } as unknown as FiscalRunner;
+    context.blueprint.tools[0].location = 'UNVERIFIED_STOCK';
+    context.worldState!.tools[0].location = 'UNVERIFIED_STOCK';
+    expect(new StagesExecutorStage().execute(context).success).toBe(true);
+    expect(stageAt(context, 25).physicalSimulationV2?.logisticsPreflight?.status).toBe('WOULD_BLOCK');
+    expect(context.worldState).toBe(stageAt(context, 100).worldStateAfter);
+    expect(fiscal).toHaveBeenCalledTimes(5);
+  });
+
+  it('isolates thrown shadow instrumentation and still preserves rejection/rollback', () => {
+    const spy = vi.spyOn(logistics, 'planEquipmentLogistics').mockImplementation(() => { throw new Error('diagnostic unavailable'); });
+    try {
+      const { context, stage25, stage50, stage75 } = runRejectedScenario();
+      expect(stage25.physicalExecutionPlanV2?.logisticsError).toBe('diagnostic unavailable');
+      expect(stage25.physicalSimulationV2?.logisticsPreflight?.status).toBe('WOULD_BLOCK');
+      expect(context.worldState).toBe(stage25.worldStateAfter);
+      expect(stage50.status).toBe('rejected');
+      expect(stage75.physicalExecutionPlanV2).toBeUndefined();
+    } finally { spy.mockRestore(); }
+  });
+
   it('marks a fiscal FAIL stage as rejected', () => {
     const { stage50 } = runRejectedScenario();
 
