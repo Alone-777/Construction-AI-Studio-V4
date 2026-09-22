@@ -142,6 +142,9 @@ describe('createFireflyProject', () => {
     expect(manifest.operations.some(operation => operation.visualBasis)).toBe(true);
     expect(firstJob.planningSource).toBe('VISUAL_ANALYSIS');
     expect(firstJob.visualBasis).toBeTruthy();
+    expect(firstJob.sourceImagePrompt).toContain('Approved visual reading:');
+    expect(firstJob.sourceImagePrompt).toContain('Preserve verified reference facts:');
+    expect(firstJob.sourceImagePrompt).not.toContain('SHADOW');
   });
 
 });
