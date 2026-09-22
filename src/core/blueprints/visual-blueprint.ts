@@ -26,15 +26,17 @@ export interface VisualBlueprintRequest {
   name?: string;
   environment?: EnvironmentPreset;
   construction?: string;
+  imageData?: string;
+  mimeType?: string;
+  imageName?: string;
+  imageSize?: number;
+  providerModel?: string;
+  evaluationCategory?: VisualEvaluationCategory;
 }
 
 export interface VisualReconstructionRequest extends VisualBlueprintRequest {
   imageData: string;
   mimeType: string;
-  imageName?: string;
-  imageSize?: number;
-  providerModel?: string;
-  evaluationCategory?: VisualEvaluationCategory;
 }
 
 export interface VisualBlueprintResult extends DescriptionBlueprintResult {
