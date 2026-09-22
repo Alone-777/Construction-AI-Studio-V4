@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useVisualPipelineStore } from '../../store/useVisualPipelineStore';
-import { fetchInitialImageFromFolder } from '../../core/providers/internal-api-visual-provider';
 import type { VisualPipelineRun } from '../../core/visual-pipeline';
 import {
   createVisualPipelineStartDraft,
@@ -49,7 +48,6 @@ export function VisualPipelineWorkspace() {
   const setInitialImage = useProjectStore(state => state.setInitialImage);
   const pipeline = useVisualPipelineStore();
   const [localError, setLocalError] = useState('');
-  const [initialImageDiscoveryDone, setInitialImageDiscoveryDone] = useState(false);
 
   const scene = project?.scenes.find(candidate => candidate.id === selectedSceneId)
     ?? project?.scenes[0];
@@ -78,35 +76,6 @@ export function VisualPipelineWorkspace() {
       : undefined;
   const videoJobBlocked = !!videoJobBlockMessage;
 
-  useEffect(() => {
-    let active = true;
-    setInitialImageDiscoveryDone(false);
-
-    if (!project) {
-      setInitialImageDiscoveryDone(true);
-      return () => { active = false; };
-    }
-    if (initialImage || initialImageLocked) {
-      setInitialImageDiscoveryDone(true);
-      return () => { active = false; };
-    }
-
-    fetchInitialImageFromFolder()
-      .then(({ image, warnings }) => {
-        if (!active) return;
-        if (warnings.length > 0) setLocalError(warnings.join(' '));
-        if (image) setInitialImage(image);
-      })
-      .catch(() => {
-        // Folder auto-discovery is optional; manual upload remains available.
-      })
-      .finally(() => {
-        if (active) setInitialImageDiscoveryDone(true);
-      });
-
-    return () => { active = false; };
-  }, [project?.id, !!initialImage, initialImageLocked, setInitialImage]);
-
   const handleInitialImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || initialImageLocked) return;
@@ -133,10 +102,6 @@ export function VisualPipelineWorkspace() {
 
   const start = () => {
     if (!project || !scene || !stage) return;
-    if (!initialImageDiscoveryDone) {
-      setLocalError('A verificação da Imagem Inicial ainda não terminou.');
-      return;
-    }
     try {
       setLocalError('');
       pipeline.start(key, createVisualPipelineStartDraft(project, scene, stage));
