@@ -75,7 +75,7 @@ export interface Stage {
   jumpRisk?: JumpRisk;
   /** Artefatos derivados do estágio real, nunca texto de demonstração isolado. */
   prompts?: {visual: string;
-    nanoBanana: string;
+    image: string;
     kling: string;
     /** Identifies whether animation text came from causal V2 or the compatibility generator. */
     animationSource?: 'PHYSICAL_EXECUTION_V2' | 'LEGACY_KLING';
