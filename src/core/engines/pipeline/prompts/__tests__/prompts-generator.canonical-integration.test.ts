@@ -160,7 +160,7 @@ describe('PromptsGeneratorStage - canonical provider-neutral image integration',
       cameras: context.dna!.cameras,
     });
     const spec = compileCanonicalImagePromptSpec(snapshots.official)!;
-    const adapted = adaptCanonicalImagePromptToNanoBanana(spec, {
+    const adapted = adaptCanonicalImagePromptToProviderNeutral(spec, {
       mode: 'GENERATE',
       profile: 'FULL',
     });
@@ -322,7 +322,7 @@ describe('PromptsGeneratorStage - canonical provider-neutral image integration',
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toContain('Missing PhysicalActionIR');
-    expect(result.error?.message).toContain('Legacy provider-neutral image fallback is disabled');
+    expect(result.error?.message).toContain('Legacy provider-specific image fallback is disabled');
     expect(stage.prompts?.image).toBeUndefined();
   });
 
