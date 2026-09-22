@@ -5,7 +5,7 @@ import { createServer } from 'vite';
 // Read-only synthetic examples: no .firefly access, providers, generated assets or state writes.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const server = await createServer({ root, configFile: false, appType: 'custom', logLevel: 'error',
-  optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, hmr: false } });
+  optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, hmr: false, ws: false } });
 try {
   const { logisticsExample } = await server.ssrLoadModule('/src/core/actions/physical-execution-v2/logistics-fixtures.ts');
   const v2 = await server.ssrLoadModule('/src/core/actions/physical-execution-v2/index.ts');

@@ -160,6 +160,20 @@ describe('V2 equipment/logistics shadow', () => {
     expect(codes(result.logistics)).toContain('LOGISTICS_INSUFFICIENT_WORKERS');
   });
 
+  it.each([3, 4])('accepts %i verified workers when the operation requires that crew', workerCount => {
+    const result = run(logisticsExample({ workerCount, profile: {
+      loadClass: 'LIGHT', sizeClass: 'LONG', heightClass: 'GROUND', minimumWorkers: workerCount,
+    } }));
+    expect(result.preflight.status).toBe('READY');
+    expect(result.logistics.movements[1].requiredWorkers).toBe(workerCount);
+  });
+
+  it('requires resolution when tool carrier and currentTool disagree', () => {
+    const example = logisticsExample();
+    example.world.tools[0].carrier = example.world.character.characterId;
+    expect(run(example).preflight.issues.map(issue => issue.code)).toContain('LOGISTICS_TOOL_CUSTODY_CONFLICT');
+  });
+
   it('extra workers alone cannot make a heavy beam float to the roof', () => {
     const result = run(logisticsExample({ workerCount: 4, profile: { massKg: 80, lengthM: 4, targetHeightM: 3 } }));
     expect(result.logistics.movements[1].method).toBe('HOIST');
@@ -316,6 +330,21 @@ describe('V2 equipment/logistics shadow', () => {
     expect(receipt.commitAvailable).toBe(false);
   });
 
+  it('isolates malformed shadow data from operational validation and prompt compilation', () => {
+    const result = run();
+    const expectedPrompt = compileAdobeFireflyVideoPromptV2({
+      artifact: compileProviderNeutralPromptArtifact(result.plan, result.receipt),
+    }).prompt;
+    Object.assign(result.plan.equipmentLogisticsPlan!.resources[0], { origin: null });
+    const receipt = simulatePhysicalExecution(result.world, result.plan);
+    expect(receipt.validation).toEqual(result.receipt.validation);
+    expect(receipt.projected).toEqual(result.receipt.projected);
+    expect(receipt.logisticsPreflight?.issues[0].code).toBe('LOGISTICS_INSTRUMENTATION_ERROR');
+    expect(compileAdobeFireflyVideoPromptV2({
+      artifact: compileProviderNeutralPromptArtifact(result.plan, receipt),
+    }).prompt).toBe(expectedPrompt);
+  });
+
   it('uses safe diagnostic prompts with complete handling and budget refusal, not truncation', () => {
     const result = run();
     const artifact = compileProviderNeutralPromptArtifact(result.plan, result.receipt);
@@ -335,6 +364,25 @@ describe('V2 equipment/logistics shadow', () => {
     expect(compileLogisticsShadowPrompt(artifact).prompt).toBeNull();
     artifact.logisticsShadow!.preflight.status = 'READY';
     expect(compileLogisticsShadowPrompt(artifact).prompt).toBeNull();
+  });
+
+  it.each([NaN, Infinity, 0, -1])('refuses invalid prompt budgets (%s) without bypassing the 1800-character cap', maxChars => {
+    const result = run();
+    const artifact = compileProviderNeutralPromptArtifact(result.plan, result.receipt);
+    artifact.retryCorrections = [{ code: 'KEEP', correction: 'Preserve continuous movement. '.repeat(100) }];
+    const preview = compileLogisticsShadowPrompt(artifact, maxChars);
+    expect(preview.prompt).toBeNull();
+    expect(preview.reason).toBe('LOGISTICS_PROMPT_BUDGET_INVALID');
+    expect(preview.generationAuthorized).toBe(false);
+  });
+
+  it('does not place an already held tool in the proposed stock point', () => {
+    const example = logisticsExample();
+    example.world.character.currentTool = 'martelo';
+    const result = run(example);
+    const initial = compileLogisticsSourcePreparation(result.logistics, result.preflight, 'INITIAL_SOURCE');
+    expect(initial.candidateImageInstruction).toContain('madeira');
+    expect(initial.candidateImageInstruction).not.toContain('hammer');
   });
 
   it('proposes an initial compact point only for registered stock; never edits an approved continuation', () => {

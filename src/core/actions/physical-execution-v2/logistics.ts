@@ -98,6 +98,9 @@ export function planEquipmentLogistics(
     if (stock?.carrier && stock.carrier !== world.character.characterId) {
       issues.push({ severity: 'BLOCKER', code: 'LOGISTICS_TOOL_HANDOFF_REQUIRED', message: `${id} belongs to another worker; a verified handoff is required.` });
     }
+    if (stock?.carrier === world.character.characterId && !held) {
+      issues.push({ severity: 'BLOCKER', code: 'LOGISTICS_TOOL_CUSTODY_CONFLICT', message: `${id} is assigned to the actor but is not the current held tool; verify custody and pickup before use.` });
+    }
     resources.push({
       key: 'tool:' + id, kind: 'TOOL', id,
       sourceZoneId: held ? world.character.currentZone : stock?.location ?? '',

@@ -13,6 +13,9 @@ export function compileLogisticsShadowPrompt(
   artifact: ProviderNeutralPromptArtifactV2,
   maxChars = ADOBE_FIREFLY_PROMPT_MAX_CHARS,
 ): { mode: 'SHADOW'; generationAuthorized: false; prompt: string | null; characterCount: number; reason?: string } {
+  if (!Number.isFinite(maxChars) || maxChars <= 0) {
+    return { mode: 'SHADOW', generationAuthorized: false, prompt: null, characterCount: 0, reason: 'LOGISTICS_PROMPT_BUDGET_INVALID' };
+  }
   const shadow = artifact.logisticsShadow;
   if (!shadow) return { mode: 'SHADOW', generationAuthorized: false, prompt: null, characterCount: 0, reason: 'LOGISTICS_NOT_AVAILABLE' };
   // Recompute: never trust a caller-modified/stale READY flag.

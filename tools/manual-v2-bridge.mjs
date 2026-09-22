@@ -79,7 +79,7 @@ export async function compileManualVideoProjectV2({
     appType: 'custom',
     logLevel: 'error',
     optimizeDeps: { noDiscovery: true, include: [] },
-    server: { middlewareMode: true, hmr: false },
+    server: { middlewareMode: true, hmr: false, ws: false },
   });
 
   try {

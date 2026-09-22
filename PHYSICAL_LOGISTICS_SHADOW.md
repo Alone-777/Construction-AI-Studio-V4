@@ -20,7 +20,7 @@ Campos novos são opcionais nos contratos existentes. Planos legados sem logíst
 
 ## Regras implementadas
 
-1. **Ferramentas:** devem estar registradas e localizadas, ou já constar em `currentTool`. A ferramenta já carregada não é duplicada. Antes de carregar material/trocar ferramenta, é colocada num apoio. Ferramenta com outro trabalhador exige transferência explicitamente preparada.
+1. **Ferramentas:** devem estar registradas e localizadas, ou já constar em `currentTool`. A ferramenta já carregada não é duplicada. Antes de carregar material/trocar ferramenta, é colocada num apoio. Ferramenta com outro trabalhador exige transferência explicitamente preparada. Se `carrier` aponta para o personagem mas `currentTool` não confirma a ferramenta em mãos, o shadow exige resolver a posse antes de dispensar a retirada.
 2. **Estoque compacto:** `logisticsArea` descreve um ponto organizado dentro de uma zona existente. O blueprint por descrição propõe a borda de `Z1`. Isso não move estoque nem prova que ele aparece na imagem.
 3. **Materiais:** origem não vazia, zona registrada, disponibilidade e quantidade suficiente são obrigatórias. Estoques ambíguos com o mesmo identificador exigem resolução. Material em `visualBasis` sem quantidade declarada não é aceito como consumo verificável.
 4. **Cadeia física:** aproximação → pegar → levantar → transportar → posicionar com apoio → fixar/assentar → soltar. O validador rejeita etapas ausentes, fora de ordem, retirada em zona errada, destino não autorizado e soltura sem apoio.
@@ -51,14 +51,14 @@ O chamador deve obter o hash e as observações da fonte real. Esta implementaç
 
 `compileLogisticsSourcePreparation` acrescenta uma proposta separada ao compilador de imagens existente:
 
-- Antes de aceitar a primeira fonte: pode descrever um ponto compacto apenas com recursos registrados, disponíveis e já localizados na zona proposta. Preserva terreno, câmera, identidade e progresso zero; não acrescenta estrutura futura.
+- Antes de aceitar a primeira fonte: pode descrever um ponto compacto apenas com recursos registrados, disponíveis e já localizados na zona proposta. Ferramentas já carregadas e equipamentos de içamento preparados são excluídos desse ponto para evitar duplicação ou deslocamento implícito. Preserva terreno, câmera, identidade e progresso zero; não acrescenta estrutura futura.
 - Após um frame aprovado: mantém o frame exato e propõe retirada, entrega e montagem de equipamento pelo fluxo revisado existente. Não fornece instrução para pintar novos itens no frame oficial.
 
 Toda proposta tem `requiresReview: true` e `changesOfficial: false`. Esta fase não gera imagens, não substitui o prompt oficial de preparação e não altera arquivos `.firefly` existentes. A Imagem Inicial continua sendo `MANUAL_REFERENCE`, conforme `START_HERE.md`.
 
 ## Preview de prompt
 
-`compileLogisticsShadowPrompt` recompõe e valida o diagnóstico antes de emitir um preview explicitamente marcado `SHADOW`. Mantém as cadeias completas, transformação, progresso, proibições e correções de retry. Recusa preview quando há pendências ou quando excederia o orçamento de 1.800 caracteres; não trunca movimentos para caber.
+`compileLogisticsShadowPrompt` recompõe e valida o diagnóstico antes de emitir um preview explicitamente marcado `SHADOW`. Mantém as cadeias completas, transformação, progresso, proibições e correções de retry. Recusa preview quando há pendências ou quando excederia o orçamento de 1.800 caracteres; não trunca movimentos para caber. Orçamentos não finitos ou não positivos retornam `LOGISTICS_PROMPT_BUDGET_INVALID`, evitando que `NaN` desative a comparação do limite.
 
 `generationAuthorized` é sempre `false`. O compilador Adobe operacional ignora o campo de diagnóstico e continua gerando o mesmo prompt. Promover essas regras a bloqueio real ou inserir preparações no fluxo requer uma evolução posterior, após observar os resultados do shadow.
 
@@ -84,6 +84,14 @@ Os exemplos são sintéticos e somente de leitura, sem provider, vídeo, migraç
 
 As regressões verificam também conservação simbólica de estoque, ferramenta já em mãos, perfis inválidos, fontes desatualizadas, rotas, apoio antes da soltura, integridade do prompt, isolamento de exceções e autoridade dos fiscais/rollback. Há testes de persistência em novos JOBs e compatibilidade do script protegido de migração; executar testes não migra o projeto do usuário.
 
+A revisão de estabilização inclui equipes válidas de três e quatro pessoas, dados shadow malformados sem efeito no prompt operacional e verificação dos artefatos persistidos em todos os 32 JOBs do projeto sintético. Os compiladores SSR da bridge e dos exemplos desabilitam WebSocket (`server.ws: false`), evitando disputa pela porta 24678 em execuções concorrentes.
+
+## Instalação no checkout operacional
+
+Validar uma cópia de desenvolvimento não confirma atualização do WSL. Compare o HEAD local com a branch remota depois de um fast-forward, preservando os arquivos não rastreados e verificando o hash de `Imagem Inicial/initial_master.png` antes/depois. Execute os quatro comandos de validação acima no checkout atualizado, sem chamar scripts de migração.
+
+No protocolo Relay atual, `run_action` aceita `test` e `build`, mas não oferece sincronização isolada nem os scripts específicos de logística. Não invoque operações de migração ou de revisão apenas para provocar seu fast-forward interno. Quando não houver uma operação de sincronização permitida, essa instalação e os quatro comandos precisam ser executados pelo operador no WSL. Atualizar o código não reescreve os JOBs antigos nem promove o shadow a autoridade operacional.
+
 ## Limites desta primeira versão
 
 - Um recurso/material é tratado por peça/lote sequencial, sem geometria 3D, distância métrica, ergonomia ou ciclo automático de várias viagens. Lotes fracionáveis devem ter perfil/quantidade coerentes fornecidos pelo chamador.
@@ -91,4 +99,3 @@ As regressões verificam também conservação simbólica de estoque, ferramenta
 - Transporte pesado entre zonas exige plano de carga na origem e descarga no destino. O modelo atual de equipamento fixo recusa esse caso com `LOGISTICS_HEAVY_LOADING_PLAN_REQUIRED`; não usa uma talha distante para carregar a peça magicamente. O exemplo válido começa com a carga já preparada no local registrado.
 - Equipamento fora do ponto de trabalho gera proposta de preparação, não uma movimentação fictícia. Observações e metadados declarados precisam de revisão humana ou de um analisador visual futuro.
 - Não há migração automática de JOBs em revisão, alteração de tentativas, liberação de próximos JOBs, ativação de provider ou garantia de que um gerador de vídeo respeitará o plano.
-

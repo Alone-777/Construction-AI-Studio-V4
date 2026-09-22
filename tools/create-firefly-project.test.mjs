@@ -77,6 +77,16 @@ describe('createFireflyProject', () => {
       expect(Array.from(job.prompt).length).toBeLessThanOrEqual(
         ANIMATION_PROMPT_MAX_CHARS,
       );
+      expect(job.physicalExecutionV2.plan.equipmentLogisticsPlan.mode).toBe('SHADOW');
+      expect(job.physicalExecutionV2.simulation.logisticsPreflight.commitAvailable).toBe(false);
+      expect(job.physicalExecutionV2.providerNeutralPrompt.logisticsShadow.plan)
+        .toEqual(job.physicalExecutionV2.plan.equipmentLogisticsPlan);
+      const shadow = job.physicalExecutionV2.logisticsShadow;
+      expect(shadow.generationAuthorized).toBe(false);
+      expect(shadow.sourcePreparation.changesOfficial).toBe(false);
+      expect(shadow.sourcePreparation.phase).toBe(queued.sequence === 1 ? 'INITIAL_SOURCE' : 'CONTINUATION');
+      if (queued.sequence > 1) expect(shadow.sourcePreparation.candidateImageInstruction).toBeNull();
+      expect(job.prompt).not.toContain('SHADOW');
     }
 
     expect(Array.from(firstJob.prompt).length).toBeLessThanOrEqual(1800);
@@ -85,5 +95,6 @@ describe('createFireflyProject', () => {
 
     await expect(stat(path.join(workspace, queue.jobs[0].sourcePath))).rejects.toThrow();
     expect((await stat(path.join(workspace, manifest.initialImage.workspacePath))).isFile()).toBe(true);
+    expect(await readFile(path.join(initialRoot, 'referencia.png'))).toEqual(Buffer.from('fake-png'));
   });
 });

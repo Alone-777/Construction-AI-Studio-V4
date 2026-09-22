@@ -11,7 +11,10 @@ export function compileLogisticsSourcePreparation(
   const registered = plan.resources.filter(resource => resource.registered && resource.available
     && resource.origin.trim() && resource.sourceZoneId.trim());
   const area = plan.area;
-  const staged = registered.filter(resource => resource.sourceZoneId === area?.zoneId);
+  // A held tool stays with its carrier. A stock proposal must not duplicate it
+  // on a rack or relocate already prepared lifting equipment into the stock point.
+  const staged = registered.filter(resource => resource.sourceZoneId === area?.zoneId
+    && !resource.heldBy && resource.kind !== 'EQUIPMENT');
   return {
     mode: 'SHADOW', phase, requiresReview: true, changesOfficial: false,
     resourceKeys: registered.map(resource => resource.key),
