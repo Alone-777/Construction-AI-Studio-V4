@@ -11,7 +11,7 @@ import { worldStateToVisualSceneState } from './core/visual/VisualSceneState';
 import { optimizePrompt } from './core/prompts/optimizer';
 import type { Project } from './core/types';
 import { auditProjectStage } from './core/fiscals/fiscal-runner';
-import { generateNanoBananaPrompt } from './core/prompts/nano-banana';
+import { generateProviderNeutralImagePrompt } from './core/prompts/provider-neutral-image';
 import { generateKlingPrompt } from './core/prompts/kling';
 
 /* ─── Tela Inicial ─── */
@@ -793,8 +793,8 @@ function PromptView() {
   const updateEditedText = usePromptStore(s => s.updateEditedText);
   const copyToClipboard = usePromptStore(s => s.copyToClipboard);
   const [promptNotice, setPromptNotice] = useState('');
-  const rawPrompt = config.platform === 'nano_banana'
-    ? stage?.prompts?.nanoBanana ?? ''
+  const rawPrompt = config.platform === 'manual_image'
+    ? stage?.prompts?.image ?? ''
     : stage?.prompts?.kling ?? '';
 
   useEffect(() => {
@@ -810,12 +810,12 @@ function PromptView() {
           <label className="text-studio-muted block mb-1">Plataforma</label>
           <select value={config.platform}
             onChange={event => {
-              const platform = event.target.value as 'kling' | 'nano_banana';
+              const platform = event.target.value as 'kling' | 'manual_image';
               setConfig({ platform, maxCharacters: platform === 'kling' ? 1400 : 3000 });
             }}
             className="select-field">
             <option value="kling">Kling (1400 chars)</option>
-            <option value="nano_banana">Nano Banana</option>
+            <option value="manual_image">Imagem manual</option>
           </select>
         </div>
 
@@ -835,17 +835,17 @@ function PromptView() {
           onClick={() => {
             if (!project || !scene || !stage?.worldStateBefore) return;
             const previousScene = project.scenes[project.scenes.findIndex(item => item.id === scene.id) - 1];
-            const nanoBanana = generateNanoBananaPrompt(
+            const imagePrompt = generateProviderNeutralImagePrompt(
               scene, stage, stage.worldStateBefore, project.dna, project.spatialMap, previousScene,
             ).fullText;
             const kling = generateKlingPrompt(scene, stage, stage.worldStateBefore, project.dna).fullText;
             updateScene(scene.id, {
               stages: scene.stages.map(item => item.percentage === stage.percentage
-                ? { ...item, prompts: { visual: '', nanoBanana, kling } }
+                ? { ...item, prompts: { visual: '', image: imagePrompt, kling } }
                 : item),
             });
-            startEditing(config.platform === 'nano_banana' ? nanoBanana : kling);
-            setPromptNotice(`Prompt ${config.platform === 'nano_banana' ? 'Nano Banana' : 'Kling'} regenerado do snapshot auditado.`);
+            startEditing(config.platform === 'manual_image' ? imagePrompt : kling);
+            setPromptNotice(`Prompt ${config.platform === 'manual_image' ? 'Imagem manual' : 'Kling'} regenerado do snapshot auditado.`);
           }} className="btn-secondary w-full disabled:opacity-50">
           ↻ Gerar novamente do estágio real
         </button>
