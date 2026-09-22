@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createCabanaDoRiachoProject } from '../../core/demo/cabana-do-riacho';
+import { createGenericConstructionProject } from '../../core/__tests__/fixtures/generic-construction-project';
 import type { ImageAssetRef } from '../../core/image-generation';
 import { DEFAULT_VISUAL_ASPECT_RATIO } from '../../core/types';
 import type { VideoAssetRef } from '../../core/video-generation';
@@ -97,7 +97,7 @@ describe('operational visual pipeline presentation', () => {
   });
 
   it('uses the persisted Initial Image as a manual reference and prompt origin', () => {
-    const base = createCabanaDoRiachoProject();
+    const base = createGenericConstructionProject();
     const project = {
       ...base,
       initialImage: {
@@ -111,7 +111,7 @@ describe('operational visual pipeline presentation', () => {
     const pair = project.scenes.flatMap(scene =>
       scene.stages.map(stage => ({ scene, stage })),
     ).find(item => item.stage.decision && item.stage.worldStateBefore && item.stage.worldStateAfter);
-    if (!pair) throw new Error('Demo project has no committed stage.');
+    if (!pair) throw new Error('Generic project has no committed stage.');
 
     const key = visualPipelineKey(project.id, pair.scene.id, String(pair.stage.percentage));
     useVisualPipelineStore.getState().start(
@@ -377,11 +377,11 @@ describe('operational visual pipeline presentation', () => {
 });
 
 function startRun(index = 0) {
-  const project = createCabanaDoRiachoProject();
+  const project = createGenericConstructionProject();
   const pairs = project.scenes.flatMap(scene => scene.stages.map(stage => ({ scene, stage })))
     .filter(item => item.stage.decision && item.stage.worldStateBefore && item.stage.worldStateAfter);
   const pair = pairs[index];
-  if (!pair) throw new Error(`Demo project has no committed stage at index ${index}.`);
+  if (!pair) throw new Error(`Generic project has no committed stage at index ${index}.`);
   const key = visualPipelineKey(project.id, pair.scene.id, String(pair.stage.percentage));
   useVisualPipelineStore.getState().start(
     key,
@@ -409,7 +409,7 @@ async function imageValidated(index = 0) {
 }
 
 async function imageValidatedIndependent(projectId: string) {
-  const base = createCabanaDoRiachoProject();
+  const base = createGenericConstructionProject();
   const project = { ...base, id: projectId };
   const pair = project.scenes
     .flatMap(scene => scene.stages.map(stage => ({ scene, stage })))
