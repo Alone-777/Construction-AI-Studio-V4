@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CanonicalImagePromptSpec } from '../image-prompts/canonical-image-prompt-spec';
 import { renderCanonicalImagePrompt } from '../image-prompts/canonical-image-prompt-renderer';
-import { adaptCanonicalImagePromptToNanoBanana } from '../image-prompts/nano-banana-prompt-adapter';
+import { adaptCanonicalImagePromptToProviderNeutral } from '../image-prompts/provider-neutral-image-prompt-adapter';
 import { PipelineRegistry } from '../engines/pipeline/pipeline-registry';
 import { beginStageTransaction } from '../transactions/stage-transaction';
 import type { Stage, WorldState } from '../types';
@@ -156,7 +156,7 @@ function request(options: {
 } = {}): ImageGenerationRequest {
   const spec = canonicalSpec(options.authority);
   const mode = options.mode ?? 'GENERATE';
-  const adapted = adaptCanonicalImagePromptToNanoBanana(spec, { mode });
+  const adapted = adaptCanonicalImagePromptToProviderNeutral(spec, { mode });
   return createImageGenerationRequest({
     canonicalSpec: spec,
     providerPrompt: {
@@ -256,7 +256,7 @@ describe('#12 Image Provider Foundation', () => {
 
   it('6. preserves the provider-adapted prompt verbatim except edge whitespace', () => {
     const spec = canonicalSpec();
-    const adapted = adaptCanonicalImagePromptToNanoBanana(spec, { mode: 'GENERATE' });
+    const adapted = adaptCanonicalImagePromptToProviderNeutral(spec, { mode: 'GENERATE' });
     const built = createImageGenerationRequest({
       canonicalSpec: spec,
       providerPrompt: adapted,
@@ -268,7 +268,7 @@ describe('#12 Image Provider Foundation', () => {
 
   it('7. preserves negativePrompt', () => {
     const spec = canonicalSpec();
-    const adapted = adaptCanonicalImagePromptToNanoBanana(spec, { mode: 'GENERATE' });
+    const adapted = adaptCanonicalImagePromptToProviderNeutral(spec, { mode: 'GENERATE' });
     expect(createImageGenerationRequest({
       canonicalSpec: spec,
       providerPrompt: adapted,
@@ -400,7 +400,7 @@ describe('#12 Image Provider Foundation', () => {
   it('21. adapter, builder and service do not mutate CanonicalImagePromptSpec', async () => {
     const spec = freeze(canonicalSpec());
     const before = clone(spec);
-    const adapted = adaptCanonicalImagePromptToNanoBanana(spec, { mode: 'GENERATE' });
+    const adapted = adaptCanonicalImagePromptToProviderNeutral(spec, { mode: 'GENERATE' });
     const built = createImageGenerationRequest({
       canonicalSpec: spec,
       providerPrompt: adapted,
@@ -459,7 +459,7 @@ describe('#12 Image Provider Foundation', () => {
 
   it('26. NanoBanana prompt adapter remains compatible with the request builder', () => {
     const spec = canonicalSpec();
-    const adapted = adaptCanonicalImagePromptToNanoBanana(spec, { mode: 'EDIT' });
+    const adapted = adaptCanonicalImagePromptToProviderNeutral(spec, { mode: 'EDIT' });
     const built = createImageGenerationRequest({
       canonicalSpec: spec,
       providerPrompt: adapted,
@@ -544,7 +544,7 @@ describe('#12 Image Provider Foundation', () => {
       completedComponents: ['component-a', 'candidate-b-only-geometry'],
     });
     const candidateBefore = clone(rejectedCandidateB);
-    const adaptedA = adaptCanonicalImagePromptToNanoBanana(officialA, { mode: 'GENERATE' });
+    const adaptedA = adaptCanonicalImagePromptToProviderNeutral(officialA, { mode: 'GENERATE' });
     const officialRequestA = createImageGenerationRequest({
       canonicalSpec: officialA,
       providerPrompt: adaptedA,
@@ -564,7 +564,7 @@ describe('#12 Image Provider Foundation', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     const spec = canonicalSpec('OFFICIAL');
-    const adapted = adaptCanonicalImagePromptToNanoBanana(spec, { mode: 'GENERATE' });
+    const adapted = adaptCanonicalImagePromptToProviderNeutral(spec, { mode: 'GENERATE' });
     const built = createImageGenerationRequest({
       canonicalSpec: spec,
       providerPrompt: adapted,
