@@ -202,6 +202,10 @@ O Operator Panel `8793` monitora essa pasta automaticamente. Quando houver um ú
 - o ChatGPT analisa e registra PASS ou RETRY pelo Relay;
 - em PASS, o último frame aprovado libera o próximo JOB e o painel troca de prompt automaticamente.
 
+### Agente Fiscal Visual autônomo
+
+O núcleo opt-in do Agente Fiscal Visual está documentado em [VISUAL_FISCAL_AGENT.md](VISUAL_FISCAL_AGENT.md). Ele analisa o contact sheet em duas rodadas independentes e devolve `PASS`, `RETRY` ou `REVIEW_REQUIRED`, sempre vinculado ao JOB, tentativa e SHA-256 da evidência. O agente não escreve diretamente no estado canônico: decisões aprováveis continuam passando pelos gates existentes do Relay/Bridge. Sem provider configurado ou diante de divergência, o fluxo permanece bloqueado em `REVIEW_REQUIRED`.
+
 Não mover manualmente os vídeos para dentro do repositório salvo em caso de diagnóstico.
 
 
