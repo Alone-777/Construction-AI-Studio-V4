@@ -10,34 +10,6 @@ import type { DetailLevel, EnvironmentPreset } from './core/types';
 import { worldStateToVisualSceneState } from './core/visual/VisualSceneState';
 import { optimizePrompt } from './core/prompts/optimizer';
 import type { Project } from './core/types';
-import type { VisualProviderDescriptor } from './core/providers/visual-provider';
-import {
-  fetchVisualProviderDescriptors,
-  InternalApiVisualProvider,
-} from './core/providers/internal-api-visual-provider';
-import {
-  compileVisualReviewToBlueprint,
-  createProjectFromVisualReview,
-  type VisualBlueprintResult,
-} from './core/blueprints/visual-blueprint';
-import {
-  ALLOWED_IMAGE_MIME_TYPES,
-  MAX_IMAGE_BYTES,
-  VISUAL_CLAIM_FIELDS,
-  validateImageMetadata,
-} from '../shared/visual-schema.mjs';
-import {
-  confirmVisualClaim,
-  createVisualReviewSession,
-  editVisualClaim,
-  formatVisualClaimValue,
-  parseVisualClaimValue,
-  removeVisualClaim,
-  restoreVisualClaim,
-  type VisualClaimField,
-  type VisualReviewSession,
-} from './core/review/visual-review';
-import type { VisualEvaluationCategory } from './core/evaluation/visual-evaluation';
 import { auditProjectStage } from './core/fiscals/fiscal-runner';
 import { generateNanoBananaPrompt } from './core/prompts/nano-banana';
 import { generateKlingPrompt } from './core/prompts/kling';
@@ -45,12 +17,10 @@ import { generateKlingPrompt } from './core/prompts/kling';
 /* ─── Tela Inicial ─── */
 function HomeScreen() {
   const setScreen = useUIStore(s => s.setScreen);
-  const createDemoProject = useProjectStore(s => s.createDemoProject);
   const loadProj = useProjectStore(s => s.loadProject);
   const [projects, setProjects] = useState<{ id: string; name: string; updatedAt: number }[]>([]);
   const [showSetup, setShowSetup] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [showImageReconstruction, setShowImageReconstruction] = useState(false);
   const [showProjectsList, setShowProjectsList] = useState(true);
 
   useEffect(() => {
@@ -76,11 +46,6 @@ function HomeScreen() {
     } catch (err) {
       alert('Erro ao importar projeto: ' + (err as Error).message);
     }
-  };
-
-  const handleCreateDemo = () => {
-    createDemoProject();
-    setScreen('project');
   };
 
   if (showSetup) {
@@ -111,12 +76,6 @@ function HomeScreen() {
           <p className="text-xs text-studio-muted mt-1">Abrir um arquivo JSON do Construction AI Studio V4</p>
         </button>
 
-        <button onClick={() => setShowImageReconstruction(true)}
-          className="panel p-6 text-left hover:border-studio-cyan transition-colors group">
-          <div className="text-lg font-semibold text-studio-text group-hover:text-studio-cyan">🖼️ RECONSTRUIR POR IMAGEM</div>
-          <p className="text-xs text-studio-muted mt-1">Pipeline visual com provider externo configurável</p>
-        </button>
-
         <button onClick={() => setShowProjectsList(value => !value)}
           className="panel p-6 text-left hover:border-studio-emerald transition-colors group">
           <div className="text-lg font-semibold text-studio-text group-hover:text-studio-emerald">📁 MEUS PROJETOS</div>
@@ -132,12 +91,6 @@ function HomeScreen() {
               ))}
             </div>
           )}
-        </button>
-
-        <button onClick={handleCreateDemo}
-          className="panel p-6 text-left hover:border-studio-purple transition-colors group">
-          <div className="text-lg font-semibold text-studio-text group-hover:text-studio-purple">🎬 DEMO: CABANA DO RIACHO</div>
-          <p className="text-xs text-studio-muted mt-1">Projeto de demonstração completo</p>
         </button>
       </div>
 
@@ -160,17 +113,6 @@ function HomeScreen() {
         </div>
       )}
 
-      {showImageReconstruction && (
-        <VisualReconstructionModal
-          onClose={() => setShowImageReconstruction(false)}
-          onProjectCreated={(project) => {
-            loadProj(project);
-            setShowImageReconstruction(false);
-            setScreen('project');
-          }}
-        />
-      )}
-
       {/* Aviso legal (§3) */}
       <p className="text-[10px] text-zinc-600 mt-12 max-w-xl text-center leading-relaxed">
         Planejamento conceitual e audiovisual. Não substitui projeto, sondagem, normas, cálculo técnico ou profissional habilitado.
@@ -179,367 +121,6 @@ function HomeScreen() {
   );
 }
 
-const VISUAL_FIELD_LABELS: Record<string, string> = {
-  constructionType: 'Tipo provável', environment: 'Ambiente', terrain: 'Terreno',
-  watercourse: 'Curso d’água', vegetation: 'Vegetação', visibleComponents: 'Componentes visíveis',
-  apparentMaterials: 'Materiais aparentes', structure: 'Estrutura', foundation: 'Fundação',
-  floor: 'Piso', walls: 'Paredes', roof: 'Cobertura', openings: 'Aberturas',
-  externalAreas: 'Áreas externas', paths: 'Caminhos', drainage: 'Drenagem',
-  spatialRelations: 'Relações espaciais', naturalElements: 'Elementos naturais',
-  preservationElements: 'Elementos a preservar', apparentCompletion: 'Conclusão aparente',
-};
-
-const VISUAL_ORIGIN_LABELS = {
-  PROVIDER: 'veio do provider',
-  USER_EDITED: 'alterado pelo usuário',
-  USER_CONFIRMED: 'confirmado pelo usuário',
-} as const;
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === 'string'
-      ? resolve(reader.result)
-      : reject(new Error('Não foi possível ler a imagem.'));
-    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function VisualClaimReviewCard({
-  field,
-  session,
-  onSessionChange,
-}: {
-  field: VisualClaimField;
-  session: VisualReviewSession;
-  onSessionChange: (session: VisualReviewSession) => void;
-}) {
-  const claim = session.reviewedInterpretation.claims[field];
-  const [draftValue, setDraftValue] = useState(formatVisualClaimValue(claim.value));
-  const [draftEvidence, setDraftEvidence] = useState(claim.evidence);
-  const [draftClassification, setDraftClassification] = useState(claim.classification);
-  const [localError, setLocalError] = useState('');
-
-  useEffect(() => {
-    setDraftValue(formatVisualClaimValue(claim.value));
-    setDraftEvidence(claim.evidence);
-    setDraftClassification(claim.classification);
-    setLocalError('');
-  }, [claim]);
-
-  const applyEdit = () => {
-    try {
-      const value = draftClassification === 'UNKNOWN' ? null : parseVisualClaimValue(field, draftValue);
-      onSessionChange(editVisualClaim(session, field, {
-        value: value as never,
-        classification: draftClassification,
-        evidence: draftEvidence,
-      }));
-    } catch (cause) {
-      setLocalError(cause instanceof Error ? cause.message : 'Correção inválida.');
-    }
-  };
-
-  const originClass = claim.origin === 'PROVIDER'
-    ? 'text-cyan-300 border-cyan-500/40'
-    : claim.origin === 'USER_CONFIRMED'
-      ? 'text-emerald-300 border-emerald-500/40'
-      : 'text-amber-300 border-amber-500/40';
-
-  return (
-    <details className={`rounded border bg-studio-bg px-2 py-1.5 text-xs ${claim.removed ? 'border-rose-500/50 opacity-80' : 'border-studio-border'}`}>
-      <summary className="cursor-pointer flex flex-wrap justify-between gap-2">
-        <span>{VISUAL_FIELD_LABELS[field] ?? field}: {claim.removed ? 'removido da interpretação' : (formatVisualClaimValue(claim.value) || 'não verificável')}</span>
-        <span className="flex flex-wrap gap-1">
-          <span className={`rounded border px-1 ${originClass}`}>{VISUAL_ORIGIN_LABELS[claim.origin]}</span>
-          <span className={claim.classification === 'FACT' ? 'text-emerald-400' : claim.classification === 'HYPOTHESIS' ? 'text-amber-400' : 'text-studio-muted'}>
-            {claim.classification}
-          </span>
-        </span>
-      </summary>
-      <div className="mt-2 space-y-2">
-        <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] text-studio-muted">
-          <div className="font-semibold text-cyan-300">Original do provider — preservado</div>
-          <div>Valor: {formatVisualClaimValue(claim.originalValue) || 'não verificável'}</div>
-          <div>Classe: {claim.originalClassification} · confiança original {Math.round(claim.originalConfidence * 100)}%</div>
-          <div>Evidência: {claim.originalEvidence}</div>
-        </div>
-        {!claim.removed && (
-          <>
-            <label className="block text-[10px] text-studio-muted">Valor atual
-              <input aria-label={`Valor de ${VISUAL_FIELD_LABELS[field] ?? field}`} value={draftValue}
-                onChange={event => setDraftValue(event.target.value)} className="input-field mt-1" />
-            </label>
-            <label className="block text-[10px] text-studio-muted">Classificação atual
-              <select aria-label={`Classificação de ${VISUAL_FIELD_LABELS[field] ?? field}`} value={draftClassification}
-                onChange={event => setDraftClassification(event.target.value as typeof draftClassification)} className="input-field mt-1">
-                <option value="FACT">FACT</option>
-                <option value="HYPOTHESIS">HYPOTHESIS</option>
-                <option value="UNKNOWN">UNKNOWN</option>
-              </select>
-            </label>
-            <label className="block text-[10px] text-studio-muted">Descrição/evidência atual
-              <textarea aria-label={`Evidência de ${VISUAL_FIELD_LABELS[field] ?? field}`} value={draftEvidence}
-                onChange={event => setDraftEvidence(event.target.value)} className="input-field mt-1 h-16 resize-y" />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={applyEdit} className="btn-secondary">Salvar correção</button>
-              <button type="button" onClick={() => onSessionChange(confirmVisualClaim(session, field))}
-                className="btn-secondary">Confirmar claim</button>
-              <button type="button" onClick={() => onSessionChange(removeVisualClaim(session, field))}
-                className="btn-secondary text-rose-300">Remover claim</button>
-            </div>
-          </>
-        )}
-        {claim.removed && (
-          <button type="button" onClick={() => onSessionChange(restoreVisualClaim(session, field))} className="btn-secondary">
-            Restaurar original do provider
-          </button>
-        )}
-        {claim.changedAt && <p className="text-[10px] text-studio-muted">Alterado em {new Date(claim.changedAt).toLocaleString('pt-BR')}.</p>}
-        {claim.humanConfirmed && <p className="text-[10px] text-emerald-300">Confirmação humana registrada.</p>}
-        {localError && <p role="alert" className="text-[10px] text-rose-300">{localError}</p>}
-      </div>
-    </details>
-  );
-}
-
-function VisualReconstructionModal({
-  onClose,
-  onProjectCreated,
-}: {
-  onClose: () => void;
-  onProjectCreated: (project: Project) => void;
-}) {
-  const [providers, setProviders] = useState<VisualProviderDescriptor[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(true);
-  const [selectedProviderId, setSelectedProviderId] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageData, setImageData] = useState('');
-  const [name, setName] = useState('');
-  const [context, setContext] = useState('');
-  const [evaluationCategory, setEvaluationCategory] = useState<VisualEvaluationCategory>('cabana');
-  const [reviewSession, setReviewSession] = useState<VisualReviewSession | null>(null);
-  const [blueprint, setBlueprint] = useState<VisualBlueprintResult | null>(null);
-  const [status, setStatus] = useState<'idle' | 'reading' | 'analyzing' | 'analyzed' | 'blueprint' | 'creating'>('idle');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    fetchVisualProviderDescriptors()
-      .then(items => {
-        if (!active) return;
-        setProviders(items);
-        setSelectedProviderId(items.find(provider => provider.configured)?.id ?? items[0]?.id ?? '');
-      })
-      .catch(cause => active && setError(cause instanceof Error ? cause.message : 'Backend visual indisponível.'))
-      .finally(() => active && setProvidersLoading(false));
-    return () => { active = false; };
-  }, []);
-
-  const selectedProvider = providers.find(provider => provider.id === selectedProviderId);
-  const request = imageFile ? {
-    imageData,
-    mimeType: imageFile.type,
-    imageName: imageFile.name,
-    imageSize: imageFile.size,
-    userContext: context.trim() || undefined,
-    name: name.trim() || undefined,
-    providerModel: selectedProvider?.model,
-    evaluationCategory,
-  } : null;
-
-  const handleImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    setReviewSession(null);
-    setBlueprint(null);
-    setError('');
-    if (!file) {
-      setImageFile(null);
-      setImageData('');
-      return;
-    }
-    try {
-      setStatus('reading');
-      validateImageMetadata(file.type, file.size);
-      setImageData(await fileToDataUrl(file));
-      setImageFile(file);
-      setStatus('idle');
-    } catch (cause) {
-      setImageFile(null);
-      setImageData('');
-      setStatus('idle');
-      setError(cause instanceof Error ? cause.message : 'Imagem inválida.');
-    }
-  };
-
-  const handleAnalyze = async () => {
-    if (!selectedProvider || !request) return;
-    setError('');
-    setReviewSession(null);
-    setBlueprint(null);
-    setStatus('analyzing');
-    try {
-      const result = await new InternalApiVisualProvider(selectedProvider).analyze(request);
-      setReviewSession(createVisualReviewSession(result));
-      setStatus('analyzed');
-    } catch (cause) {
-      setStatus('idle');
-      setError(cause instanceof Error ? cause.message : 'Falha na análise visual.');
-    }
-  };
-
-  const handleBlueprint = () => {
-    if (!reviewSession || !request) return;
-    setError('');
-    try {
-      setBlueprint(compileVisualReviewToBlueprint(reviewSession, request));
-      setStatus('blueprint');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível normalizar o blueprint.');
-    }
-  };
-
-  const handleCreateProject = () => {
-    if (!reviewSession || !blueprint || !request) return;
-    setError('');
-    setStatus('creating');
-    try {
-      onProjectCreated(createProjectFromVisualReview(reviewSession, request));
-    } catch (cause) {
-      setStatus('blueprint');
-      setError(cause instanceof Error ? cause.message : 'Não foi possível orquestrar o projeto visual.');
-    }
-  };
-
-  const handleReviewChange = (next: VisualReviewSession) => {
-    setReviewSession(next);
-    setBlueprint(null);
-    setStatus('analyzed');
-    setError('');
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="panel p-5 max-w-5xl w-full max-h-[94vh] overflow-auto" onClick={event => event.stopPropagation()}>
-        <div className="flex justify-between gap-4 items-start mb-4">
-          <div>
-            <h3 className="text-xl font-semibold">Reconstrução visual real</h3>
-            <p className="text-xs text-studio-muted mt-1">Imagem → backend seguro → provider → schema → blueprint → orquestrador.</p>
-          </div>
-          <button onClick={onClose} className="btn-secondary">Fechar</button>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <section className="space-y-3">
-            <div className="panel-header">1. IMAGEM ORIGINAL</div>
-            <input aria-label="Imagem de referência" type="file" accept={ALLOWED_IMAGE_MIME_TYPES.join(',')}
-              onChange={handleImage} className="input-field" />
-            <p className="text-[10px] text-studio-muted">JPEG, PNG ou WebP; máximo {Math.round(MAX_IMAGE_BYTES / 1024 / 1024)} MB.</p>
-            {imageData && imageFile && (
-              <div className="rounded border border-studio-border bg-studio-bg p-2">
-                <img src={imageData} alt="Preview da imagem original" className="w-full max-h-64 object-contain rounded" />
-                <div className="mt-2 text-[10px] text-studio-muted">{imageFile.name} · {imageFile.type} · {Math.ceil(imageFile.size / 1024)} KB</div>
-              </div>
-            )}
-            <input value={name} onChange={event => setName(event.target.value)} className="input-field" placeholder="Nome do projeto reconstruído (opcional)" />
-            <textarea value={context} onChange={event => setContext(event.target.value)} className="input-field h-20 resize-y"
-              placeholder="Contexto adicional opcional; não será tratado como evidência visual." />
-            <label className="block text-xs text-studio-muted">Categoria da avaliação supervisionada
-              <select value={evaluationCategory} onChange={event => setEvaluationCategory(event.target.value as VisualEvaluationCategory)} className="input-field mt-1">
-                <option value="cabana">Cabana</option>
-                <option value="ponte">Ponte</option>
-                <option value="abrigo">Abrigo</option>
-                <option value="deck_plataforma">Deck/plataforma</option>
-              </select>
-            </label>
-
-            <div className="panel-header">2. STATUS DOS PROVIDERS</div>
-            <div className="space-y-1">
-              {providersLoading && <p className="text-xs text-studio-muted">Consultando backend seguro…</p>}
-              {providers.map(provider => (
-                <label key={provider.id} className={`flex items-center justify-between rounded border p-2 text-xs ${selectedProviderId === provider.id ? 'border-studio-accent' : 'border-studio-border'}`}>
-                  <span className="flex items-center gap-2">
-                    <input type="radio" name="visual-provider" value={provider.id}
-                      checked={selectedProviderId === provider.id} onChange={() => setSelectedProviderId(provider.id)} />
-                    {provider.name}
-                  </span>
-                  <span className={provider.configured ? 'text-emerald-400' : 'text-amber-400'}>
-                    {provider.configured ? `configurado · ${provider.model ?? 'modelo do servidor'}` : 'não configurado'}
-                  </span>
-                </label>
-              ))}
-              {!providersLoading && providers.length === 0 && <p className="text-xs text-amber-400">Backend visual indisponível ou sem catálogo de providers.</p>}
-            </div>
-            {!selectedProvider?.configured && (
-              <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-                Nenhum provider selecionado está configurado. Copie <code>.env.example</code> para <code>.env</code>, configure a chave somente no servidor e reinicie-o. Nenhuma análise será fabricada.
-              </div>
-            )}
-            <button onClick={handleAnalyze}
-              disabled={!request || !selectedProvider?.configured || status === 'analyzing' || status === 'reading'}
-              className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed">
-              {status === 'analyzing' ? 'Analisando imagem no provider…' : '3. Iniciar análise visual'}
-            </button>
-          </section>
-
-          <section className="space-y-3">
-            <div className="panel-header">4–6. INTERPRETAÇÃO ORIGINAL E REVISÃO HUMANA</div>
-            {!reviewSession ? (
-              <p className="text-xs text-studio-muted p-3">A interpretação validada aparecerá aqui. Respostas fora do schema são bloqueadas.</p>
-            ) : (
-              <>
-                <div className="rounded border border-cyan-500/30 bg-cyan-500/5 p-2">
-                  <div className="text-[10px] font-semibold text-cyan-300">INTERPRETAÇÃO ORIGINAL DO PROVIDER — SOMENTE LEITURA</div>
-                  <p className="mt-1 text-xs">{reviewSession.providerOriginal.summary}</p>
-                </div>
-                <p className="text-[10px] text-studio-muted">Edite, remova ou confirme cada claim. Toda correção fica separada do original e invalida o blueprint anterior.</p>
-                <div className="max-h-[28rem] overflow-auto space-y-1 pr-1">
-                  {VISUAL_CLAIM_FIELDS.map(field => {
-                    return <VisualClaimReviewCard key={field} field={field} session={reviewSession} onSessionChange={handleReviewChange} />;
-                  })}
-                </div>
-                <details className="text-xs text-studio-muted">
-                  <summary className="cursor-pointer">Incertezas e limites técnicos</summary>
-                  {[...reviewSession.reviewedInterpretation.uncertainties, ...reviewSession.reviewedInterpretation.technicalUnknowns].map(item => <div key={item}>• {item}</div>)}
-                </details>
-                <button onClick={handleBlueprint} className="btn-secondary w-full">7. Gerar blueprint normalizado</button>
-              </>
-            )}
-
-            <div className="panel-header">8. BLUEPRINT DERIVADO</div>
-            {!blueprint ? (
-              <p className="text-xs text-studio-muted p-3">Revise a interpretação antes de gerar o blueprint.</p>
-            ) : (
-              <div className="space-y-2 text-xs">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-studio-bg rounded p-2">{blueprint.blueprint.components.length}<br /><span className="text-studio-muted">componentes</span></div>
-                  <div className="bg-studio-bg rounded p-2">{blueprint.blueprint.operations.length}<br /><span className="text-studio-muted">operações</span></div>
-                  <div className="bg-studio-bg rounded p-2">{blueprint.blueprint.map.zones.length}<br /><span className="text-studio-muted">zonas</span></div>
-                </div>
-                <div className="max-h-36 overflow-auto space-y-1">
-                  {blueprint.blueprint.operations.map(operation => (
-                    <div key={operation.id} className="rounded bg-studio-bg p-2 flex justify-between gap-2">
-                      <span>{operation.name}</span>
-                      <span className={operation.visualBasis?.classification === 'FACT' ? 'text-emerald-400' : 'text-amber-400'}>{operation.visualBasis?.classification}</span>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={handleCreateProject} disabled={status === 'creating'} className="btn-primary w-full disabled:opacity-50">
-                  {status === 'creating' ? 'Orquestrando projeto…' : '9. Gerar projeto completo'}
-                </button>
-              </div>
-            )}
-          </section>
-        </div>
-        {error && <div role="alert" className="mt-4 rounded border border-rose-500/50 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Setup rápido ─── */
 function ProjectSetupScreen({ onBack }: { onBack: () => void }) {
   const setScreen = useUIStore(s => s.setScreen);
   const createProjectFromDescription = useProjectStore(s => s.createProjectFromDescription);
