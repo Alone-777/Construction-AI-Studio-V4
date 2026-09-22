@@ -450,51 +450,23 @@ function LeftPanel() {
 
             {project.visualReconstruction && (
               <>
-                <div className="panel-header">RECONSTRUÇÃO VISUAL</div>
+                <div className="panel-header">ANÁLISE VISUAL</div>
                 <div className="p-2 space-y-2 text-[10px]">
                   <img src={project.visualReconstruction.referenceImage.dataUrl}
-                    alt="Imagem original da reconstrução" className="w-full max-h-36 object-contain rounded border border-studio-border bg-studio-bg" />
+                    alt="Referência visual do projeto" className="w-full max-h-36 object-contain rounded border border-studio-border bg-studio-bg" />
                   <div className="text-studio-muted">
-                    Original preservado: {project.visualReconstruction.referenceImage.name} · {Math.ceil(project.visualReconstruction.referenceImage.size / 1024)} KB
+                    Referência preservada: {project.visualReconstruction.referenceImage.name} · {Math.ceil(project.visualReconstruction.referenceImage.size / 1024)} KB
                   </div>
-                  <div className="text-studio-muted">
-                    Provider/modelo: {project.visualReconstruction.providerOriginal?.providerId ?? project.visualReconstruction.analysis.providerId} / {project.visualReconstruction.providerModel ?? 'não informado'}
-                  </div>
+                  <div>{project.visualReconstruction.analysis.summary}</div>
                   <details>
-                    <summary className="cursor-pointer text-studio-cyan">Consultar interpretação original</summary>
+                    <summary className="cursor-pointer text-studio-cyan">Blueprint derivado da análise</summary>
                     <div className="mt-1 space-y-1">
-                      <div>{project.visualReconstruction.providerOriginal?.summary ?? project.visualReconstruction.analysis.summary}</div>
-                      {VISUAL_CLAIM_FIELDS.map(field => {
-                        const claim = (project.visualReconstruction?.providerOriginal ?? project.visualReconstruction?.analysis)?.claims[field];
-                        if (!claim) return null;
-                        return <div key={field}><span className={claim.classification === 'FACT' ? 'text-emerald-400' : claim.classification === 'HYPOTHESIS' ? 'text-amber-400' : 'text-studio-muted'}>{claim.classification}</span> · {VISUAL_FIELD_LABELS[field]}</div>;
-                      })}
-                    </div>
-                  </details>
-                  <details>
-                    <summary className="cursor-pointer text-studio-cyan">Consultar revisão humana</summary>
-                    <div className="mt-1 space-y-1">
-                      {VISUAL_CLAIM_FIELDS.map(field => {
-                        const claim = project.visualReconstruction?.analysis.claims[field];
-                        const reviewed = project.visualReconstruction?.reviewedInterpretation?.claims[field];
-                        if (!claim) return null;
-                        return <div key={field}>
-                          <span className={claim.classification === 'FACT' ? 'text-emerald-400' : claim.classification === 'HYPOTHESIS' ? 'text-amber-400' : 'text-studio-muted'}>{claim.classification}</span>
-                          {' · '}{VISUAL_FIELD_LABELS[field]} · {reviewed ? VISUAL_ORIGIN_LABELS[reviewed.origin] : 'legado do provider'}
-                        </div>;
-                      })}
-                    </div>
-                  </details>
-                  <details>
-                    <summary className="cursor-pointer text-studio-cyan">Consultar blueprint e origem</summary>
-                    <div className="mt-1 space-y-1">
-                      {project.operations.map(operation => <div key={operation.id}>• {operation.name}: <span className={operation.visualBasis?.classification === 'FACT' ? 'text-emerald-400' : 'text-amber-400'}>{operation.visualBasis?.classification ?? '—'}</span>{operation.visualBasis ? ` · ${operation.visualBasis.sourceOrigin ?? 'PROVIDER'}${operation.visualBasis.humanConfirmed ? ' · confirmado' : ''}` : ''}</div>)}
+                      {project.operations.map(operation => <div key={operation.id}>• {operation.name}: <span className={operation.visualBasis?.classification === 'FACT' ? 'text-emerald-400' : 'text-amber-400'}>{operation.visualBasis?.classification ?? '—'}</span>{operation.visualBasis ? ` · ${operation.visualBasis.sourceClassification}` : ''}</div>)}
                     </div>
                   </details>
                   {project.visualReconstruction.evaluation && (
                     <div className="rounded border border-studio-border bg-studio-bg p-2 space-y-2">
                       <div className="font-semibold text-studio-cyan">AVALIAÇÃO SUPERVISIONADA</div>
-                      <div>Categoria: {project.visualReconstruction.evaluation.category}</div>
                       <div>Fiscal: {project.visualReconstruction.evaluation.fiscal.approved ? 'aprovado' : 'reprovado'} · {project.visualReconstruction.evaluation.fiscal.approvedStages}/{project.visualReconstruction.evaluation.fiscal.stageCount} estágios</div>
                       <select aria-label="Decisão da avaliação visual" value={project.visualReconstruction.evaluation.decision}
                         onChange={event => updateVisualEvaluation({ decision: event.target.value as 'pending' | 'approved' | 'rejected' })}
