@@ -245,7 +245,7 @@ function createStage(overrides: Partial<Stage> = {}): Stage {
     futureElements: ['roof'],
     cameraId: 'A',
     validations: baseValidation,
-    prompts: { visual: '', nanoBanana: '', kling: '' },
+    prompts: { visual: '', image: '', kling: '' },
     executionProof: {
       characterArrived: true,
       actionStarted: true,
