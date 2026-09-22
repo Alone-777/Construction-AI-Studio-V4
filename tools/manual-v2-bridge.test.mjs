@@ -11,13 +11,13 @@ describe('manual-v2-bridge', () => {
       description: 'Cabana rústica de madeira em uma floresta',
       name: 'Cabana V2 Bridge',
       toolOverrides: {
-        preparacao: 'shovel',
+        marcacao: 'rope',
       },
       retryCorrectionsBySegment: {
-        'preparacao:0-25': [
+        'marcacao:0-25': [
           {
             code: 'TOOL_ACTION_NOT_EXECUTED',
-            correction: 'Show repeated shovel-to-ground contact with persistent visible clearing.',
+            correction: 'Show visible stake placement and keep the rope taut between marked corners.',
           },
         ],
       },
@@ -27,11 +27,11 @@ describe('manual-v2-bridge', () => {
     expect(result.platform).toBe('ADOBE_FIREFLY');
     expect(result.model).toBe('KLING_3_0');
     expect(result.promptMaxChars).toBe(1800);
-    expect(result.operations.length).toBe(8);
-    expect(result.segments.length).toBe(32);
+    expect(result.operations.length).toBe(9);
+    expect(result.segments.length).toBe(36);
 
     const first = result.segments.find(segment =>
-      segment.operationType === 'preparacao' &&
+      segment.operationType === 'marcacao' &&
       segment.startStagePercentage === 0 &&
       segment.targetStagePercentage === 25
     );
@@ -47,7 +47,7 @@ describe('manual-v2-bridge', () => {
     );
     expect(first.prompt).toContain('[ADOBE FIREFLY VIDEO JOB]');
     expect(first.prompt).toContain('PHYSICAL EXECUTION:');
-    expect(first.prompt).toContain('shovel');
+    expect(first.prompt).toContain('rope');
     expect(first.prompt).not.toContain('TOOL_ACTION_NOT_EXECUTED');
     expect(first.retryPrompt).toContain('TOOL_ACTION_NOT_EXECUTED');
     expect(first.retryPrompt).not.toBe(first.prompt);
@@ -69,7 +69,7 @@ describe('manual-v2-bridge', () => {
 
     const recipe = executionRecipeFromV2Segment(first);
     expect(recipe.schema).toBe('construction-manual-execution-recipe/1');
-    expect(recipe.tools).toContain('shovel');
+    expect(recipe.tools).toContain('rope');
     expect(recipe.actionSequence.length).toBeGreaterThanOrEqual(2);
     expect(recipe.terminalEvidence).toBeTruthy();
   }, 30000);
