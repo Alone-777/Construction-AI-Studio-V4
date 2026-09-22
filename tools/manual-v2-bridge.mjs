@@ -66,6 +66,7 @@ export async function compileManualVideoProjectV2({
   workerCount,
   toolOverrides = {},
   retryCorrectionsBySegment = {},
+  visualAnalysis = null,
   studioRoot = STUDIO_ROOT,
 } = {}) {
   if (!String(description || '').trim()) {
@@ -86,6 +87,9 @@ export async function compileManualVideoProjectV2({
     const descriptionModule = await server.ssrLoadModule(
       '/src/core/blueprints/description-blueprint.ts',
     );
+    const visualBlueprintModule = visualAnalysis
+      ? await server.ssrLoadModule('/src/core/blueprints/visual-blueprint.ts')
+      : null;
     const pipelineModule = await server.ssrLoadModule(
       '/src/core/engines/pipeline/index.ts',
     );
@@ -96,12 +100,22 @@ export async function compileManualVideoProjectV2({
       '/src/core/image-prompts/canonical-image-prompt-compiler.ts',
     );
 
-    const compiled = descriptionModule.compileDescriptionToBlueprint({
+    const baseInput = {
       description: String(description).trim(),
       ...(String(name || '').trim() ? { name: String(name).trim() } : {}),
       sceneDuration: 15,
       ...(workerCount !== undefined ? { workerCount } : {}),
-    });
+    };
+    const compiled = visualAnalysis
+      ? visualBlueprintModule.compileVisualAnalysisToBlueprint(visualAnalysis, {
+          ...(String(name || '').trim() ? { name: String(name).trim() } : {}),
+          userContext: String(description).trim(),
+        })
+      : descriptionModule.compileDescriptionToBlueprint(baseInput);
+
+    if (workerCount !== undefined) {
+      compiled.config.workerCount = Math.max(1, Number(workerCount) || 1);
+    }
 
     const config = clone(compiled.config);
     const blueprint = clone(compiled.blueprint);
@@ -221,6 +235,7 @@ export async function compileManualVideoProjectV2({
         name: operation.name,
         physicalAction: firstSegment?.physicalAction || operation.name,
         tool: firstSegment?.tool || null,
+        visualBasis: operation.visualBasis ? clone(operation.visualBasis) : null,
       });
     }
 
@@ -231,6 +246,8 @@ export async function compileManualVideoProjectV2({
       promptMaxChars: 1800,
       operations,
       segments,
+      planningSource: visualAnalysis ? 'VISUAL_ANALYSIS' : 'DESCRIPTION',
+      visualAnalysis: visualAnalysis ? clone(visualAnalysis) : null,
       interpretation: clone(compiled.interpretation),
       assumptions: clone(compiled.assumptions),
       config: {
