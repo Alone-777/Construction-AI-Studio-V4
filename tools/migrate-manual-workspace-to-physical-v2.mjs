@@ -57,6 +57,14 @@ async function backupFile(workspaceRoot, backupRoot, relativePath) {
   return true;
 }
 
+function canonicalOperationTypeForV2(value) {
+  const operationType = String(value || '').trim();
+  // Backward compatibility: workspaces created before marking-first used
+  // "preparacao" for the clearing operation. Preserve the legacy Job identity
+  // while compiling its physical plan from the current "limpeza" operation.
+  return operationType === 'preparacao' ? 'limpeza' : operationType;
+}
+
 function segmentKey(operationType, start, target) {
   return String(operationType) + ':' + String(start) + '-' + String(target);
 }
@@ -166,6 +174,7 @@ export async function migrateManualWorkspaceToPhysicalV2({
     if (record.state.status === 'COMPLETE') continue;
     const operationType = String(record.job.operationType || '').trim();
     if (!operationType) throw new Error('JOB sem operationType: ' + record.job.id);
+    const v2OperationType = canonicalOperationTypeForV2(operationType);
 
     // Preserve legacy tool choice only for the live RETRY_REQUIRED operation.
     // That tool is part of observed retry evidence/corrections. Future PENDING
@@ -174,11 +183,11 @@ export async function migrateManualWorkspaceToPhysicalV2({
     // item is an inspection tool, not the causal installation tool.
     if (record.state.status === 'RETRY_REQUIRED') {
       const tool = firstRecipeTool(record.job);
-      if (tool) toolOverrides[operationType] = tool;
+      if (tool) toolOverrides[v2OperationType] = tool;
 
       retryCorrectionsBySegment[
         segmentKey(
-          operationType,
+          v2OperationType,
           record.job.startStagePercentage,
           record.job.targetStagePercentage,
         )
@@ -206,7 +215,7 @@ export async function migrateManualWorkspaceToPhysicalV2({
   for (const record of records) {
     if (record.state.status === 'COMPLETE') continue;
     const key = segmentKey(
-      record.job.operationType,
+      canonicalOperationTypeForV2(record.job.operationType),
       record.job.startStagePercentage,
       record.job.targetStagePercentage,
     );
@@ -254,7 +263,7 @@ export async function migrateManualWorkspaceToPhysicalV2({
     }
 
     const key = segmentKey(
-      record.job.operationType,
+      canonicalOperationTypeForV2(record.job.operationType),
       record.job.startStagePercentage,
       record.job.targetStagePercentage,
     );
