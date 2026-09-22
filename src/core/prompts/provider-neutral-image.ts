@@ -11,7 +11,7 @@ export function generateProviderNeutralImagePrompt(
   dna: ProjectDNA,
   spatialMap: SpatialMap,
   previousScene?: Scene
-): NanoBananaPrompt {
+): ProviderNeutralImagePrompt {
   const previousReference = previousScene
     ? `CONTINUITY REFERENCE: use Scene ${previousScene.number} as the immutable visual baseline`
     : undefined;
