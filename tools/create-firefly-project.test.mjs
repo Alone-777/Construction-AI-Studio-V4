@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,6 +8,7 @@ import {
   ANIMATION_PROMPT_MAX_CHARS,
   createFireflyProject,
 } from './create-firefly-project.mjs';
+import { makeRawVisualAnalysis } from '../src/core/__tests__/visual-analysis-fixture';
 
 describe('createFireflyProject', () => {
   it('creates 15s Kling 3.0 jobs while keeping Initial Image as MANUAL_REFERENCE', async () => {
@@ -97,4 +99,49 @@ describe('createFireflyProject', () => {
     expect((await stat(path.join(workspace, manifest.initialImage.workspacePath))).isFile()).toBe(true);
     expect(await readFile(path.join(initialRoot, 'referencia.png'))).toEqual(Buffer.from('fake-png'));
   });
+
+  it('uses the approved structured image analysis as the blueprint planning source', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'construction-ai-visual-bootstrap-'));
+    const initialRoot = path.join(root, 'Imagem Inicial');
+    await mkdir(initialRoot, { recursive: true });
+    const imageBytes = Buffer.from('visual-reference-bytes');
+    const imagePath = path.join(initialRoot, 'referencia.png');
+    await writeFile(imagePath, imageBytes);
+    const imageSha256 = createHash('sha256').update(imageBytes).digest('hex');
+    const reviewPath = path.join(root, 'approved-initial-review.json');
+    await writeFile(reviewPath, JSON.stringify({
+      verdict: 'APPROVED',
+      imageSha256,
+      projectDescription: 'Abrigo de madeira em uma clareira.',
+      projectName: 'Abrigo Visual',
+      analysis: {
+        schemaVersion: '1.0.0',
+        ...makeRawVisualAnalysis('abrigo', 'clareira'),
+      },
+    }, null, 2));
+
+    const result = await createFireflyProject({
+      projectRoot: root,
+      description: 'Abrigo de madeira em uma clareira.',
+      name: 'Abrigo Visual',
+      initialReviewFile: reviewPath,
+      createdAt: new Date('2026-09-22T12:00:00.000Z'),
+    });
+
+    const workspace = path.join(root, result.workspace);
+    const manifest = JSON.parse(await readFile(path.join(workspace, 'manifest.json'), 'utf8'));
+    const queue = JSON.parse(await readFile(path.join(workspace, 'queue.json'), 'utf8'));
+    const firstJob = JSON.parse(
+      await readFile(path.join(workspace, queue.jobs[0].jobDirectory, 'job.json'), 'utf8'),
+    );
+
+    expect(manifest.planningSource).toBe('VISUAL_ANALYSIS');
+    expect(manifest.visualAnalysis.schemaVersion).toBe('1.0.0');
+    expect(manifest.visualAnalysis.imageSha256).toBe(imageSha256);
+    expect(manifest.visualAnalysis.claims.constructionType.value).toBe('abrigo');
+    expect(manifest.operations.some(operation => operation.visualBasis)).toBe(true);
+    expect(firstJob.planningSource).toBe('VISUAL_ANALYSIS');
+    expect(firstJob.visualBasis).toBeTruthy();
+  });
+
 });
