@@ -2,9 +2,6 @@ import { createServer } from 'node:http';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GeminiVisualProvider } from './providers/gemini-visual-provider.mjs';
-import { OpenAIVisualProvider } from './providers/openai-visual-provider.mjs';
-import { CustomVisualProvider } from './providers/custom-visual-provider.mjs';
 import {
   ProviderResponseError,
   ProviderUnavailableError,
@@ -24,11 +21,9 @@ const initialImageMimeTypes = new Map([
   ['.png', 'image/png'],
   ['.webp', 'image/webp'],
 ]);
-const providers = [
-  new GeminiVisualProvider(),
-  new OpenAIVisualProvider(),
-  new CustomVisualProvider(),
-];
+// External visual providers are intentionally disabled in the operational runtime.
+// Initial-image interpretation is performed by ChatGPT through the guarded Relay flow.
+const providers = [];
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -163,33 +158,10 @@ async function handleApi(request, response, pathname) {
     return true;
   }
   if (request.method === 'POST' && pathname === '/api/visual/analyze') {
-    const startedAt = Date.now();
-    let provider;
-    try {
-      const body = await readJsonBody(request);
-      provider = providers.find(candidate => candidate.id === body.providerId);
-      if (!provider) throw new ProviderUnavailableError(String(body.providerId || 'desconhecido'));
-      const analysis = await provider.analyze(body);
-      recordSafeVisualDiagnostic({
-        provider: provider.id,
-        model: provider.model,
-        durationMs: Date.now() - startedAt,
-        internalHttpStatus: 200,
-        analysis,
-      });
-      json(response, 200, { analysis });
-    } catch (error) {
-      const result = providerErrorResponse(error);
-      recordSafeVisualDiagnostic({
-        provider: provider?.id ?? 'unknown',
-        model: provider?.model,
-        durationMs: Date.now() - startedAt,
-        internalHttpStatus: result.status,
-        schemaValidation: error instanceof VisualSchemaValidationError ? 'invalid' : 'not-run',
-        errorCode: result.body.code,
-      });
-      json(response, result.status, result.body);
-    }
+    json(response, 410, {
+      error: 'Providers visuais externos foram removidos do fluxo operacional. Use o intake da Imagem Inicial pelo Operator Panel + Relay.',
+      code: 'EXTERNAL_VISUAL_PROVIDERS_DISABLED',
+    });
     return true;
   }
   return pathname.startsWith('/api/');
