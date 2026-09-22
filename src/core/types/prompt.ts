@@ -1,6 +1,6 @@
-export type PromptPlatform = 'nano_banana' | 'kling' | 'midjourney' | 'stable_diffusion' | 'runway' | 'custom';
+export type PromptPlatform = 'manual_image' | 'kling' | 'midjourney' | 'stable_diffusion' | 'runway' | 'custom';
 
-export interface NanoBananaPrompt {
+export interface ProviderNeutralImagePrompt {
   previousReference?: string;
   dna: string;
   environment: string;
