@@ -7,7 +7,6 @@ import {
   createProjectFromDescription as orchestrateDescription,
   type ProjectDescriptionInput,
 } from '../core/blueprints/description-blueprint';
-import { createCabanaDoRiachoProject } from '../core/demo/cabana-do-riacho';
 import { autoSaveProject } from '../db/repository';
 import {
   updateVisualEvaluationDecision,
@@ -22,7 +21,6 @@ interface ProjectState {
   /* ─── Ações de projeto ─── */
   createProject: (config: ProjectConfig) => void;
   createProjectFromDescription: (input: ProjectDescriptionInput) => void;
-  createDemoProject: () => void;
   loadProject: (project: Project) => void;
   closeProject: () => void;
   updateProjectName: (name: string) => void;
@@ -82,10 +80,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   createProjectFromDescription: (input) => {
     set({ project: orchestrateDescription(input), isDirty: true });
-  },
-
-  createDemoProject: () => {
-    set({ project: createCabanaDoRiachoProject(), isDirty: true });
   },
 
   loadProject: (project) => set({ project, isDirty: false }),
