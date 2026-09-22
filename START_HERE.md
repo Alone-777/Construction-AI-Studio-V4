@@ -199,7 +199,8 @@ O Operator Panel `8793` monitora essa pasta automaticamente. Quando houver um ú
 - o JOB passa para `REVIEW_REQUIRED`;
 - o vídeo original permanece intacto na pasta de downloads;
 - o usuário envia o mesmo vídeo no ChatGPT;
-- o ChatGPT analisa e registra PASS ou RETRY pelo Relay;
+- o Agente Fiscal Visual analisa e registra PASS ou RETRY pelo Relay quando houver provider configurado;
+- sem provider ou em qualquer incerteza, o JOB permanece em `REVIEW_REQUIRED` para análise manual no ChatGPT;
 - em PASS, o último frame aprovado libera o próximo JOB e o painel troca de prompt automaticamente.
 
 ### Agente Fiscal Visual autônomo
