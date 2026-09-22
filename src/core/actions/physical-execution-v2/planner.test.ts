@@ -47,6 +47,12 @@ function world(): WorldState {
     residues: [],
     tools: [
       {
+        toolId: 'corda',
+        status: 'armazenada',
+        location: 'Z1',
+        inUse: false,
+      },
+      {
         toolId: 'facao',
         status: 'armazenada',
         location: 'Z1',
@@ -167,6 +173,55 @@ function operation(overrides: Partial<Operation>): Operation {
 }
 
 describe('native Physical Execution V2 planner', () => {
+  it('plans site marking as visible persistent perimeter work before clearing', () => {
+    const official = world();
+    official.futureComponents.unshift('component_marcacao');
+    const op = operation({
+      id: 'op_marcacao',
+      name: 'Marcação da implantação',
+      type: 'marcacao',
+      componentId: 'component_marcacao',
+      visualBasis: {
+        classification: 'FACT',
+        sourceClassification: 'FACT',
+        sourceField: 'blueprint',
+        evidence: 'site footprint',
+        materials: [],
+        tools: ['corda'],
+      },
+    });
+    const currentStage = stage(
+      'medir o perímetro, posicionar estacas visíveis nos cantos e tensionar corda entre elas',
+      'corda',
+    );
+
+    const plan = planPhysicalExecutionV2({
+      scene: scene(op.id),
+      stage: currentStage,
+      operation: op,
+      worldStateBefore: official,
+      beforePercentage: 0,
+    });
+    const receipt = simulatePhysicalExecution(official, plan);
+
+    expect(plan.intent.methodId).toBe('native:mark');
+    expect(plan.evidence[0]?.relation).toBe('MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED');
+    expect(plan.nodes.some(node =>
+      node.kind === 'PLACE'
+      && node.toolId === 'rope'
+      && node.effects.some(effect =>
+        effect.type === 'STATE_CHANGED'
+        && effect.property === 'site-marking'
+      ),
+    )).toBe(true);
+    expect(plan.nodes.some(node =>
+      /place visible corner stakes/i.test(node.instruction)
+      && /rope taut/i.test(node.instruction),
+    )).toBe(true);
+    expect(receipt.validation.ok).toBe(true);
+    expect(receipt.commitAvailable).toBe(false);
+  });
+
   it('plans selective preparation from OFFICIAL with machete contact and removal causality', () => {
     const official = world();
     const op = operation({
