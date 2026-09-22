@@ -142,7 +142,7 @@ Formato final de criação no Relay, depois da análise aprovada:
 
 A descrição e o nome podem vir diretamente da revisão aprovada da Imagem Inicial; o usuário não precisa repeti-los.
 
-O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **15 segundos cada**. A Imagem Inicial é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial; o vídeo só é liberado quando essa fonte temporal existir. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
+O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **15 segundos cada**. A Imagem Inicial é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial; o vídeo só é liberado quando essa fonte temporal existir. O Operator Panel aceita a imagem gerada em **JPG, JPEG, PNG ou WebP** dentro da pasta indicada e normaliza automaticamente para o arquivo canônico `job-001-source.png`; o usuário não deve precisar converter formato manualmente. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
 
 Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
