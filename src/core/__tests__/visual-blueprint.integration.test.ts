@@ -65,6 +65,6 @@ describe('Interpretação visual → blueprint → projeto', () => {
     }
     expect(stages.every(stage => stage.validations.approved)).toBe(true);
     expect(stages.some(stage => stage.validations.checks?.some(check => check.ruleId === 'visual-source-fiscal' && check.status === 'WARNING'))).toBe(true);
-    expect(stages.filter(stage => stage.percentage > 0).every(stage => stage.prompts?.nanoBanana && stage.prompts?.kling)).toBe(true);
+    expect(stages.filter(stage => stage.percentage > 0).every(stage => stage.prompts?.image && stage.prompts?.kling)).toBe(true);
   });
 });
