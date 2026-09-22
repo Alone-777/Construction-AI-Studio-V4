@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createCabanaDoRiachoProject } from '../../demo/cabana-do-riacho';
+import { createGenericConstructionProject } from '../../__tests__/fixtures/generic-construction-project';
 import { worldStateToVisualSceneState } from '../../visual/VisualSceneState';
 import { compileVisualScene, compileVisualSceneShort, compileVisualSceneCompositionOnly, type VisualPromptResult } from '../../visual/VisualPromptCompiler';
 
-describe('VisualPromptCompiler - Cabana do Riacho', () => {
-  const project = createCabanaDoRiachoProject();
+describe('VisualPromptCompiler - Projeto genérico', () => {
+  const project = createGenericConstructionProject();
   const worldState = project.worldState;
   const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -18,10 +18,10 @@ describe('VisualPromptCompiler - Cabana do Riacho', () => {
     expect(result.metadata).toBeDefined();
   });
 
-  it('prompt contém referência à cabana', () => {
+  it('prompt contém referência ao abrigo', () => {
     const result = compileVisualScene(visualSceneState);
 
-    expect(result.prompt.toLowerCase()).toContain('cabana');
+    expect(result.prompt.toLowerCase()).toContain('abrigo');
   });
 
   it('prompt contém referência a madeira (material principal)', () => {
@@ -57,10 +57,10 @@ describe('VisualPromptCompiler - Cabana do Riacho', () => {
     expect(result.prompt.toLowerCase()).toContain('action');
   });
 
-  it('prompt contém ambiente (riacho)', () => {
+  it('prompt contém ambiente (clareira)', () => {
     const result = compileVisualScene(visualSceneState);
 
-    expect(result.prompt.toLowerCase()).toContain('riacho');
+    expect(result.prompt.toLowerCase()).toContain('clareira');
   });
 
   it('metadados de compilação estão corretos', () => {
@@ -113,7 +113,7 @@ describe('VisualPromptCompiler - Cabana do Riacho', () => {
 });
 
 describe('VisualPromptCompiler - Variações de saída', () => {
-  const project = createCabanaDoRiachoProject();
+  const project = createGenericConstructionProject();
   const worldState = project.worldState;
   const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -140,7 +140,7 @@ describe('VisualPromptCompiler - Variações de saída', () => {
 });
 
 describe('VisualPromptCompiler - Mapeamentos cinematográficos', () => {
-  const project = createCabanaDoRiachoProject();
+  const project = createGenericConstructionProject();
   const worldState = project.worldState;
   const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -186,7 +186,7 @@ describe('VisualPromptCompiler - Mapeamentos cinematográficos', () => {
 
 describe('VisualPromptCompiler - Elementos visuais', () => {
   it('formata elementos visuais por tipo com posição e layer', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -228,7 +228,7 @@ describe('VisualPromptCompiler - Elementos visuais', () => {
   });
 
   it('exclui elementos invisíveis da seção de elementos', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -262,7 +262,7 @@ describe('VisualPromptCompiler - Elementos visuais', () => {
   });
 
   it('retorna "NO VISUAL ELEMENTS" quando array vazio', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -274,7 +274,7 @@ describe('VisualPromptCompiler - Elementos visuais', () => {
   });
 
   it('retorna "ALL ELEMENTS HIDDEN" quando todos invisíveis', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -299,7 +299,7 @@ describe('VisualPromptCompiler - Elementos visuais', () => {
 
 describe('VisualPromptCompiler - Edge cases', () => {
   it('lida com configurações opcionais ausentes (fillLight, ambientLight)', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -318,7 +318,7 @@ describe('VisualPromptCompiler - Edge cases', () => {
   });
 
   it('lida com path de câmera opcional', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -342,7 +342,7 @@ describe('VisualPromptCompiler - Edge cases', () => {
   });
 
   it('lida com depth of field habilitado', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -358,7 +358,7 @@ describe('VisualPromptCompiler - Edge cases', () => {
   });
 
   it('lida com iluminação customizada (mixed/artificial)', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
@@ -385,15 +385,15 @@ describe('VisualPromptCompiler - Edge cases', () => {
   });
 
   it('lida com keyframes na ação', () => {
-    const project = createCabanaDoRiachoProject();
+    const project = createGenericConstructionProject();
     const worldState = project.worldState;
     const visualSceneState = worldStateToVisualSceneState(worldState);
 
     visualSceneState.action = {
       type: 'walk',
-      description: 'Caminha até a cabana',
+      description: 'Caminha até o abrigo',
       actorId: 'worker-1',
-      targetId: 'cabana',
+      targetId: 'abrigo',
       startTime: 0,
       duration: 10,
       keyframes: [
@@ -407,7 +407,7 @@ describe('VisualPromptCompiler - Edge cases', () => {
 
     expect(result.sections.action).toContain('ACTION: WALK');
     expect(result.sections.action).toContain('ACTOR: worker-1');
-    expect(result.sections.action).toContain('TARGET: cabana');
+    expect(result.sections.action).toContain('TARGET: abrigo');
     expect(result.sections.action).toContain('KEYFRAMES:');
     expect(result.sections.action).toContain('t0.0s:');
     expect(result.sections.action).toContain('t5.0s:');
