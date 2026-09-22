@@ -284,7 +284,7 @@ function actionInstruction(
 ): string {
   const toolText = toolId ? ' with the ' + toolId : '';
   if (method === 'MARK') {
-    return 'Measure the bounded footprint, press visible slender corner stakes into the soil one by one by hand, then pull the rope taut between them'
+    return 'Measure the bounded footprint, place visible corner stakes one by one by pressing the slender stakes into the soil by hand, then pull the rope taut between them'
       + toolText
       + ', adjust the line by hand, and leave a clear aligned perimeter visibly marked on the ground.';
   }
