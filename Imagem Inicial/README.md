@@ -1,15 +1,18 @@
 # Imagem Inicial
 
-Esta pasta é a entrada local opcional da imagem-base do projeto.
+Esta pasta existe como entrada local de compatibilidade. No uso normal, o operador não precisa copiar arquivos manualmente para cá.
 
-## Como usar
+## Fluxo recomendado
 
-1. Coloque aqui uma imagem `.jpg`, `.jpeg`, `.png` ou `.webp`.
-2. Mantenha preferencialmente apenas uma imagem na pasta.
-3. Inicie o servidor do Construction AI Studio com `npm run server`.
-4. Ao abrir o Visual Pipeline de um projeto que ainda não possui uma Imagem Inicial persistida, o Studio lê esta pasta automaticamente e salva a imagem no projeto.
-5. Depois que o pipeline visual do projeto começa, a Imagem Inicial fica bloqueada para preservar a consistência dos prompts já emitidos.
+1. Abra o **Construction AI Operator Panel** em `http://127.0.0.1:8793`.
+2. Quando o sistema estiver em `NO_PROJECT`, envie uma única imagem JPG/JPEG, PNG ou WebP pelo painel.
+3. O Relay valida o arquivo, calcula o SHA-256 e publica o pacote de análise.
+4. O ChatGPT analisa a referência e devolve uma revisão visual estruturada.
+5. Se a revisão for `CORRECTION_REQUIRED`, o painel mostra o motivo e o prompt de correção. Nenhum workspace/JOB é criado.
+6. Se a revisão for `APPROVED`, o Construction AI usa os fatos visuais aprovados para montar o blueprint/mapa, preparar a fonte temporal inicial e então liberar o primeiro JOB elegível.
 
-Se houver mais de uma imagem, o backend escolhe a primeira em ordem alfabética e informa um aviso no painel.
+A imagem permanece `MANUAL_REFERENCE`: orienta design, proporções, materiais, terreno, ambiente e identidade visual, mas nunca substitui o estado temporal `OFFICIAL` nem autoriza componentes futuros.
 
-A Imagem Inicial é usada como `MANUAL_REFERENCE` para identidade, design, materiais, terreno e ambiente. O estado temporal OFFICIAL sempre tem prioridade; componentes futuros visíveis na imagem de referência não podem ser antecipados nos JOBs.
+## Compatibilidade local
+
+A pasta pode continuar sendo usada por ferramentas técnicas e diagnóstico. Ela não é a interface principal do operador e não faz análise automática por provider externo.
