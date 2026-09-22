@@ -289,6 +289,9 @@ function sourceImagePromptFor({
     'Show exactly one primary worker in the frame with a stable, reusable identity, consistent face, body, hair and clothing for the whole project.',
     'Place the worker naturally near the work area, ready to begin the first operation but not already performing it; keep the full body or most of the body readable for later continuity.',
     'Only show tools or compact staging items that are physically justified for the first operation; do not preload future construction components.',
+    firstOperation[0] === 'marcacao'
+      ? 'For site marking, visibly stage one coil of rope and four slender wooden marking stakes beside the worker before work begins; the stakes are not installed yet and no construction component exists.'
+      : '',
     'No magical objects, no premature construction, no temporal contradiction.',
     'The result becomes OFFICIAL temporal source for JOB 1 only after it is reviewed/accepted.',
   ].filter(Boolean).join(' ');
