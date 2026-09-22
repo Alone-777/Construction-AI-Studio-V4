@@ -126,16 +126,21 @@ function operationPlan(construction: string, materials: string[]): OperationDefi
   const foundation = selectMaterial(materials, ['pedra', 'cascalho', 'madeira', 'troncos', 'argila']);
   const surface = selectMaterial(materials, ['palha', 'madeira', 'bambu', 'barro', 'pedra']);
 
-  const preparation: OperationDefinition = {
-    key: 'preparacao', name: 'Preparação seletiva do local', type: 'limpeza', tool: 'facao',
-    physicalAction: 'delimitar a implantação e remover somente obstáculos autorizados',
-    residue: { source: 'preparação seletiva', materialId: 'fibras', quantity: 8 },
+  const marking: OperationDefinition = {
+    key: 'marcacao', name: 'Marcação da implantação', type: 'marcacao', tool: 'corda',
+    physicalAction: 'medir o perímetro, posicionar estacas visíveis nos cantos e tensionar corda entre elas, deixando a implantação claramente marcada',
+  };
+  const cleaning: OperationDefinition = {
+    key: 'limpeza', name: 'Limpeza seletiva da área marcada', type: 'limpeza', dependency: 'marcacao', tool: 'facao',
+    physicalAction: 'remover somente vegetação e obstáculos dentro da implantação marcada, mantendo estacas, cordas e área externa preservadas',
+    residue: { source: 'limpeza seletiva da área marcada', materialId: 'fibras', quantity: 8 },
   };
 
   if (construction === 'ponte') {
     return [
-      preparation,
-      { key: 'apoios', name: 'Execução dos apoios', type: 'sapata', dependency: 'preparacao', tool: 'pa', physicalAction: 'escavar e consolidar cada apoio', material: foundation, quantity: 24 },
+      marking,
+      cleaning,
+      { key: 'apoios', name: 'Execução dos apoios', type: 'sapata', dependency: 'limpeza', tool: 'pa', physicalAction: 'escavar e consolidar cada apoio', material: foundation, quantity: 24 },
       { key: 'vigas', name: 'Montagem das vigas longitudinais', type: 'viga', dependency: 'apoios', tool: 'serra', physicalAction: 'posicionar e travar as vigas entre os apoios', material: structural, quantity: 28 },
       { key: 'tabuleiro', name: 'Montagem do tabuleiro', type: 'piso', dependency: 'vigas', tool: 'martelo', physicalAction: 'fixar sequencialmente os módulos do tabuleiro', material: structural, quantity: 28 },
       { key: 'guarda_corpo', name: 'Instalação do guarda-corpo', type: 'parede linear', dependency: 'tabuleiro', tool: 'martelo', physicalAction: 'fixar montantes e travessas de proteção', material: structural, quantity: 12 },
@@ -144,8 +149,9 @@ function operationPlan(construction: string, materials: string[]): OperationDefi
 
   if (['plataforma', 'casa_arvore'].includes(construction)) {
     return [
-      preparation,
-      { key: 'ancoragem', name: 'Execução das ancoragens', type: 'sapata', dependency: 'preparacao', tool: 'corda', physicalAction: 'posicionar e conferir cada ponto de ancoragem', material: foundation, quantity: 20 },
+      marking,
+      cleaning,
+      { key: 'ancoragem', name: 'Execução das ancoragens', type: 'sapata', dependency: 'limpeza', tool: 'corda', physicalAction: 'posicionar e conferir cada ponto de ancoragem', material: foundation, quantity: 20 },
       { key: 'estrutura', name: 'Montagem da estrutura portante', type: 'viga', dependency: 'ancoragem', tool: 'serra', physicalAction: 'cortar, elevar e travar as vigas portantes', material: structural, quantity: 30 },
       { key: 'piso', name: 'Fechamento do piso', type: 'piso', dependency: 'estrutura', tool: 'martelo', physicalAction: 'fixar os módulos do piso sobre a estrutura', material: structural, quantity: 26 },
       { key: 'protecao', name: 'Instalação da proteção perimetral', type: 'parede', dependency: 'piso', tool: 'martelo', physicalAction: 'montar guarda-corpo ao redor da superfície', material: structural, quantity: 14 },
@@ -154,8 +160,9 @@ function operationPlan(construction: string, materials: string[]): OperationDefi
 
   if (construction === 'piscina_natural') {
     return [
-      preparation,
-      { key: 'escavacao', name: 'Escavação controlada', type: 'fundação', dependency: 'preparacao', tool: 'pa', physicalAction: 'escavar o volume por quadrantes e separar o solo', residue: { source: 'escavação controlada', materialId: 'terra', quantity: 30 } },
+      marking,
+      cleaning,
+      { key: 'escavacao', name: 'Escavação controlada', type: 'fundação', dependency: 'limpeza', tool: 'pa', physicalAction: 'escavar o volume por quadrantes e separar o solo', residue: { source: 'escavação controlada', materialId: 'terra', quantity: 30 } },
       { key: 'base', name: 'Regularização da base', type: 'base', dependency: 'escavacao', tool: 'enxada', physicalAction: 'regularizar e compactar a base', material: foundation, quantity: 30 },
       { key: 'contencao', name: 'Construção da contenção', type: 'parede', dependency: 'base', tool: 'martelo', physicalAction: 'assentar a contenção por trechos', material: selectMaterial(materials, ['pedra', 'argila', 'barro']), quantity: 32 },
       { key: 'acabamento', name: 'Aplicação da camada de acabamento', type: 'cobertura', dependency: 'contencao', tool: 'enxada', physicalAction: 'aplicar a camada final continuamente', material: surface, quantity: 22 },
@@ -164,8 +171,9 @@ function operationPlan(construction: string, materials: string[]): OperationDefi
 
   if (construction === 'torre') {
     return [
-      preparation,
-      { key: 'fundacao', name: 'Execução das fundações', type: 'sapata', dependency: 'preparacao', tool: 'pa', physicalAction: 'escavar e consolidar as sapatas', material: foundation, quantity: 28 },
+      marking,
+      cleaning,
+      { key: 'fundacao', name: 'Execução das fundações', type: 'sapata', dependency: 'limpeza', tool: 'pa', physicalAction: 'escavar e consolidar as sapatas', material: foundation, quantity: 28 },
       { key: 'pilares', name: 'Elevação dos pilares', type: 'pilar', dependency: 'fundacao', tool: 'corda', physicalAction: 'elevar, aprumar e escorar cada pilar', material: structural, quantity: 34 },
       { key: 'travamento', name: 'Montagem dos travamentos', type: 'travessa', dependency: 'pilares', tool: 'martelo', physicalAction: 'fixar travessas e contraventamentos', material: structural, quantity: 24 },
       { key: 'plataforma', name: 'Montagem da plataforma superior', type: 'piso', dependency: 'travamento', tool: 'martelo', physicalAction: 'fixar o piso da plataforma superior', material: structural, quantity: 20 },
@@ -174,8 +182,9 @@ function operationPlan(construction: string, materials: string[]): OperationDefi
   }
 
   return [
-    preparation,
-    { key: 'fundacao', name: 'Execução das fundações', type: 'sapata', dependency: 'preparacao', tool: 'pa', physicalAction: 'escavar e assentar cada fundação', material: foundation, quantity: 24 },
+    marking,
+    cleaning,
+    { key: 'fundacao', name: 'Execução das fundações', type: 'sapata', dependency: 'limpeza', tool: 'pa', physicalAction: 'escavar e assentar cada fundação', material: foundation, quantity: 24 },
     { key: 'base', name: 'Montagem da base e piso', type: 'piso', dependency: 'fundacao', tool: 'martelo', physicalAction: 'montar e fixar os módulos da base', material: structural, quantity: 24 },
     { key: 'pilares', name: 'Elevação dos pilares', type: 'pilar', dependency: 'base', tool: 'martelo', physicalAction: 'posicionar, aprumar e fixar cada pilar', material: structural, quantity: 20 },
     { key: 'paredes', name: 'Fechamento das paredes', type: 'parede', dependency: 'pilares', tool: 'martelo', physicalAction: 'montar o trecho de parede sobre a estrutura', material: structural, quantity: 25 },
