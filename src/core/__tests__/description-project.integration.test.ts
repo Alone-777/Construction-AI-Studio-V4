@@ -80,7 +80,7 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
     for (const stage of allStages.filter((item: any) => item.percentage > 0)) {
       expect(stage.executionProof?.valid).toBe(true);
       expect(stage.workRoute?.length).toBeGreaterThan(0);
-      expect(stage.prompts?.nanoBanana).toContain(`ZONE ${stage.activeZone}`);
+      expect(stage.prompts?.image).toContain(`ZONE ${stage.activeZone}`);
       expect(stage.prompts?.kling).toContain(`zone ${stage.activeZone}`);
     }
   });
