@@ -14,7 +14,8 @@ O uso operacional normal é pelo **Operator Panel**.
 
 1. clique no atalho **Construction AI Studio** na Área de Trabalho do Windows;
 2. o atalho abre `http://127.0.0.1:8793`;
-3. quando não existir projeto ativo, o painel mostra **SEM PROJETO** e permite enviar a Imagem Inicial diretamente por upload/arrastar e soltar.
+3. quando não existir projeto ativo, o painel mostra **SEM PROJETO** e permite enviar uma **foto do local** diretamente por upload/arrastar e soltar;
+4. no mesmo painel, o operador escolhe uma construção ou deixa o Construction AI sugerir a opção mais plausível e pode acrescentar uma descrição curta.
 
 A pasta `Imagem Inicial/` continua existindo internamente por compatibilidade, mas não é mais o fluxo normal do usuário.
 
@@ -60,9 +61,16 @@ bash ~/Construction-AI-Relay/scripts/open-panel.sh
 
 As portas `5173` (Vite/dev) e `8787` (backend do Studio) não devem ser apresentadas ao usuário como painel principal. Elas ficam reservadas para desenvolvimento, API interna e diagnóstico técnico quando necessário.
 
-## Imagem Inicial
+## Foto do local e Imagem Inicial
 
-No uso normal, envie uma JPG/JPEG, PNG ou WebP diretamente pelo Operator Panel.
+No uso normal, envie uma JPG/JPEG, PNG ou WebP diretamente pelo Operator Panel. A imagem
+enviada nessa tela é tratada primeiro como **REFERÊNCIA DO LOCAL**. Ela não é automaticamente
+o frame temporal inicial da obra.
+
+O painel também persiste a intenção do novo projeto em
+`.construction-intake/project-intent.json`: modo `AUTO` para o Construction AI sugerir a
+construção ou modo `SELECTED` para avaliar uma escolha do operador, além de uma descrição
+opcional.
 
 Regras:
 - tamanho máximo: 10 MB;
@@ -73,13 +81,20 @@ Regras:
 - a revisão é vinculada ao SHA-256 exato da imagem;
 - `CORRECTION_REQUIRED` mostra no painel o motivo e o prompt de correção;
 - `APPROVED` libera a criação do projeto;
+- em modo `AUTO`, a análise registra uma construção recomendada, justificativa e alternativas plausíveis;
+- em modo `SELECTED`, a análise avalia a construção escolhida contra o terreno e as limitações atuais do pipeline;
 - trocar a imagem invalida a revisão anterior.
 
 Para `APPROVED`, a revisão deve conter análise visual estruturada `schemaVersion=1.0.0`. Cada claim usa `FACT`, `HYPOTHESIS` ou `UNKNOWN` e mantém evidência/confiança. O conjunto canônico cobre: tipo de construção, ambiente, terreno, curso d'água, vegetação, componentes visíveis, materiais aparentes, estrutura, fundação, piso, paredes, cobertura, aberturas, áreas externas, caminhos, drenagem, relações espaciais, elementos naturais, itens de preservação e grau aparente de conclusão.
 
 Essa análise estruturada alimenta diretamente o compilador visual do blueprint. A descrição textual é contexto complementar; não é mais a única fonte do mapa da obra.
 
-A Imagem Inicial continua sendo `MANUAL_REFERENCE`: orienta design, proporções, materiais, terreno, ambiente e identidade, mas nunca substitui o estado temporal OFFICIAL e nunca autoriza elementos futuros.
+A referência do local continua sendo `MANUAL_REFERENCE`: orienta design, proporções, materiais,
+terreno, ambiente e identidade, mas nunca substitui o estado temporal OFFICIAL e nunca autoriza
+elementos futuros. Para o JOB 1, o Construction AI prepara uma imagem OFFICIAL separada, com
+**um único trabalhador principal de identidade visual estável**. As ferramentas são governadas
+pela operação atual; não ficam congeladas para todo o projeto apenas porque apareceram na primeira
+imagem.
 
 O runtime operacional não depende de Gemini, OpenAI API, Groq ou provider visual externo para essa análise.
 
@@ -119,13 +134,14 @@ Ao receber `CRIAR NOVO PROJETO`, o ChatGPT deve:
 1. ler este `START_HERE.md`;
 2. verificar GitHub, branch operacional e funcionamento básico do sistema;
 3. confirmar que o sistema está em `NO_PROJECT`; se houver projeto ativo e a intenção for zerar, usar somente o reset guardado com backup;
-4. solicitar ao Relay `initial_image_packet` e analisar a imagem atual;
-5. se a imagem for inadequada, registrar `record_initial_image_review` com `CORRECTION_REQUIRED`, motivo e `correctionPrompt`; não criar workspace/JOB;
-6. se a imagem for adequada, registrar `record_initial_image_review` com `APPROVED`, descrição operacional, nome opcional e análise estruturada;
-7. somente após a aprovação vinculada ao hash atual, enviar `create_project` com `confirm=CREATE_NEW_PROJECT`;
-8. aguardar a resposta real do Relay e confirmar o workspace criado;
-9. continuar pelo primeiro JOB elegível em ordem temporal;
-10. manter o Construction AI como executor e fonte do estado operacional.
+4. ler, quando existir, `.construction-intake/project-intent.json` pelo Relay para recuperar a intenção salva no painel;
+5. solicitar ao Relay `initial_image_packet` e analisar a foto atual junto com essa intenção;
+6. se a imagem ou a construção pretendida forem inadequadas, registrar `record_initial_image_review` com `CORRECTION_REQUIRED`, motivo e `correctionPrompt`; não criar workspace/JOB;
+7. se forem adequadas, registrar `record_initial_image_review` com `APPROVED`, descrição operacional, nome opcional, `constructionType`, justificativa/alternativas e análise visual estruturada;
+8. somente após a aprovação vinculada ao hash atual, enviar `create_project` com `confirm=CREATE_NEW_PROJECT`;
+9. aguardar a resposta real do Relay e confirmar o workspace criado;
+10. continuar pelo primeiro JOB elegível em ordem temporal;
+11. manter o Construction AI como executor e fonte do estado operacional.
 
 Formato final de criação no Relay, depois da análise aprovada:
 
@@ -142,7 +158,15 @@ Formato final de criação no Relay, depois da análise aprovada:
 
 A descrição e o nome podem vir diretamente da revisão aprovada da Imagem Inicial; o usuário não precisa repeti-los.
 
-O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **15 segundos cada**. A Imagem Inicial é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial; o vídeo só é liberado quando essa fonte temporal existir. O Operator Panel aceita a imagem gerada em **JPG, JPEG, PNG ou WebP** dentro da pasta indicada e normaliza automaticamente para o arquivo canônico `job-001-source.png`; o usuário não deve precisar converter formato manualmente. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
+O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **15 segundos cada**. A foto do local é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial com um trabalhador principal consistente; o vídeo só é liberado quando essa fonte temporal existir. O Operator Panel aceita a imagem gerada em **JPG, JPEG, PNG ou WebP** dentro da pasta indicada e normaliza automaticamente para o arquivo canônico `job-001-source.png`; o usuário não deve precisar converter formato manualmente. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
+
+Para **novos projetos**, a ordem física canônica começa por:
+
+1. **MARCAÇÃO DA IMPLANTAÇÃO** — medir o perímetro, posicionar estacas visíveis e tensionar corda;
+2. **LIMPEZA SELETIVA DA ÁREA MARCADA** — remover apenas vegetação/obstáculos dentro do perímetro, preservando marcação e área externa;
+3. fundação/apoios, base e demais operações dependentes.
+
+Workspaces já existentes não são reescritos automaticamente por essa regra.
 
 Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
