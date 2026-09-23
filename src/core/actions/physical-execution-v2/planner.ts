@@ -161,10 +161,18 @@ function contactModeFor(
   return 'PRESS';
 }
 
-function methodRelation(method: MethodKind, targetPercentage?: number): string {
+function methodRelation(
+  method: MethodKind,
+  beforePercentage?: number,
+  targetPercentage?: number,
+): string {
   if (method === 'MARK') {
-    if (targetPercentage === 50) return 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED';
-    if (targetPercentage === 100) return 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED';
+    if (beforePercentage === 0 && targetPercentage === 50) {
+      return 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED';
+    }
+    if (beforePercentage === 50 && targetPercentage === 100) {
+      return 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED';
+    }
     return 'MARKING_PROGRESS_REMAINS_VISIBLE';
   }
   if (method === 'CLEAR') return 'BOUNDED_SURFACE_CLEARING_PERSISTS';
@@ -394,7 +402,7 @@ export function planPhysicalExecutionV2({
       targetId,
       ...(materialId ? [materialId] : []),
     ]),
-    relation: methodRelation(method, targetPercentage),
+    relation: methodRelation(method, beforePercentage, targetPercentage),
     metric: isFilmableMarkingMilestone ? 'physical-milestone' : 'canonical-stage',
     expected: {
       beforePercentage,
