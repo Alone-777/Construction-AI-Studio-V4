@@ -13,6 +13,7 @@ import {
   compileManualVideoProjectV2,
   executionRecipeFromV2Segment,
 } from './manual-v2-bridge.mjs';
+import { normalizeVideoStyle } from './viral-timelapse.mjs';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const VIDEO_PLATFORM = 'ADOBE_FIREFLY';
@@ -303,6 +304,33 @@ function negativeConstraints(future) {
   ];
 }
 
+function viralNegativeConstraints(future) {
+  return [
+    'no full-scene teleportation',
+    'no project redesign',
+    'no regression of completed major structure',
+    'no camera jump',
+    'no magical construction of an entire finished building in one instant',
+    'no morphing construction that changes the project identity',
+    ...future.map(name => 'no premature ' + name),
+  ];
+}
+
+function viralChecklist({ operationName, future }) {
+  return [
+    'The clip duration is exactly 15 seconds.',
+    'The source frame remains the recognizable starting state.',
+    'The current operation produces a strong visible macro transformation.',
+    'Construction progress remains visually readable throughout the clip.',
+    'Camera, site, footprint, scale, major design and completed structural work remain recognizable.',
+    'Minor drift in loose tools, debris, temporary materials or background workers is acceptable.',
+    'No project redesign, regression of major completed work or unrelated future-stage jump occurs.',
+    ...future.map(name => 'Unrelated later stage remains absent: ' + name + '.'),
+    'The terminal frame clearly shows ' + operationName + ' as the current completed milestone.',
+    'The terminal frame is stable enough to become the next JOB source.',
+  ];
+}
+
 function checklist({ operationName, start, target, future }) {
   return [
     'The clip duration is exactly 15 seconds.',
@@ -372,12 +400,14 @@ export async function createFireflyProject({
   description,
   name,
   initialReviewFile,
+  videoStyle = 'PHYSICAL_REALISM',
   createdAt = new Date(),
 }) {
   if (!projectRoot) throw new Error('projectRoot é obrigatório.');
   if (!String(description || '').trim()) throw new Error('description é obrigatória.');
 
   const resolvedRoot = path.resolve(projectRoot);
+  const normalizedVideoStyle = normalizeVideoStyle(videoStyle);
   const initial = await findInitialImage(resolvedRoot);
   const reviewedInitial = await readApprovedInitialReview(initialReviewFile, initial.absolute);
   const inferredConstruction = inferConstruction(description);
@@ -388,6 +418,7 @@ export async function createFireflyProject({
     description,
     name: title,
     visualAnalysis: reviewedInitial?.visualAnalysis ?? null,
+    videoStyle: normalizedVideoStyle,
   });
   const construction = v2Project.config.construction || inferredConstruction;
   const environment = v2Project.config.environment || inferredEnvironment;
@@ -440,6 +471,7 @@ export async function createFireflyProject({
     sourcePreparation: v2Project.segments[0]?.logisticsShadow?.sourcePreparation ?? null,
   });
   const reviewedVisualSummary = reviewedInitial?.visualAnalysis?.summary || null;
+  const viralTimelapse = v2Project.videoStyle === 'VIRAL_TIMELAPSE';
 
   const jobs = [];
   let previousJob = null;
@@ -475,7 +507,8 @@ export async function createFireflyProject({
         : firstOfficialSourcePath;
 
       const future = operations.slice(operationIndex + 1).map(item => item[1]);
-      const executionRecipe = executionRecipeFromV2Segment(v2Segment);
+      const executionRecipe = v2Segment.executionRecipe
+        ?? executionRecipeFromV2Segment(v2Segment);
       const prompt = assertAnimationPromptLimit(v2Segment.prompt);
 
       const videoSlot = path.posix.join('outputs', String(sequence).padStart(3, '0') + '.mp4');
@@ -492,14 +525,17 @@ export async function createFireflyProject({
         physicalAction: v2Segment.physicalAction || operation[2],
         visualBasis: operation[3] ?? null,
         planningSource: v2Project.planningSource,
-        promptSource: 'PHYSICAL_EXECUTION_V2',
-        physicalExecutionV2: {
-          schema: 'construction-manual-physical-execution-v2/1',
-          plan: v2Segment.physicalExecutionPlanV2,
-          simulation: v2Segment.physicalSimulationV2,
-          providerNeutralPrompt: v2Segment.providerNeutralPromptV2,
-          logisticsShadow: v2Segment.logisticsShadow,
-        },
+        productionMode: v2Project.videoStyle,
+        promptSource: v2Segment.promptSource || 'PHYSICAL_EXECUTION_V2',
+        physicalExecutionV2: v2Segment.physicalExecutionPlanV2
+          ? {
+              schema: 'construction-manual-physical-execution-v2/1',
+              plan: v2Segment.physicalExecutionPlanV2,
+              simulation: v2Segment.physicalSimulationV2,
+              providerNeutralPrompt: v2Segment.providerNeutralPromptV2,
+              logisticsShadow: v2Segment.logisticsShadow,
+            }
+          : null,
         executionRecipe,
         segmentId: `${operation[0]}:${start}-${target}`,
         segmentIndex: segmentIndex + 1,
@@ -515,7 +551,9 @@ export async function createFireflyProject({
         initialReferencePath: referencePath,
         terminalRequirement: target === 100 ? 'SCENE_EXIT' : 'INTERMEDIATE_CONTINUATION',
         prompt,
-        negativeConstraints: negativeConstraints(future),
+        negativeConstraints: viralTimelapse
+          ? viralNegativeConstraints(future)
+          : negativeConstraints(future),
         continuityLocks: {
           preserveWorkerIdentity: true,
           preserveCamera: true,
@@ -523,13 +561,20 @@ export async function createFireflyProject({
           preserveEnvironment: environment,
           preserveCompletedOperations: operations.slice(0, operationIndex).map(item => item[0]),
           forbiddenFutureElements: future,
+          allowMinorPropDrift: viralTimelapse,
+          allowBackgroundWorkerVariance: viralTimelapse,
         },
-        acceptanceChecklist: checklist({
-          operationName: operation[1],
-          start,
-          target,
-          future,
-        }),
+        acceptanceChecklist: viralTimelapse
+          ? viralChecklist({
+              operationName: operation[1],
+              future,
+            })
+          : checklist({
+              operationName: operation[1],
+              start,
+              target,
+              future,
+            }),
         output: {
           videoSlot,
           lastFrameSlot,
@@ -626,25 +671,41 @@ export async function createFireflyProject({
       promptMaxChars: ANIMATION_PROMPT_MAX_CHARS,
       durationSeconds: 15,
       oneActiveJobAtATime: true,
+      productionMode: v2Project.videoStyle,
+      editingIntent: viralTimelapse
+        ? 'Select the strongest 4-8 seconds from each generated Job for the final narrated edit.'
+        : 'Use the approved canonical clip as generated.',
     },
-    executionPolicy: {
-      primarySchema: 'construction-physical-execution-plan/2',
-      promptSource: 'PHYSICAL_EXECUTION_V2',
-      schema: 'construction-manual-execution-recipe/1',
-      compatibilityProjection: true,
-      requireExplicitTools: true,
-      requireActorAction: true,
-      requireVisibleTransformation: true,
-      requireTerminalEvidence: true,
-      rejectPantomimeWithoutPhysicalChange: true,
-    },
+    executionPolicy: viralTimelapse
+      ? {
+          primarySchema: 'construction-viral-timelapse/1',
+          promptSource: 'VIRAL_TIMELAPSE',
+          schema: 'construction-manual-execution-recipe/1',
+          compatibilityProjection: true,
+          requireMacroTransformation: true,
+          requireStableTerminalFrame: true,
+          allowMinorPropDrift: true,
+          allowBackgroundWorkerVariance: true,
+          requireFramePerfectMicroContinuity: false,
+        }
+      : {
+          primarySchema: 'construction-physical-execution-plan/2',
+          promptSource: 'PHYSICAL_EXECUTION_V2',
+          schema: 'construction-manual-execution-recipe/1',
+          compatibilityProjection: true,
+          requireExplicitTools: true,
+          requireActorAction: true,
+          requireVisibleTransformation: true,
+          requireTerminalEvidence: true,
+          rejectPantomimeWithoutPhysicalChange: true,
+        },
     operations: operations.map(([id, operationName, physicalAction, visualBasis], index) => ({
       sequence: index + 1,
       id,
       name: operationName,
       physicalAction,
       visualBasis,
-      promptSource: 'PHYSICAL_EXECUTION_V2',
+      promptSource: viralTimelapse ? 'VIRAL_TIMELAPSE' : 'PHYSICAL_EXECUTION_V2',
     })),
   };
 
@@ -689,6 +750,7 @@ async function main() {
     description: args.description,
     name: args.name,
     initialReviewFile: args['initial-review-file'],
+    videoStyle: args['video-style'] || 'PHYSICAL_REALISM',
   });
   process.stdout.write(JSON.stringify(result) + '\n');
 }
