@@ -353,7 +353,7 @@ export function compileDescriptionToBlueprint(input: ProjectDescriptionInput): D
     rules: [
       { id: 'rule_protected_zone', description: 'A zona ambiental protegida é imutável', condition: `zona == ${protectedArea.id}`, consequence: 'bloquear transformação', editable: false },
       { id: 'rule_dependency', description: 'O grafo construtivo é obrigatório', condition: 'predecessores != COMPLETE', consequence: 'componente BLOCKED', editable: false },
-      { id: 'rule_progression', description: 'Toda operação possui marcos físicos absolutos adequados ao trabalho', condition: 'operação ativa', consequence: 'gerar marcos físicos filmáveis sem subdivisão percentual artificial', editable: false },
+      { id: 'rule_progression', description: 'Toda operação possui marcos físicos absolutos', condition: 'operação ativa', consequence: 'gerar 0/25/50/75/100', editable: false },
     ],
   };
 
