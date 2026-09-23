@@ -110,6 +110,46 @@ O runtime operacional não depende de Gemini, OpenAI API, Groq ou provider visua
 8. O Construction AI decide o estado operacional do JOB e libera correção ou próximo JOB.
 9. O ChatGPT atua como orquestrador; o Construction AI continua sendo o sistema executor e a fonte do estado operacional.
 
+## Bootstrap obrigatório via Relay em conversas novas
+
+O fato de `.firefly/` e `.construction-intake/` serem ignorados pelo Git **não** significa que o ChatGPT não possa verificar o estado local. O caminho oficial para isso é:
+
+```text
+ChatGPT -> GitHub Relay (inbox/outbox) -> Relay local -> Construction Bridge -> Construction AI Studio
+```
+
+Antes de pedir captura de tela, `npm run verificar` ou qualquer confirmação manual de estado, o ChatGPT **deve tentar o Relay primeiro**.
+
+Sequência mínima obrigatória:
+
+1. criar uma solicitação única em `Alone-777/Construction-AI-Relay/inbox/<requestId>.json`;
+2. aguardar e ler `outbox/<requestId>.json`;
+3. usar `overview` para confirmar branch, commit, workspaces e disponibilidade do estado local;
+4. se estiver em `NO_PROJECT`, ler `.construction-intake/project-intent.json` com `read_file` quando existir e usar `initial_image_packet` para obter a foto atual e seu SHA-256;
+5. se existir workspace ativo, usar `supervisor_bundle` para identificar JOB, status, tentativa, prompt e próxima ação;
+6. só usar fallback manual se houver **falha real do Relay/Bridge após uma tentativa explícita**.
+
+Regras de fallback:
+- não responder “não consigo verificar o estado local daqui” antes de tentar o Relay;
+- não inferir que o estado local é inacessível apenas porque ele não está versionado no GitHub;
+- não pedir captura de tela como primeira opção;
+- se o Relay falhar, relatar objetivamente a falha observada e então pedir apenas uma confirmação do painel, `npm run verificar` ou uma captura do Construction AI Studio;
+- uma resposta válida do Relay é suficiente para tratar o estado retornado como fonte operacional atual, sem exigir confirmação visual redundante do usuário.
+
+Exemplo mínimo de consulta inicial:
+
+```json
+{
+  "protocol": "construction-ai-relay/0.1",
+  "requestId": "<id-unico>",
+  "operation": {
+    "op": "overview"
+  }
+}
+```
+
+Em `CRIAR NOVO PROJETO`, depois de confirmar `NO_PROJECT`, o ChatGPT deve continuar pelo Relay com `read_file` do intent e `initial_image_packet`; em `CONTINUAR`, se houver workspace, deve usar `supervisor_bundle`. Captura de tela é contingência, não bootstrap normal.
+
 ## Comandos de conversa
 
 Em qualquer conversa nova deste projeto, use exatamente um destes comandos em maiúsculas:
@@ -180,8 +220,10 @@ Se a conversa não conseguir inspecionar diretamente o computador local:
 - não declarar o dispositivo como offline sem evidência;
 - não bloquear `CONTINUAR` ou `CRIAR NOVO PROJETO` por ausência de um conector não configurado;
 - usar o GitHub e o `START_HERE.md` para verificar código e regras;
-- para estado local realmente indispensável, pedir somente uma confirmação objetiva do usuário, saída de `npm run verificar` ou uma captura do próprio Construction AI Studio;
-- quando a Imagem Inicial precisar ser verificada, aceitar a confirmação do painel do Construction AI ou do comando `npm run verificar`; não exigir Desktop Commander.
+- **tentar primeiro o GitHub Relay/inbox-outbox e aguardar uma resposta real do Relay local**;
+- considerar `.firefly/` e `.construction-intake/` acessíveis indiretamente pelo Relay quando o runtime estiver respondendo;
+- somente após falha real dessa tentativa, pedir uma confirmação objetiva do usuário, saída de `npm run verificar` ou uma captura do próprio Construction AI Studio;
+- quando a Imagem Inicial precisar ser verificada, preferir `initial_image_packet`; se o Relay estiver indisponível, aceitar a confirmação do painel do Construction AI ou do comando `npm run verificar`; não exigir Desktop Commander.
 
 ## Regra de continuidade
 
