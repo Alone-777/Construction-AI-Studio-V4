@@ -27,6 +27,8 @@ describe('viral-timelapse', () => {
     expect(result.characterCount).toBeLessThanOrEqual(1800);
     expect(result.prompt).toContain('[ADOBE FIREFLY VIRAL TIMELAPSE]');
     expect(result.prompt).toContain('MACRO TRANSFORMATION:');
+    expect(result.prompt).toContain('ACTION CAUSALITY:');
+    expect(result.prompt).toMatch(/visible worker, tool, machine or material placement/i);
     expect(result.prompt).toContain('END STATE:');
     expect(result.prompt).toContain('Minor continuity drift');
     expect(result.prompt).not.toContain('Advance only 0%');
@@ -46,6 +48,7 @@ describe('viral-timelapse', () => {
     expect(result.prompt).toContain('RETRY FIXES:');
     expect(result.prompt).toContain('PROJECT_DESIGN_DRIFT');
     expect(result.prompt).toContain('Keep the same cabin footprint');
+    expect(result.prompt).toContain('ACTION CAUSALITY:');
     expect(result.prompt).not.toContain('grip the');
   });
 
@@ -63,3 +66,18 @@ describe('viral-timelapse', () => {
     expect(recipe.terminalEvidence).toContain('END STATE:');
   });
 });
+
+
+  it('forbids self-clearing terrain while keeping viral pace', () => {
+    const result = compileViralTimelapsePrompt({
+      operationType: 'limpeza',
+      operationName: 'Limpeza seletiva da área marcada',
+      physicalAction: 'remover vegetação da implantação',
+      environment: 'montanha',
+    });
+
+    expect(result.prompt).toMatch(/Every visible clearing change must happen at the exact patch/i);
+    expect(result.prompt).toMatch(/must never clear or transform by themselves/i);
+    expect(result.prompt).toMatch(/spatially close to the area that is changing/i);
+    expect(result.prompt).toMatch(/accelerated construction timelapse/i);
+  });
