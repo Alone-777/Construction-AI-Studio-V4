@@ -129,8 +129,9 @@ describe('Adobe Firefly V2 animation prompt compiler', () => {
       durationSeconds: 15,
     });
 
-    expect(compiled.prompt).toContain('END EVIDENCE:');
-    expect(compiled.prompt).toContain('Stop exactly at the target; never overshoot.');
+    expect(compiled.prompt).toContain('END STATE:');
+    expect(compiled.prompt).toContain('Stop after this physical marking milestone;');
+    expect(compiled.prompt).not.toContain('Stop exactly at the target; never overshoot.');
     expect(compiled.characterCount).toBeLessThanOrEqual(1800);
   });
 
