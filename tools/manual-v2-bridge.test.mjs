@@ -14,10 +14,10 @@ describe('manual-v2-bridge', () => {
         marcacao: 'rope',
       },
       retryCorrectionsBySegment: {
-        'marcacao:0-25': [
+        'marcacao:0-50': [
           {
             code: 'TOOL_ACTION_NOT_EXECUTED',
-            correction: 'Show visible stake placement and keep the rope taut between marked corners.',
+            correction: 'Install the four existing corner stakes clearly and keep the rope coiled for the next milestone.',
           },
         ],
       },
@@ -28,12 +28,12 @@ describe('manual-v2-bridge', () => {
     expect(result.model).toBe('KLING_3_0');
     expect(result.promptMaxChars).toBe(1800);
     expect(result.operations.length).toBe(9);
-    expect(result.segments.length).toBe(36);
+    expect(result.segments.length).toBe(34);
 
     const first = result.segments.find(segment =>
       segment.operationType === 'marcacao' &&
       segment.startStagePercentage === 0 &&
-      segment.targetStagePercentage === 25
+      segment.targetStagePercentage === 50
     );
     expect(first).toBeDefined();
     expect(first.promptSource).toBe('PHYSICAL_EXECUTION_V2');
@@ -47,7 +47,9 @@ describe('manual-v2-bridge', () => {
     );
     expect(first.prompt).toContain('[ADOBE FIREFLY VIDEO JOB]');
     expect(first.prompt).toContain('PHYSICAL EXECUTION:');
-    expect(first.prompt).toContain('rope');
+    expect(first.prompt).toContain('four existing corner stakes');
+    expect(first.prompt).toContain('rope coiled and unused');
+    expect(first.prompt).not.toContain('0%→50%');
     expect(first.prompt).not.toContain('TOOL_ACTION_NOT_EXECUTED');
     expect(first.retryPrompt).toContain('TOOL_ACTION_NOT_EXECUTED');
     expect(first.retryPrompt).not.toBe(first.prompt);
@@ -57,7 +59,7 @@ describe('manual-v2-bridge', () => {
     expect(first.logisticsShadow.preflight.status).not.toBe('READY');
     expect(first.logisticsShadow.preview.prompt).toBeNull();
     expect(first.logisticsShadow.sourcePreparation.phase).toBe('INITIAL_SOURCE');
-    expect(first.logisticsShadow.sourcePreparation.candidateImageInstruction).toContain('small organized stock/tool point');
+    expect(first.logisticsShadow.sourcePreparation.phase).toBe('INITIAL_SOURCE');
     expect(result.segments.slice(1).every(segment =>
       segment.logisticsShadow.sourcePreparation.phase === 'CONTINUATION'
       && segment.logisticsShadow.sourcePreparation.candidateImageInstruction === null
@@ -69,7 +71,7 @@ describe('manual-v2-bridge', () => {
 
     const recipe = executionRecipeFromV2Segment(first);
     expect(recipe.schema).toBe('construction-manual-execution-recipe/1');
-    expect(recipe.tools).toContain('rope');
+    expect(recipe.tools).toEqual(['appropriate hand tool']);
     expect(recipe.actionSequence.length).toBeGreaterThanOrEqual(2);
     expect(recipe.terminalEvidence).toBeTruthy();
   }, 30000);
