@@ -83,7 +83,22 @@ function retryBlock(
   ).join(' | ');
 }
 
+function markingEvidence(artifact: ProviderNeutralPromptArtifactV2) {
+  return artifact.evidence.find(item =>
+    item.relation === 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED'
+    || item.relation === 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED'
+  );
+}
+
 function progressBlock(artifact: ProviderNeutralPromptArtifactV2): string {
+  const marking = markingEvidence(artifact);
+  if (marking?.relation === 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED') {
+    return 'Physical milestone: install exactly four existing corner stakes and leave the existing rope coiled and unused. Do not begin rope layout or clearing.';
+  }
+  if (marking?.relation === 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED') {
+    return 'Physical milestone: keep the four installed stakes fixed and finish one closed, taut, aligned rope perimeter. Do not begin clearing.';
+  }
+
   const canonical = artifact.canonicalProgress;
   const parts = [
     'Advance only ' + canonical.beforePercentage + '%→' +
@@ -102,6 +117,15 @@ function progressBlock(artifact: ProviderNeutralPromptArtifactV2): string {
 }
 
 function evidenceBlock(artifact: ProviderNeutralPromptArtifactV2, maxChars: number): string {
+  const marking = markingEvidence(artifact);
+  if (marking) {
+    const expected = marking.expected as Record<string, unknown>;
+    const terminalDescription = typeof expected?.terminalDescription === 'string'
+      ? expected.terminalDescription
+      : 'The physical marking milestone remains clearly visible and stable.';
+    return 'END STATE: ' + compactAnimationPromptField(terminalDescription, maxChars) + '.';
+  }
+
   const terminal = artifact.evidence
     .filter(item => item.visibleIn === 'TERMINAL_FRAME')
     .map(item =>
@@ -119,7 +143,16 @@ function causalBeats(
   maxItems: number,
   itemChars: number,
 ): string {
-  const beats = artifact.executionBeats
+  const marking = markingEvidence(artifact);
+  const sourceBeats = marking
+    ? artifact.executionBeats.filter(beat =>
+        beat.changesMatter
+        || beat.kind === 'ACQUIRE_TOOL'
+        || beat.kind === 'INSPECT'
+        || beat.kind === 'STOP'
+      )
+    : artifact.executionBeats;
+  const beats = sourceBeats
     .slice(0, maxItems)
     .map((beat, index) =>
       String(index + 1) + ') ' + compactAnimationPromptField(beat.instruction, itemChars)
