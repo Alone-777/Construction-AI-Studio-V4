@@ -447,8 +447,17 @@ export class StagesExecutorStage {
       return { success: false, error: new Error('No scenes to validate') };
     }
     for (const scene of context.scenes) {
-      if (!scene.stages || scene.stages.length !== 5) {
-        return { success: false, error: new Error(`Scene ${scene.id} doesn't have 5 stages`) };
+      if (!scene.stages || scene.stages.length < 2) {
+        return { success: false, error: new Error(`Scene ${scene.id} has insufficient physical milestones`) };
+      }
+      const percentages = scene.stages.map(stage => stage.percentage);
+      if (percentages[0] !== 0 || percentages[percentages.length - 1] !== 100) {
+        return { success: false, error: new Error(`Scene ${scene.id} must start at 0 and end at 100`) };
+      }
+      for (let index = 1; index < percentages.length; index += 1) {
+        if (percentages[index] <= percentages[index - 1]) {
+          return { success: false, error: new Error(`Scene ${scene.id} has non-increasing physical milestones`) };
+        }
       }
       for (const stage of scene.stages) {
         if (!stage.validations || !stage.executionProof) {
