@@ -1,6 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  buildViralExecutionRecipe,
+  compileViralTimelapsePrompt,
+  normalizeVideoStyle,
+} from './viral-timelapse.mjs';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STUDIO_ROOT = path.resolve(HERE, '..');
 
@@ -67,11 +73,14 @@ export async function compileManualVideoProjectV2({
   toolOverrides = {},
   retryCorrectionsBySegment = {},
   visualAnalysis = null,
+  videoStyle = 'PHYSICAL_REALISM',
   studioRoot = STUDIO_ROOT,
 } = {}) {
   if (!String(description || '').trim()) {
     throw new Error('description is required for Physical Execution V2 compilation.');
   }
+
+  const normalizedVideoStyle = normalizeVideoStyle(videoStyle);
 
   const { createServer } = await import('vite');
   const server = await createServer({
@@ -135,6 +144,88 @@ export async function compileManualVideoProjectV2({
       const specification = blueprint.operations.find(item => item.id === operation.id);
       const firstWorkStage = orderedStages.find(stage => stage.percentage > 0);
       const markingZone = firstWorkStage?.activeZone || operation.zones?.[0] || 'Z1';
+
+      if (normalizedVideoStyle === 'VIRAL_TIMELAPSE') {
+        const terminalStage = orderedStages.find(stage => stage.percentage === 100);
+        if (!terminalStage) {
+          throw new Error('Viral timelapse requires a terminal 100% stage for ' + key + '.');
+        }
+
+        const operationIndex = project.operations.findIndex(item => item.id === operation.id);
+        const completedOperations = project.operations
+          .slice(0, operationIndex)
+          .map(item => item.name);
+        const forbiddenFutureElements = project.operations
+          .slice(operationIndex + 1)
+          .map(item => item.name);
+        const corrections = normalizeRetryCorrections(
+          retryCorrectionsBySegment[retryKey(key, 0, 100)],
+        );
+        const baseCompiledPrompt = compileViralTimelapsePrompt({
+          operationType: key,
+          operationName: operation.name,
+          physicalAction: operation.physicalAction || terminalStage.physicalAction || operation.name,
+          environment: config.environment,
+          completedOperations,
+          forbiddenFutureElements,
+          durationSeconds: 15,
+          aspectRatio: '16:9',
+          model: 'KLING_3_0',
+        });
+        const retryCompiledPrompt = corrections.length
+          ? compileViralTimelapsePrompt({
+              operationType: key,
+              operationName: operation.name,
+              physicalAction: operation.physicalAction || terminalStage.physicalAction || operation.name,
+              environment: config.environment,
+              completedOperations,
+              forbiddenFutureElements,
+              retryCorrections: corrections,
+              durationSeconds: 15,
+              aspectRatio: '16:9',
+              model: 'KLING_3_0',
+            })
+          : null;
+
+        segments.push({
+          operationType: key,
+          operationId: operation.id,
+          operationName: operation.name,
+          physicalAction:
+            operation.physicalAction || terminalStage.physicalAction || operation.name,
+          startStagePercentage: 0,
+          targetStagePercentage: 100,
+          activeZone: firstWorkStage?.activeZone || terminalStage.activeZone || operation.zones?.[0] || 'Z1',
+          tool: terminalStage.tool || firstWorkStage?.tool || null,
+          prompt: baseCompiledPrompt.prompt,
+          promptCharacters: baseCompiledPrompt.characterCount,
+          retryPrompt: retryCompiledPrompt?.prompt ?? null,
+          retryPromptCharacters: retryCompiledPrompt?.characterCount ?? null,
+          promptMaxChars: baseCompiledPrompt.maxChars,
+          promptSource: 'VIRAL_TIMELAPSE',
+          productionMode: 'VIRAL_TIMELAPSE',
+          executionRecipe: buildViralExecutionRecipe({
+            operationType: key,
+            operationName: operation.name,
+            physicalAction:
+              operation.physicalAction || terminalStage.physicalAction || operation.name,
+          }),
+          physicalExecutionPlanV2: null,
+          physicalSimulationV2: null,
+          providerNeutralPromptV2: null,
+          retryProviderNeutralPromptV2: null,
+          logisticsShadow: {
+            mode: 'SHADOW',
+            generationAuthorized: false,
+            skippedForProductionMode: 'VIRAL_TIMELAPSE',
+            sourcePreparation: {
+              phase: segments.length === 0 ? 'INITIAL_SOURCE' : 'CONTINUATION',
+              candidateImageInstruction: null,
+            },
+          },
+        });
+        continue;
+      }
 
       const videoMilestones = key === 'marcacao'
         ? [
@@ -309,6 +400,7 @@ export async function compileManualVideoProjectV2({
     return {
       schema: 'construction-manual-v2-bridge/1',
       platform: 'ADOBE_FIREFLY',
+      videoStyle: normalizedVideoStyle,
       model: 'KLING_3_0',
       promptMaxChars: 1800,
       operations,
@@ -322,6 +414,7 @@ export async function compileManualVideoProjectV2({
         environment: config.environment,
         materials: clone(config.materials),
         workerCount: config.workerCount,
+        videoStyle: normalizedVideoStyle,
       },
     };
   } finally {
