@@ -93,10 +93,10 @@ function markingEvidence(artifact: ProviderNeutralPromptArtifactV2) {
 function progressBlock(artifact: ProviderNeutralPromptArtifactV2): string {
   const marking = markingEvidence(artifact);
   if (marking?.relation === 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED') {
-    return 'Physical milestone: install exactly four existing corner stakes and leave the existing rope coiled and unused. Do not begin rope layout or clearing.';
+    return 'Physical milestone: install exactly four existing corner stakes and leave the existing rope coiled and unused. Do not begin rope layout or clearing. Stop exactly at the target; never overshoot.';
   }
   if (marking?.relation === 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED') {
-    return 'Physical milestone: keep the four installed stakes fixed and finish one closed, taut, aligned rope perimeter. Do not begin clearing.';
+    return 'Physical milestone: keep the four installed stakes fixed and finish one closed, taut, aligned rope perimeter. Do not begin clearing. Stop exactly at the target; never overshoot.';
   }
 
   const canonical = artifact.canonicalProgress;
@@ -123,7 +123,7 @@ function evidenceBlock(artifact: ProviderNeutralPromptArtifactV2, maxChars: numb
     const terminalDescription = typeof expected?.terminalDescription === 'string'
       ? expected.terminalDescription
       : 'The physical marking milestone remains clearly visible and stable.';
-    return 'END STATE: ' + compactAnimationPromptField(terminalDescription, maxChars) + '.';
+    return 'END EVIDENCE: ' + compactAnimationPromptField(terminalDescription, maxChars) + '.';
   }
 
   const terminal = artifact.evidence
