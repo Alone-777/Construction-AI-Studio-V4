@@ -40,17 +40,21 @@ describe('Criar do zero: descrição → blueprint → Core', () => {
     expect(project.storyboard).toHaveLength(project.scenes.length);
   });
 
-  it('executa progressão física absoluta para o mesmo trabalho', () => {
+  it('executa marcos físicos adequados ao trabalho sem fracionar marcação artificialmente', () => {
     for (const scene of project.scenes) {
-      expect(scene.stages.map((stage: any) => stage.percentage)).toEqual([0, 25, 50, 75, 100]);
+      const operation = project.operations.find((item: any) => item.id === scene.operationId);
+      const expected = operation?.type === 'marcacao'
+        ? [0, 50, 100]
+        : [0, 25, 50, 75, 100];
+      expect(scene.stages.map((stage: any) => stage.percentage)).toEqual(expected);
       for (const stage of scene.stages) {
         expect(stage.physicalState).toBeDefined();
         expect(Object.keys(stage.physicalState?.elementProgress ?? {})).toHaveLength(
-          project.operations.find((operation: any) => operation.id === scene.operationId)?.elements?.length ?? 0,
+          operation?.elements?.length ?? 0,
         );
       }
       expect(scene.stages[scene.stages.length - 1]?.physicalState?.completedElements).toEqual(
-        project.operations.find((operation: any) => operation.id === scene.operationId)?.elements,
+        operation?.elements,
       );
     }
   });
