@@ -78,6 +78,20 @@ function operationGuidance(operationType, operationName, physicalAction) {
   return table[key] || fallback;
 }
 
+function causalityGuidance(operationType) {
+  const key = String(operationType || '').trim().toLowerCase();
+  if (key === 'limpeza') {
+    return 'ACTION CAUSALITY: Every visible clearing change must happen at the exact patch where a visible worker, hand tool or machine is actively cutting, pulling, scraping, raking or removing material. Grass, brush, roots, debris and soil must never clear or transform by themselves away from active work.';
+  }
+  if (key === 'marcacao') {
+    return 'ACTION CAUSALITY: Stakes, guide lines and footprint marks may appear only where a visible worker is placing, pulling, aligning or fixing them. Do not let markings create themselves away from the active worker.';
+  }
+  if (['fundacao', 'apoios', 'escavacao'].includes(key)) {
+    return 'ACTION CAUSALITY: Excavation, soil displacement, supports and foundation changes may occur only where a visible worker, tool or machine is actively acting on that exact area. No self-digging or self-forming ground.';
+  }
+  return 'ACTION CAUSALITY: Every major visible construction change must be caused on screen by a visible worker, tool, machine or material placement acting on that same area. Timelapse may compress time, but it must not replace visible cause with self-transforming terrain or components.';
+}
+
 function terminalGuidance(operationType, operationName) {
   const key = String(operationType || '').trim().toLowerCase();
   const table = {
@@ -109,20 +123,22 @@ export function buildViralExecutionRecipe({
 } = {}) {
   const guidance = operationGuidance(operationType, operationName, physicalAction);
   const terminal = terminalGuidance(operationType, operationName);
+  const causality = causalityGuidance(operationType);
   return {
     schema: 'construction-manual-execution-recipe/1',
     operationType: String(operationType || '').trim() || null,
     operationName: String(operationName || '').trim() || null,
     tools: ['construction tools'],
     actorAction:
-      'Workers perform fast purposeful construction timelapse activity that visibly advances the current milestone.',
+      'Workers perform fast purposeful construction timelapse activity and remain visibly close to the area or component that is changing.',
     actionSequence: [
       guidance,
+      causality,
       'Keep visible progress moving throughout the clip instead of spending the full shot on one tiny hand-level action.',
       'End only after the current milestone is visually clear and stable enough to become the next source frame.',
     ],
     visibleTransformation:
-      'The scene should show a strong macro construction transformation from the current source state to the completed current milestone.',
+      'The scene should show a strong macro construction transformation, but every major changed area must retain readable human/tool/machine causality on screen.',
     terminalEvidence:
       'END STATE: ' + terminal + '; the frame is stable, readable and significantly more advanced than the source.',
     forbidden:
@@ -166,6 +182,7 @@ export function compileViralTimelapsePrompt({
   const future = compactList(forbiddenFutureElements, 5, 40);
   const guidance = operationGuidance(operationType, operationName, physicalAction);
   const terminal = terminalGuidance(operationType, operationName);
+  const causality = causalityGuidance(operationType);
   const fixes = (Array.isArray(retryCorrections) ? retryCorrections : [])
     .map((item) => ({
       code: compact(item?.code, 48),
@@ -179,11 +196,12 @@ export function compileViralTimelapsePrompt({
       model + ' image-to-video. Source frame is temporal truth.',
     'Create a fast, satisfying accelerated construction timelapse.',
     'Operation: ' + compact(operationName, 100) + '.',
-    'MACRO TRANSFORMATION: ' + compact(guidance, 340),
-    'Show rapid purposeful worker activity and obvious visible progress every few seconds. Prefer a readable sequence of major construction changes over slow hand-level realism.',
+    'MACRO TRANSFORMATION: ' + compact(guidance, 320),
+    causality,
+    'Show rapid purposeful worker activity and obvious visible progress every few seconds. Keep the active worker/tool/machine spatially close to the area that is changing. Prefer a readable sequence of major construction changes over slow hand-level realism.',
     'Preserve the camera viewpoint, site, terrain, building footprint, scale, major design and all completed structural work.',
-    'Minor continuity drift in loose tools, debris, temporary materials or background workers is acceptable if the main construction identity stays coherent.',
-    'Avoid obvious full-building popping, total-scene teleportation, project redesign, regression of completed work, or a camera jump.',
+    'Minor continuity drift in loose tools, debris, temporary materials or background workers is acceptable if the main construction identity stays coherent and the major transformation still has visible cause.',
+    'Avoid self-transforming terrain or components, obvious full-building popping, total-scene teleportation, project redesign, regression of completed work, or a camera jump.',
     completed ? 'Completed work stays recognizable: ' + completed + '.' : '',
     future ? 'Do not begin unrelated later stages: ' + future + '.' : '',
     environment ? 'Environment identity: ' + compact(environment, 70) + '.' : '',
@@ -200,11 +218,12 @@ export function compileViralTimelapsePrompt({
       '[ADOBE FIREFLY VIRAL TIMELAPSE] ' + durationSeconds + 's ' + aspectRatio + ' ' +
         model + '. Source frame is temporal truth.',
       'Fast satisfying construction timelapse. Operation: ' + compact(operationName, 80) + '.',
-      'MACRO TRANSFORMATION: ' + compact(guidance, 260),
-      'Rapid purposeful workers; show obvious visible progress throughout the clip.',
+      'MACRO TRANSFORMATION: ' + compact(guidance, 240),
+      compact(causality, 330),
+      'Rapid purposeful workers; keep them visibly near the changing area and show obvious progress throughout the clip.',
       'Preserve camera, site, footprint, scale, major design and completed structure.',
       'Minor drift in loose tools, debris and background workers is acceptable.',
-      'No full-building pop, total-scene teleport, redesign, regression or camera jump.',
+      'No self-transforming terrain/components, full-building pop, total-scene teleport, redesign, regression or camera jump.',
       future ? 'No later stages: ' + compactList(forbiddenFutureElements, 4, 28) + '.' : '',
       'END STATE: ' + compact(terminal, 160) + '. Stable final frame for next Job.',
       fixes.length
