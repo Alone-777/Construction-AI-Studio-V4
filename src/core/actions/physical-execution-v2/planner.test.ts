@@ -173,7 +173,7 @@ function operation(overrides: Partial<Operation>): Operation {
 }
 
 describe('native Physical Execution V2 planner', () => {
-  it('plans site marking as visible persistent perimeter work before clearing', () => {
+  it('plans site marking as two filmable physical milestones before clearing', () => {
     const official = world();
     official.futureComponents.unshift('component_marcacao');
     const op = operation({
@@ -190,36 +190,57 @@ describe('native Physical Execution V2 planner', () => {
         tools: ['corda'],
       },
     });
-    const currentStage = stage(
-      'medir o perímetro, posicionar estacas visíveis nos cantos e tensionar corda entre elas',
-      'corda',
-    );
 
-    const plan = planPhysicalExecutionV2({
+    const stakePlan = planPhysicalExecutionV2({
       scene: scene(op.id),
-      stage: currentStage,
+      stage: stage(
+        'instalar quatro estacas de canto e depois tensionar a corda',
+        'corda',
+        50,
+      ),
       operation: op,
       worldStateBefore: official,
       beforePercentage: 0,
     });
-    const receipt = simulatePhysicalExecution(official, plan);
+    const stakeReceipt = simulatePhysicalExecution(official, stakePlan);
 
-    expect(plan.intent.methodId).toBe('native:mark');
-    expect(plan.evidence[0]?.relation).toBe('MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED');
-    expect(plan.nodes.some(node =>
+    expect(stakePlan.intent.methodId).toBe('native:mark');
+    expect(stakePlan.evidence[0]?.relation).toBe('FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED');
+    expect(stakePlan.nodes.some(node =>
+      node.kind === 'PLACE'
+      && !node.toolId
+      && /exactly four existing slender wooden corner stakes/i.test(node.instruction)
+      && /rope coiled and unused/i.test(node.instruction),
+    )).toBe(true);
+    expect(stakePlan.nodes.some(node => node.kind === 'ACQUIRE_TOOL')).toBe(false);
+    expect(stakeReceipt.validation.ok).toBe(true);
+    expect(stakeReceipt.commitAvailable).toBe(false);
+
+    const ropePlan = planPhysicalExecutionV2({
+      scene: scene(op.id),
+      stage: stage(
+        'tensionar corda entre as quatro estacas instaladas',
+        'corda',
+        100,
+      ),
+      operation: op,
+      worldStateBefore: official,
+      beforePercentage: 50,
+    });
+    const ropeReceipt = simulatePhysicalExecution(official, ropePlan);
+
+    expect(ropePlan.evidence[0]?.relation).toBe('MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED');
+    expect(ropePlan.nodes.some(node =>
+      node.kind === 'ACQUIRE_TOOL' && node.toolId === 'rope',
+    )).toBe(true);
+    expect(ropePlan.nodes.some(node =>
       node.kind === 'PLACE'
       && node.toolId === 'rope'
-      && node.effects.some(effect =>
-        effect.type === 'STATE_CHANGED'
-        && effect.property === 'site-marking'
-      ),
+      && /closed rope perimeter/i.test(node.instruction)
+      && /do not move or replace the stakes/i.test(node.instruction),
     )).toBe(true);
-    expect(plan.nodes.some(node =>
-      /place visible corner stakes/i.test(node.instruction)
-      && /rope taut/i.test(node.instruction),
-    )).toBe(true);
-    expect(receipt.validation.ok).toBe(true);
-    expect(receipt.commitAvailable).toBe(false);
+    expect(ropeReceipt.validation.ok).toBe(true);
+    expect(ropeReceipt.commitAvailable).toBe(false);
   });
 
   it('plans selective preparation from OFFICIAL with machete contact and removal causality', () => {
