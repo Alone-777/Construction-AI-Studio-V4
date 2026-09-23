@@ -163,9 +163,9 @@ function contactModeFor(
 
 function methodRelation(method: MethodKind, targetPercentage?: number): string {
   if (method === 'MARK') {
-    return targetPercentage !== undefined && targetPercentage < 100
-      ? 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED'
-      : 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED';
+    if (targetPercentage === 50) return 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED';
+    if (targetPercentage === 100) return 'MARKED_FOOTPRINT_REMAINS_VISIBLE_AND_ALIGNED';
+    return 'MARKING_PROGRESS_REMAINS_VISIBLE';
   }
   if (method === 'CLEAR') return 'BOUNDED_SURFACE_CLEARING_PERSISTS';
   if (method === 'EXCAVATE') return 'BOUNDED_EXCAVATION_AND_SPOIL_PERSIST';
@@ -293,10 +293,15 @@ function actionInstruction(
 ): string {
   const toolText = toolId ? ' with the ' + toolId : '';
   if (method === 'MARK') {
-    if ((beforePercentage ?? 0) === 0 && (targetPercentage ?? 0) < 100) {
+    if ((beforePercentage ?? -1) === 0 && targetPercentage === 50) {
       return 'Install exactly four existing slender wooden corner stakes one by one: carry one stake to each corner of the intended footprint, press each stake firmly into the soil by hand, and leave all four upright and clearly separated. Keep the existing rope coiled and unused; do not tension it yet.';
     }
-    return 'Keep all four installed corner stakes fixed. Unroll the existing rope, route it continuously from stake to stake, wrap or guide it around each stake, pull every side taut, adjust the alignment by hand, and finish with one clearly visible closed rope perimeter. Do not move or replace the stakes.';
+    if (beforePercentage === 50 && targetPercentage === 100) {
+      return 'Keep all four installed corner stakes fixed. Unroll the existing rope, route it continuously from stake to stake, wrap or guide it around each stake, pull every side taut, adjust the alignment by hand, and finish with one clearly visible closed rope perimeter. Do not move or replace the stakes.';
+    }
+    return 'Measure the bounded footprint, place visible corner stakes one by one by pressing the slender stakes into the soil by hand, then pull the rope taut between them'
+      + toolText
+      + ', adjust the line by hand, and leave a clear aligned perimeter visibly marked on the ground.';
   }
   if (method === 'CLEAR') {
     return 'Cut/scrape only the bounded current patch inside the marked footprint using short repeated contacts' + toolText
@@ -366,10 +371,12 @@ export function planPhysicalExecutionV2({
   const rawToolId =
     stage.tool
     ?? operation.visualBasis?.tools?.[0];
-  const effectiveRawToolId =
-    method === 'MARK' && beforePercentage === 0 && targetPercentage < 100
-      ? undefined
-      : rawToolId;
+  const isStakeMilestone =
+    method === 'MARK' && beforePercentage === 0 && targetPercentage === 50;
+  const isRopeMilestone =
+    method === 'MARK' && beforePercentage === 50 && targetPercentage === 100;
+  const isFilmableMarkingMilestone = isStakeMilestone || isRopeMilestone;
+  const effectiveRawToolId = isStakeMilestone ? undefined : rawToolId;
   const toolId = effectiveRawToolId
     ? canonicalToolId(effectiveRawToolId) ?? effectiveRawToolId
     : undefined;
@@ -386,16 +393,16 @@ export function planPhysicalExecutionV2({
       ...(materialId ? [materialId] : []),
     ]),
     relation: methodRelation(method, targetPercentage),
-    metric: method === 'MARK' ? 'physical-milestone' : 'canonical-stage',
+    metric: isFilmableMarkingMilestone ? 'physical-milestone' : 'canonical-stage',
     expected: {
       beforePercentage,
       targetPercentage,
-      terminalDescription: method === 'MARK'
-        ? (targetPercentage < 100
-          ? 'Exactly four corner stakes are upright and fixed in the ground; the rope remains coiled and unused.'
-          : 'All four corner stakes remain fixed and a closed rope perimeter is taut, straight, aligned and clearly visible.')
-        : (stage.visualEvidence?.[0]
-          ?? ('Visible persistent result for ' + targetLabel)),
+      terminalDescription: isStakeMilestone
+        ? 'Exactly four corner stakes are upright and fixed in the ground; the rope remains coiled and unused.'
+        : isRopeMilestone
+          ? 'All four corner stakes remain fixed and a closed rope perimeter is taut, straight, aligned and clearly visible.'
+          : (stage.visualEvidence?.[0]
+            ?? ('Visible persistent result for ' + targetLabel)),
     },
     visibleIn: 'TERMINAL_FRAME',
     mustPersist: true,
@@ -497,11 +504,11 @@ export function planPhysicalExecutionV2({
   add({
     id: evidenceId + ':position',
     kind: 'POSITION',
-    instruction: method === 'MARK'
-      ? (targetPercentage < 100
-        ? 'Keep the four existing loose stakes visible. Work on one intended corner at a time and do not create extra stakes.'
-        : 'Keep the four installed stakes fixed. Position the worker and the existing rope at the first stake before unrolling it.')
-      : 'Position actor, tool and current material at the bounded target section before changing it.',
+    instruction: isStakeMilestone
+      ? 'Keep the four existing loose stakes visible. Work on one intended corner at a time and do not create extra stakes.'
+      : isRopeMilestone
+        ? 'Keep the four installed stakes fixed. Position the worker and the existing rope at the first stake before unrolling it.'
+        : 'Position actor, tool and current material at the bounded target section before changing it.',
     actorId,
     ...(toolId ? { toolId } : {}),
     sourceEntityIds: materialId ? [materialId] : [],
@@ -612,12 +619,12 @@ export function planPhysicalExecutionV2({
     add({
       id: evidenceId + ':target-contact',
       kind: 'CONTACT',
-      instruction: method === 'MARK'
-        ? (targetPercentage < 100
-          ? 'Place the first existing wooden stake at a visible corner point and touch it with both hands before pressing it into the soil.'
-          : 'Bring the existing loose rope into visible contact with the first installed corner stake before routing it around the perimeter.')
-        : 'Establish visible physical contact with ' + targetLabel
-          + ' before the transformation begins.',
+      instruction: isStakeMilestone
+        ? 'Place the first existing wooden stake at a visible corner point and touch it with both hands before pressing it into the soil.'
+        : isRopeMilestone
+          ? 'Bring the existing loose rope into visible contact with the first installed corner stake before routing it around the perimeter.'
+          : 'Establish visible physical contact with ' + targetLabel
+            + ' before the transformation begins.',
       actorId,
       ...(toolId ? { toolId } : {}),
       sourceEntityIds: materialId ? [materialId] : [],
@@ -693,11 +700,11 @@ export function planPhysicalExecutionV2({
   add({
     id: evidenceId + ':inspect',
     kind: 'INSPECT',
-    instruction: method === 'MARK'
-      ? (targetPercentage < 100
-        ? 'Finish with exactly four upright corner stakes clearly visible and separated; keep the rope coiled and unused, then pause so the milestone is easy to verify.'
-        : 'Finish with all four stakes fixed and the rope visibly taut on every side of the closed perimeter; step back and pause so the complete marking remains stable and readable.')
-      : 'Keep the changed section visible, show that it persists, and show the remaining unfinished work.',
+    instruction: isStakeMilestone
+      ? 'Finish with exactly four upright corner stakes clearly visible and separated; keep the rope coiled and unused, then pause so the milestone is easy to verify.'
+      : isRopeMilestone
+        ? 'Finish with all four stakes fixed and the rope visibly taut on every side of the closed perimeter; step back and pause so the complete marking remains stable and readable.'
+        : 'Keep the changed section visible, show that it persists, and show the remaining unfinished work.',
     actorId,
     sourceEntityIds: [],
     targetEntityIds: [targetId],
@@ -715,7 +722,7 @@ export function planPhysicalExecutionV2({
   add({
     id: evidenceId + ':stop',
     kind: 'STOP',
-    instruction: method === 'MARK'
+    instruction: isFilmableMarkingMilestone
       ? 'Stop after this physical marking milestone; do not begin selective clearing or any later construction operation.'
       : 'Stop construction at exactly the canonical '
         + targetPercentage
@@ -734,7 +741,7 @@ export function planPhysicalExecutionV2({
     evidenceIds: [evidenceId],
   });
 
-  const limitations = method === 'MARK'
+  const limitations = isFilmableMarkingMilestone
     ? []
     : ['PHYSICAL_PROGRESS_MEASURE_NOT_AVAILABLE_FROM_CURRENT_BLUEPRINT'];
   if (toolId && !resolveToolAffordance(toolId)) limitations.push('TOOL_AFFORDANCE_UNKNOWN');
