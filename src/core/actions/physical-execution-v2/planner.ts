@@ -639,7 +639,9 @@ export function planPhysicalExecutionV2({
     add({
       id: evidenceId + ':primary-action',
       kind: primaryKind,
-      instruction: actionInstruction(method, operation, toolId, targetLabel),
+      instruction: actionInstruction(
+        method, operation, toolId, targetLabel, beforePercentage, targetPercentage,
+      ),
       actorId,
       ...(toolId ? { toolId } : {}),
       sourceEntityIds: materialId
