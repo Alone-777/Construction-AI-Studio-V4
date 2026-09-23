@@ -62,7 +62,7 @@ export class ScenesBuilderStage {
         scenes.push(scene);
         storyboard.push({
           sceneId,
-          description: `${operation.name}: ${operation.topology}, zonas ${scene.activeZones.join(' → ')}, progressão 0/25/50/75/100`,
+          description: `${operation.name}: ${operation.topology}, zonas ${scene.activeZones.join(' → ')}, progressão ${stages.map(stage => stage.percentage).join('/')}`,
           locked: false,
           imageAttached: false,
         });
