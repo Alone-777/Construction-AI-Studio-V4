@@ -290,6 +290,46 @@ describe('native Physical Execution V2 planner', () => {
     });
   });
 
+  it('keeps cleanup classified as CLEAR when preservation text mentions stakes and rope', () => {
+    const official = world();
+    const op = operation({
+      id: 'op_limpeza',
+      name: 'Limpeza seletiva da área marcada',
+      type: 'limpeza',
+      componentId: 'component_limpeza',
+      visualBasis: {
+        classification: 'FACT',
+        sourceClassification: 'FACT',
+        sourceField: 'blueprint',
+        evidence: 'cleanup inside marked footprint',
+        materials: [],
+        tools: ['facao'],
+      },
+    });
+
+    const plan = planPhysicalExecutionV2({
+      scene: scene(op.id),
+      stage: stage(
+        'remover somente vegetação e obstáculos dentro da implantação marcada, mantendo estacas, cordas e área externa preservadas — marco 25%',
+        'facao',
+      ),
+      operation: op,
+      worldStateBefore: official,
+      beforePercentage: 0,
+    });
+
+    expect(plan.intent.methodId).toBe('native:clear');
+    expect(plan.evidence[0]?.relation).toBe('BOUNDED_SURFACE_CLEARING_PERSISTS');
+    expect(plan.nodes.some(node =>
+      node.kind === 'CUT'
+      && /Cut\/scrape only the bounded current patch/.test(node.instruction)
+      && node.effects.some(effect => effect.type === 'SURFACE_REMOVED'),
+    )).toBe(true);
+    expect(plan.nodes.some(node =>
+      /place visible corner stakes|pull the rope taut between them/i.test(node.instruction),
+    )).toBe(false);
+  });
+
   it('plans foundation excavation with shovel and soil destination', () => {
     const official = world();
     const op = operation({
