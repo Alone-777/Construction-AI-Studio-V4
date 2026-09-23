@@ -98,6 +98,27 @@ imagem.
 
 O runtime operacional não depende de Gemini, OpenAI API, Groq ou provider visual externo para essa análise.
 
+## Modos de produção de vídeo
+
+Novos projetos podem escolher entre dois estilos sem trocar de arquitetura:
+
+- **VIRAL_TIMELAPSE** — padrão atual para novos projetos. Prioriza transformação visual forte, ritmo, progressão macro e retenção. Cada operação canônica vira um único JOB de vídeo 0%→100% daquela operação. A continuidade rígida fica concentrada em câmera, local, terreno, implantação, escala, design principal e componentes estruturais já concluídos. Pequenas variações em ferramentas soltas, entulho, materiais temporários e trabalhadores secundários não são motivo automático de RETRY quando a transformação principal permanece coerente.
+- **PHYSICAL_REALISM** — modo experimental rigoroso. Mantém os planos físicos detalhados, causalidade ferramenta/material, milestones menores e critérios de continuidade mais estritos.
+
+No `VIRAL_TIMELAPSE`:
+- o Kling continua gerando até 15 segundos por JOB no Adobe Firefly;
+- para construções comuns, o número de JOBs tende a acompanhar o número de operações macro, em vez de dividir cada operação em quatro quartos;
+- o prompt pede **accelerated construction timelapse**, **MACRO TRANSFORMATION** e um **END STATE** visualmente forte;
+- não é necessário provar toda microação manual em velocidade real;
+- continuam proibidos redesign completo, regressão da obra, troca de local/câmera e salto para uma construção não relacionada;
+- o frame terminal aprovado continua sendo a fonte OFFICIAL do próximo JOB;
+- na edição final, é esperado selecionar apenas o trecho mais forte de cada geração, tipicamente cerca de 4–8 segundos, em vez de usar obrigatoriamente os 15 segundos completos;
+- a narração é parte recomendada da estratégia editorial: ela conecta saltos temporais, explica a transformação e sustenta a curiosidade até o reveal.
+
+Referências externas de vídeos virais são material de estudo, não autoridade temporal e não entram diretamente no estado OFFICIAL. Lições externas continuam isoladas no Training Lab e só podem afetar produção depois de validação nos próprios projetos.
+
+Workspaces existentes **não são convertidos automaticamente** entre estilos. A escolha de estilo pertence ao novo projeto; não reescrever uma fila ativa silenciosamente.
+
 ## Fluxo operacional atual
 
 1. Construction AI determina o próximo JOB pela ordem temporal.
@@ -200,13 +221,13 @@ A descrição e o nome podem vir diretamente da revisão aprovada da Imagem Inic
 
 O bootstrap cria o workspace legado `.firefly` (nome interno mantido por compatibilidade) e gera os JOBs oficiais de vídeo com **15 segundos cada**. A foto do local é copiada apenas como `MANUAL_REFERENCE`, nunca como estado temporal. Para o JOB 1, o Construction AI cria um prompt de preparação da imagem `OFFICIAL` do estado inicial com um trabalhador principal consistente; o vídeo só é liberado quando essa fonte temporal existir. O Operator Panel aceita a imagem gerada em **JPG, JPEG, PNG ou WebP** dentro da pasta indicada e normaliza automaticamente para o arquivo canônico `job-001-source.png`; o usuário não deve precisar converter formato manualmente. Cada JOB seguinte usa o último frame aprovado do anterior. O ChatGPT nunca deve criar ou editar `.firefly` diretamente.
 
-Para **novos projetos**, a ordem física canônica começa por:
+Para **novos projetos**, a ordem canônica continua começando por:
 
-1. **MARCAÇÃO DA IMPLANTAÇÃO** — medir o perímetro, posicionar estacas visíveis e tensionar corda;
-2. **LIMPEZA SELETIVA DA ÁREA MARCADA** — remover apenas vegetação/obstáculos dentro do perímetro, preservando marcação e área externa;
+1. **MARCAÇÃO DA IMPLANTAÇÃO**;
+2. **LIMPEZA SELETIVA DA ÁREA MARCADA**;
 3. fundação/apoios, base e demais operações dependentes.
 
-Para o vídeo manual, a marcação não usa mais quatro quartos artificiais. O compilador operacional transforma essa operação em **dois marcos físicos filmáveis**:
+No modo **VIRAL_TIMELAPSE**, marcação e limpeza são transformações macro completas, uma por JOB. No modo **PHYSICAL_REALISM**, a marcação não usa quatro quartos artificiais; o compilador transforma essa operação em **dois marcos físicos filmáveis**:
 - **marco 1:** instalar exatamente quatro estacas de canto já existentes na fonte; a corda permanece enrolada e sem uso;
 - **marco 2:** manter as quatro estacas fixas, desenrolar a corda e terminar com um perímetro fechado, tensionado, alinhado e claramente visível.
 
