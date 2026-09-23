@@ -18,13 +18,6 @@ const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const VIDEO_PLATFORM = 'ADOBE_FIREFLY';
 const VIDEO_MODEL = 'KLING_3_0';
 export const ANIMATION_PROMPT_MAX_CHARS = MANUAL_KLING_PROMPT_MAX_CHARS;
-const STAGES = [
-  [0, 25],
-  [25, 50],
-  [50, 75],
-  [75, 100],
-];
-
 function normalize(value) {
   return String(value || '')
     .normalize('NFD')
