@@ -94,6 +94,46 @@ describe('Adobe Firefly V2 animation prompt compiler', () => {
     expect(compiled.prompt).toContain('INSUFFICIENT_PHYSICAL_PROGRESS');
   });
 
+
+  it('marks special marking milestones with critic-readable terminal evidence and stop condition', () => {
+    const marking = artifact();
+    marking.sourcePlanId = 'plan:marking:0-50';
+    marking.canonicalProgress = {
+      beforePercentage: 0,
+      targetPercentage: 50,
+      tolerancePercentage: 0,
+    };
+    marking.physicalProgress = undefined;
+    marking.executionBeats = [
+      { id: 'place', instruction: 'Install exactly four existing slender wooden corner stakes one by one.', zoneId: 'Z1', changesMatter: true },
+      { id: 'inspect', instruction: 'Finish with exactly four upright corner stakes clearly visible and separated; keep the rope coiled and unused.', zoneId: 'Z1' },
+      { id: 'stop', instruction: 'Stop after this physical marking milestone; do not begin selective clearing.', zoneId: 'Z1' },
+    ];
+    marking.evidence = [{
+      id: 'marking-terminal',
+      entityIds: ['component_marcacao'],
+      relation: 'FOUR_CORNER_STAKES_REMAIN_VISIBLE_AND_FIXED',
+      metric: 'physical-milestone',
+      expected: {
+        beforePercentage: 0,
+        targetPercentage: 50,
+        terminalDescription: 'Exactly four corner stakes are upright and fixed in the ground; the rope remains coiled and unused.',
+      },
+      visibleIn: 'TERMINAL_FRAME',
+      mustPersist: true,
+    }];
+
+    const compiled = compileAdobeFireflyVideoPromptV2({
+      artifact: marking,
+      model: 'KLING_3_0',
+      durationSeconds: 15,
+    });
+
+    expect(compiled.prompt).toContain('END EVIDENCE:');
+    expect(compiled.prompt).toContain('Stop exactly at the target; never overshoot.');
+    expect(compiled.characterCount).toBeLessThanOrEqual(1800);
+  });
+
   it('fails rather than silently dropping retry corrections when the budget is impossibly small', () => {
     expect(() => compileAdobeFireflyVideoPromptV2({
       artifact: artifact([{
