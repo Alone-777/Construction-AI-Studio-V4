@@ -24,7 +24,7 @@ describe('createFireflyProject', () => {
       createdAt: new Date('2026-09-20T20:00:00.000Z'),
     });
 
-    expect(result.totalJobs).toBe(36);
+    expect(result.totalJobs).toBe(34);
     expect(result.firstJob.durationSeconds).toBe(15);
     expect(result.firstJob.sourceReady).toBe(false);
     expect(result.firstJob.expectedOfficialSource).toBe('inputs/official/job-001-source.png');
@@ -69,7 +69,8 @@ describe('createFireflyProject', () => {
     expect(firstJob.executionRecipe.tools.length).toBeGreaterThan(0);
     expect(firstJob.prompt).toContain('[ADOBE FIREFLY VIDEO JOB]');
     expect(firstJob.prompt).toContain('PHYSICAL EXECUTION:');
-    expect(firstJob.prompt).toContain(firstJob.executionRecipe.tools[0]);
+    expect(firstJob.prompt).toContain('four existing corner stakes');
+    expect(firstJob.prompt).toContain('rope coiled and unused');
     expect(firstJob.prompt).toMatch(/no pantomime/i);
 
     for (const queued of queue.jobs) {
@@ -95,8 +96,11 @@ describe('createFireflyProject', () => {
     }
 
     expect(Array.from(firstJob.prompt).length).toBeLessThanOrEqual(1800);
-    expect(firstJob.prompt).toContain('Stop exactly at the target; never overshoot.');
-    expect(firstJob.prompt).toContain('0%→25%');
+    expect(firstJob.prompt).not.toContain('Stop exactly at the target; never overshoot.');
+    expect(firstJob.prompt).not.toContain('0%→50%');
+    expect(firstJob.prompt).toContain('Physical milestone:');
+    expect(firstJob.prompt).toContain('END STATE:');
+    expect(firstJob.prompt).not.toContain('expected {"beforePercentage"');
 
     await expect(stat(path.join(workspace, queue.jobs[0].sourcePath))).rejects.toThrow();
     expect((await stat(path.join(workspace, manifest.initialImage.workspacePath))).isFile()).toBe(true);
