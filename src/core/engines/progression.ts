@@ -14,7 +14,18 @@ export function generateProgression(
   const topology = analyzeTopology(elements, operationType, zones);
   const stages: Stage[] = [];
   
-  const percentages: StagePercentage[] = [0, 25, 50, 75, 100];
+  const normalizedOperationType = String(operationType || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const isSiteMarking =
+    normalizedOperationType.includes('marcacao')
+    || normalizedOperationType.includes('marcar')
+    || normalizedOperationType.includes('perimetro')
+    || normalizedOperationType.includes('estaca');
+  const percentages: StagePercentage[] = isSiteMarking
+    ? [0, 50, 100]
+    : [0, 25, 50, 75, 100];
   
   let lastZone = zones[0] || 'Z1';
   let currentState = { ...initialState };
@@ -24,7 +35,9 @@ export function generateProgression(
 
   percentages.forEach(percent => {
     const topoStage = topology.progression.find(p => p.stagePercentage === percent);
-    const activeZone = topoStage && topoStage.zones.length > 0 ? topoStage.zones[0] : lastZone;
+    const activeZone = isSiteMarking
+      ? (zones[0] || lastZone)
+      : (topoStage && topoStage.zones.length > 0 ? topoStage.zones[0] : lastZone);
     
     let displacement = undefined;
     if (activeZone !== lastZone) {
@@ -38,7 +51,9 @@ export function generateProgression(
     };
 
     const stageChanges = percent === 0 ? [] : (topoStage?.components ?? elements);
-    const progressesByElement = topology.recommendedType === 'POINTS' || topology.recommendedType === 'AREA';
+    const progressesByElement =
+      !isSiteMarking
+      && (topology.recommendedType === 'POINTS' || topology.recommendedType === 'AREA');
     if (percent > 0) {
       if (progressesByElement) {
         stageChanges.forEach(element => { elementProgress[element] = 100; });
