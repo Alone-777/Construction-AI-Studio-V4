@@ -132,13 +132,80 @@ export async function compileManualVideoProjectV2({
       }
       const key = operationKey(operation.id);
       const orderedStages = [...scene.stages].sort((a, b) => a.percentage - b.percentage);
+      const specification = blueprint.operations.find(item => item.id === operation.id);
+      const firstWorkStage = orderedStages.find(stage => stage.percentage > 0);
+      const markingZone = firstWorkStage?.activeZone || operation.zones?.[0] || 'Z1';
 
-      for (let index = 0; index < orderedStages.length; index += 1) {
-        const stage = orderedStages[index];
-        if (stage.percentage === 0) continue;
-        const previous = orderedStages[index - 1]?.percentage ?? 0;
-        const plan = stage.physicalExecutionPlanV2;
-        const simulation = stage.physicalSimulationV2;
+      const videoMilestones = key === 'marcacao'
+        ? [
+            {
+              stage: {
+                ...clone(orderedStages.find(stage => stage.percentage === 50)),
+                activeZone: markingZone,
+                physicalAction: 'instalar exatamente quatro estacas de canto visíveis; manter a corda enrolada e sem uso',
+                visualEvidence: [
+                  'Exactly four corner stakes are upright and fixed in the ground; the rope remains coiled and unused.',
+                ],
+              },
+              previous: 0,
+              worldStateBefore:
+                orderedStages.find(stage => stage.percentage === 25)?.worldStateBefore
+                ?? firstWorkStage?.worldStateBefore,
+            },
+            {
+              stage: {
+                ...clone(orderedStages.find(stage => stage.percentage === 100)),
+                activeZone: markingZone,
+                physicalAction: 'manter as quatro estacas fixas e tensionar a corda fechando o perímetro marcado',
+                visualEvidence: [
+                  'All four corner stakes remain fixed and a closed rope perimeter is taut, straight, aligned and clearly visible.',
+                ],
+              },
+              previous: 50,
+              worldStateBefore:
+                orderedStages.find(stage => stage.percentage === 75)?.worldStateBefore
+                ?? orderedStages.find(stage => stage.percentage === 50)?.worldStateAfter,
+            },
+          ]
+        : orderedStages
+            .filter(stage => stage.percentage > 0)
+            .map((stage, index, stages) => ({
+              stage,
+              previous: index === 0 ? 0 : stages[index - 1].percentage,
+              worldStateBefore: stage.worldStateBefore,
+            }));
+
+      for (const milestone of videoMilestones) {
+        const stage = milestone.stage;
+        if (!stage || !milestone.worldStateBefore) {
+          throw new Error('Video milestone source state is missing for ' + key + '.');
+        }
+        const previous = milestone.previous;
+        let plan = stage.physicalExecutionPlanV2;
+        let simulation = stage.physicalSimulationV2;
+
+        if (key === 'marcacao') {
+          plan = physicalModule.planPhysicalExecutionV2({
+            scene,
+            stage,
+            operation,
+            worldStateBefore: milestone.worldStateBefore,
+            beforePercentage: previous,
+            materialUse: specification?.materialUse,
+            logisticsContext: {
+              workerCount: config.workerCount,
+              spatialMap: project.spatialMap,
+              handling: specification?.handling,
+              handlingByMaterial: specification?.handlingByMaterial,
+              area: blueprint.logisticsArea,
+            },
+          });
+          simulation = physicalModule.simulatePhysicalExecution(
+            milestone.worldStateBefore,
+            plan,
+          );
+        }
+
         if (!plan || !simulation?.validation?.ok || !simulation.projected) {
           throw new Error(
             'Physical Execution V2 is not valid for ' + key + ':' + previous + '-' + stage.percentage +
