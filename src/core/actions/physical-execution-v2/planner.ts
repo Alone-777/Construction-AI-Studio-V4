@@ -196,9 +196,11 @@ function effectForMethod(
       type: 'STATE_CHANGED',
       entityId: targetId,
       property: 'site-marking',
-      to: targetPercentage < 100
+      to: targetPercentage === 50
         ? 'four-corner-stakes-installed'
-        : 'rope-perimeter-taut-and-aligned',
+        : targetPercentage === 100
+          ? 'rope-perimeter-taut-and-aligned'
+          : 'visible-marking-progress',
       zoneId,
     };
   }
