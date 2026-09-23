@@ -47,9 +47,39 @@ function classifyMethod(
   operation: Operation,
   stage: Stage,
 ): MethodKind {
-  const text = normalize([
+  const operationText = normalize([
     operation.type,
     operation.name,
+  ].join(' '));
+
+  // Operation identity is authoritative. Stage text often contains preservation
+  // constraints about earlier/later operations (for example a cleaning stage
+  // that says to preserve stakes and rope), and those words must not reclassify
+  // the current operation.
+  if (
+    operationText.includes('marcacao')
+    || operationText.includes('marcar')
+  ) {
+    return 'MARK';
+  }
+
+  if (
+    operationText.includes('escav')
+    || operationText.includes('fundacao')
+    || operationText.includes('sapata')
+  ) {
+    return 'EXCAVATE';
+  }
+
+  if (
+    operationText.includes('limpeza')
+    || operationText.includes('preparacao seletiva')
+  ) {
+    return 'CLEAR';
+  }
+
+  const text = normalize([
+    operationText,
     stage.physicalAction,
   ].join(' '));
 
