@@ -83,3 +83,46 @@ describe('manual-v2-bridge', () => {
     expect(result.segments.every(segment => segment.logisticsShadow.preflight.status !== 'READY')).toBe(true);
   }, 30000);
 });
+
+
+describe('viral timelapse bridge', () => {
+  it('collapses a cabin into one macro video Job per construction operation', async () => {
+    const result = await compileManualVideoProjectV2({
+      description: 'Cabana rústica de madeira em uma floresta',
+      name: 'Cabana Viral',
+      videoStyle: 'VIRAL_TIMELAPSE',
+    });
+
+    expect(result.videoStyle).toBe('VIRAL_TIMELAPSE');
+    expect(result.config.videoStyle).toBe('VIRAL_TIMELAPSE');
+    expect(result.operations.length).toBe(9);
+    expect(result.segments.length).toBe(9);
+    expect(result.segments.every(segment =>
+      segment.startStagePercentage === 0 &&
+      segment.targetStagePercentage === 100
+    )).toBe(true);
+    expect(result.segments.every(segment =>
+      segment.promptSource === 'VIRAL_TIMELAPSE' &&
+      segment.productionMode === 'VIRAL_TIMELAPSE'
+    )).toBe(true);
+    expect(result.segments.every(segment =>
+      segment.physicalExecutionPlanV2 === null &&
+      segment.physicalSimulationV2 === null &&
+      segment.providerNeutralPromptV2 === null
+    )).toBe(true);
+    expect(result.segments.every(segment =>
+      segment.executionRecipe?.schema === 'construction-manual-execution-recipe/1'
+    )).toBe(true);
+    expect(result.segments.every(segment =>
+      Array.from(segment.prompt).length <= 1800
+    )).toBe(true);
+
+    const first = result.segments[0];
+    expect(first.operationType).toBe('marcacao');
+    expect(first.prompt).toContain('[ADOBE FIREFLY VIRAL TIMELAPSE]');
+    expect(first.prompt).toContain('MACRO TRANSFORMATION:');
+    expect(first.prompt).toContain('END STATE:');
+    expect(first.prompt).toMatch(/fast.*construction timelapse/i);
+    expect(first.prompt).not.toContain('Advance only 0%');
+  }, 30000);
+});
