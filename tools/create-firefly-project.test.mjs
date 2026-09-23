@@ -155,3 +155,55 @@ describe('createFireflyProject', () => {
   });
 
 });
+
+
+describe('createFireflyProject viral timelapse', () => {
+  it('creates one macro Kling Job per operation with relaxed micro-continuity', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'construction-ai-viral-bootstrap-'));
+    const initialRoot = path.join(root, 'Imagem Inicial');
+    await mkdir(initialRoot, { recursive: true });
+    await writeFile(path.join(initialRoot, 'referencia.png'), Buffer.from('fake-png'));
+
+    const result = await createFireflyProject({
+      projectRoot: root,
+      description: 'Cabana de madeira em uma floresta',
+      name: 'Cabana Viral',
+      videoStyle: 'VIRAL_TIMELAPSE',
+      createdAt: new Date('2026-09-23T12:00:00.000Z'),
+    });
+
+    expect(result.totalJobs).toBe(9);
+    expect(result.totalDurationSeconds).toBe(135);
+
+    const workspace = path.join(root, result.workspace);
+    const manifest = JSON.parse(await readFile(path.join(workspace, 'manifest.json'), 'utf8'));
+    const queue = JSON.parse(await readFile(path.join(workspace, 'queue.json'), 'utf8'));
+    const firstJob = JSON.parse(
+      await readFile(path.join(workspace, queue.jobs[0].jobDirectory, 'job.json'), 'utf8'),
+    );
+
+    expect(manifest.videoPolicy.productionMode).toBe('VIRAL_TIMELAPSE');
+    expect(manifest.videoPolicy.editingIntent).toMatch(/4-8 seconds/i);
+    expect(manifest.executionPolicy.primarySchema).toBe('construction-viral-timelapse/1');
+    expect(manifest.executionPolicy.promptSource).toBe('VIRAL_TIMELAPSE');
+    expect(manifest.executionPolicy.requireFramePerfectMicroContinuity).toBe(false);
+    expect(queue.jobs).toHaveLength(9);
+    expect(queue.jobs.every(job =>
+      job.startStagePercentage === 0 &&
+      job.targetStagePercentage === 100 &&
+      job.durationSeconds === 15
+    )).toBe(true);
+
+    expect(firstJob.productionMode).toBe('VIRAL_TIMELAPSE');
+    expect(firstJob.promptSource).toBe('VIRAL_TIMELAPSE');
+    expect(firstJob.physicalExecutionV2).toBeNull();
+    expect(firstJob.executionRecipe.schema).toBe('construction-manual-execution-recipe/1');
+    expect(firstJob.continuityLocks.allowMinorPropDrift).toBe(true);
+    expect(firstJob.continuityLocks.allowBackgroundWorkerVariance).toBe(true);
+    expect(firstJob.prompt).toContain('[ADOBE FIREFLY VIRAL TIMELAPSE]');
+    expect(firstJob.prompt).toContain('MACRO TRANSFORMATION:');
+    expect(firstJob.prompt).toContain('END STATE:');
+    expect(firstJob.prompt).not.toMatch(/Advance only 0%/);
+    expect(Array.from(firstJob.prompt).length).toBeLessThanOrEqual(ANIMATION_PROMPT_MAX_CHARS);
+  }, 30000);
+});
