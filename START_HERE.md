@@ -206,7 +206,13 @@ Para **novos projetos**, a ordem física canônica começa por:
 2. **LIMPEZA SELETIVA DA ÁREA MARCADA** — remover apenas vegetação/obstáculos dentro do perímetro, preservando marcação e área externa;
 3. fundação/apoios, base e demais operações dependentes.
 
-Workspaces já existentes não são reescritos automaticamente por essa regra.
+Para o vídeo manual, a marcação não usa mais quatro quartos artificiais. O compilador operacional transforma essa operação em **dois marcos físicos filmáveis**:
+- **marco 1:** instalar exatamente quatro estacas de canto já existentes na fonte; a corda permanece enrolada e sem uso;
+- **marco 2:** manter as quatro estacas fixas, desenrolar a corda e terminar com um perímetro fechado, tensionado, alinhado e claramente visível.
+
+Os percentuais 50/100 continuam existindo apenas como compatibilidade de estado interno. O prompt enviado ao Kling descreve o **estado físico final**, não pede ao modelo para “fazer 25%/50%” da marcação e não expõe JSON interno de evidência. A marcação permanece na mesma zona física durante os dois vídeos. Outras operações continuam com a segmentação existente até receberem marcos físicos especializados.
+
+Workspaces já existentes não são reescritos automaticamente por essa regra. Um workspace criado com a segmentação antiga deve ser arquivado/recriado para testar corretamente a nova marcação; não reutilizar um PASS antigo como se tivesse sido produzido pela política nova.
 
 Esses dois comandos substituem o antigo comando genérico `Construction AI: INICIAR`.
 
